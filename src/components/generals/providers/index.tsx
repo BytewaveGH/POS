@@ -1,5 +1,3 @@
-
-
 import React from 'react'
 import { TanstackQueryProvider } from './react-query'
 
