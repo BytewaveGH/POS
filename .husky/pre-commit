@@ -1,0 +1,7 @@
+# run a linter on staged files before committing 
+
+
+npx lint-staged  && npm run format
+
+ # run a build on every commit 
+ npm run build

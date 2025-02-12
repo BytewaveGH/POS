@@ -1,0 +1,64 @@
+{
+  "name": "admins",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "format": "prettier --write .",
+    "commit": "cz",
+    "prepare": "husky",
+    "release": "standard-version"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,css,md}": [
+      "prettier --write"
+    ]
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.56.2",
+    "axios": "^1.7.7",
+    "clsx": "^2.1.1",
+    "next": "14.2.11",
+    "next-auth": "^5.0.0-beta.21",
+    "next-intl": "^3.19.3",
+    "react": "^18",
+    "react-dom": "^18",
+    "sharp": "^0.33.5",
+    "tailwind-merge": "^2.5.2",
+    "tailwindcss-animate": "^1.0.7",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.5.0",
+    "@commitlint/config-conventional": "^19.5.0",
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "commitizen": "^4.3.0",
+    "cz-conventional-changelog": "^3.3.0",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.11",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.2.1",
+    "eslint-plugin-unicorn": "^55.0.0",
+    "husky": "^9.1.6",
+    "lint-staged": "^15.2.10",
+    "postcss": "^8",
+    "prettier": "^3.3.3",
+    "standard-version": "^9.5.0",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5"
+  },
+  "config": {
+    "commitizen": {
+      "path": "./node_modules/cz-conventional-changelog"
+    }
+  }
+}

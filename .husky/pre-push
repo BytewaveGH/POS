@@ -1,0 +1,5 @@
+#  will run the release here 
+# npm run release
+
+# after the release will run the release push
+# git push --follow-tags origin main

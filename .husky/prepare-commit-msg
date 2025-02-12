@@ -1,0 +1,2 @@
+# helps exec commitizen for commit message
+exec < /dev/tty && npx cz --hook || true

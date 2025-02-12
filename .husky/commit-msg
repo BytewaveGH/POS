@@ -1,0 +1,19 @@
+# Checks for commit message standards
+
+npx commitlint --edit "$1"
+
+# Capture the exit status of commitlint
+RESULT=$?
+
+# Check if commitlint failed
+if [ $RESULT -ne 0 ]; then
+  echo ""
+  echo "Error: Your commit message does not meet the required standard."
+  echo "Please follow the conventional commit guidelines."
+  echo ""
+  echo "Example of a valid commit message:"
+  echo "  feat: add new user login feature"
+  echo ""
+  echo "Types allowed: feat, fix, docs, style, refactor, test, chore"
+  exit 1
+fi

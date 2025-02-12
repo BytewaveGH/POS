@@ -1,0 +1,61 @@
+{
+  "extends": [
+    "next/core-web-vitals",
+    "plugin:@typescript-eslint/recommended",
+    "plugin:unicorn/recommended" // Make sure to include this for unicorn rules
+  ],
+  "plugins": ["unicorn"],
+  "rules": {
+    //custom rules here
+    "no-console": [
+      "error",
+      {
+        "allow": ["warn", "error"]
+      }
+    ], // this disallows console types except [warn, error]
+    "react/react-in-jsx-scope": "off",
+    "@typescript-eslint/no-require-imports": "off",
+    // "@typescript-eslint/no-unused-vars": ["error"], //this makes no unused variables
+    // Variable Naming
+    // "camelcase": ["error", { "properties": "always" }],
+    "@typescript-eslint/naming-convention": [
+      "error",
+      {
+        "selector": "variable",
+        "format": ["camelCase", "PascalCase"],
+        "leadingUnderscore": "allow"
+      },
+      {
+        "selector": "function",
+        "format": ["camelCase", "PascalCase"]
+      },
+      {
+        "selector": "typeLike",
+        "format": ["PascalCase"]
+      }
+    ],
+    // File Naming (Handled by `eslint-plugin-unicorn`)
+    // Deprecated
+    // "unicorn/file-name-case": [
+    //   "error",
+    //   {
+    //     "cases": {
+    //       "pascalCase": true,
+    //       "kebabCase": true,
+    //       "lowerCase": true
+    //     }
+    //   }
+    // ],
+    "unicorn/prevent-abbreviations": "off",
+    "unicorn/no-await-expression-member": "off",
+    "unicorn/no-empty-file": "error"
+  }
+  // "overrides": [
+  //   {
+  //     "files": ["*.ts", "*.tsx"],
+  //     "rules": {
+  //       // Add TypeScript-specific rules here if needed
+  //     }
+  //   }
+  // ]
+}
