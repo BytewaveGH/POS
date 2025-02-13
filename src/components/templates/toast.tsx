@@ -11,7 +11,6 @@ export default function ToastTemplate({ position, className }: ToastTemplateProp
   return <Toaster richColors theme="light" position={position} className={`bg-white ${className}`} />
 }
 
-
 // interface ToastAction {
 //   label: string;
 //   onClick: () => void;
@@ -61,7 +60,6 @@ export default function ToastTemplate({ position, className }: ToastTemplateProp
 //   ));
 // };
 
-
 interface CancelableToastProps {
   label: string
   action: () => void
@@ -76,10 +74,6 @@ export const CancelableToast = ({ label, action }: CancelableToastProps) => {
     actionButtonStyle: { backgroundColor: '#0865AC' },
   })
 }
-
-
-
-
 
 // export function cancelablePromise<T>(asyncFn?: (data?: unknown) => Promise<T>) {
 //   let rejected = false

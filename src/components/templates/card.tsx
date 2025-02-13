@@ -1,13 +1,10 @@
-"use client"
-
+'use client'
 
 import { Card, CardContent, CardDescription, CardFooter } from '../ui/card'
 import { Copy, EllipsisVertical, PencilLine, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { CardProps } from './templates'
 import { DropdownTemplate } from './dropdown-menu'
-
-
 
 const CardTemplate = ({
   cardStyle,
@@ -61,7 +58,7 @@ const CardTemplate = ({
                     items={[
                       ...(handleEdit
                         ? [
-                            <div key={"edit"} onClick={handleEdit} className="flex items-center gap-2 py-1.5 cursor-pointer">
+                            <div key={'edit'} onClick={handleEdit} className="flex items-center gap-2 py-1.5 cursor-pointer">
                               <PencilLine size={16} className="text-endeavour" />
                               <span className="bytewave-link">Edit</span>
                             </div>,
@@ -77,7 +74,7 @@ const CardTemplate = ({
                       // </>,
                       ...(handleDuplicate
                         ? [
-                            <div key={"duplicate"} onClick={handleDuplicate} className="flex items-center gap-2 py-1.5 cursor-pointer">
+                            <div key={'duplicate'} onClick={handleDuplicate} className="flex items-center gap-2 py-1.5 cursor-pointer">
                               <Copy size={16} className="text-endeavour" />
                               <span className="bytewave-link">Duplicate</span>
                             </div>,
@@ -85,7 +82,7 @@ const CardTemplate = ({
                         : []),
                       ...(handleDelete
                         ? [
-                            <div key={"delete"} onClick={handleDelete} className="flex gap-2 items-center py-1.5 cursor-pointer">
+                            <div key={'delete'} onClick={handleDelete} className="flex gap-2 items-center py-1.5 cursor-pointer">
                               <Trash2 size={16} className="text-red-500" />
                               <span className="bytewave-link">Delete</span>
                             </div>,
