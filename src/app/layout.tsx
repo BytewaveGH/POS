@@ -1,6 +1,7 @@
 import { Providers } from '@/components/generals/providers'
 import type { Metadata } from 'next'
 import { Mulish } from 'next/font/google'
+import "./globals.css";
 // import { Providers } from '@/components/providers'
 
 const mulish = Mulish({
@@ -11,8 +12,8 @@ const mulish = Mulish({
 })
 
 export const metadata: Metadata = {
-  title: 'Seedstars IG',
-  description: 'Seedstars IG',
+  title: 'bytewave IG',
+  description: 'bytewave IG',
 }
 
 export default function RootLayout({
