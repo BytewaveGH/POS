@@ -9,7 +9,6 @@ import Link from 'next/link'
 import { useBrowserStorage } from '@/hooks/use-browser-storage'
 import { PopoverTemplate } from '@/components/templates/popover'
 
-
 interface ProfileAvatarProps {
   image: React.JSX.Element
 }
@@ -26,22 +25,22 @@ const ProfileAvatar = ({ image }: ProfileAvatarProps) => {
       trigger={<div className="flex space-x-2 items-center py-2 ml-5  cursor-pointer">{image}</div>}
       content={[
         // <div className="space-y-1">
-        <div key={"avatar"} className="w-full flex gap-2 items-center">
-          <AvatarTemplate src={""} />
-          <div className='w-full'>
-            <p className="seedstars-paragraph font-mulish-semi-bold line-clamp-2">{`${""} `}</p>
-            <h5 className="seedstars-link text-endeavour  line-clamp-1 text-ellipsis overflow-hidden whitespace-nowrap">{`${""}`}</h5>
+        <div key={'avatar'} className="w-full flex gap-2 items-center">
+          <AvatarTemplate src={''} />
+          <div className="w-full">
+            <p className="seedstars-paragraph font-mulish-semi-bold line-clamp-2">{`${''} `}</p>
+            <h5 className="seedstars-link text-endeavour  line-clamp-1 text-ellipsis overflow-hidden whitespace-nowrap">{`${''}`}</h5>
           </div>
         </div>,
 
-        <Link key={"link"} className="p-2  hover:bg-gray-100  flex items-center rounded cursor-pointer" href="/en/launch/profile">
+        <Link key={'link'} className="p-2  hover:bg-gray-100  flex items-center rounded cursor-pointer" href="/en/launch/profile">
           {/* <SeedstarUserVerify fill={'#0865AC'} width={18} height={18} /> */}
           <p className="seedstars-paragraph p-1 text-stone-500 ">Profile</p>
         </Link>,
 
         // <Separator className="bg-gray-200" />,
         <div
-            key={"logout"}
+          key={'logout'}
           className="p-2 hover:bg-gray-100 rounded cursor-pointer flex items-center"
           onClick={async () => {
             await signOut({ callbackUrl: `/${getValue('locale') ?? 'en'}`, redirect: false })

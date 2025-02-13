@@ -1,7 +1,7 @@
 import { Providers } from '@/components/generals/providers'
 import type { Metadata } from 'next'
 import { Mulish } from 'next/font/google'
-import "./globals.css";
+import './globals.css'
 // import { Providers } from '@/components/providers'
 
 const mulish = Mulish({

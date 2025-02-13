@@ -2,7 +2,7 @@
 
 import CryptoJS from 'crypto-js'
 
-export const userDataCrypt = (action: 'encrypt' | 'decrypt' | 'hashing', key: string, value: string ) => {
+export const userDataCrypt = (action: 'encrypt' | 'decrypt' | 'hashing', key: string, value: string) => {
   const NotFound = 'UserData not found'
 
   try {
@@ -19,7 +19,7 @@ export const userDataCrypt = (action: 'encrypt' | 'decrypt' | 'hashing', key: st
         const bytes = CryptoJS.AES.decrypt(value, key)
         return bytes.toString(CryptoJS.enc.Utf8) || NotFound
       }
-      
+
       case 'hashing': {
         return CryptoJS.SHA256(value).toString()
       }

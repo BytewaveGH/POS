@@ -43,7 +43,7 @@ export function LaunchDropDown({ handleClick, dropDownList, id, value, title, de
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-56 bg-white p-3">
         <DropdownMenuLabel className="flex items-center">
-           <div className="ml-2">{title}</div>
+          <div className="ml-2">{title}</div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <RadioGroup defaultValue={defaultValue} onValueChange={handleClick}>
@@ -51,9 +51,9 @@ export function LaunchDropDown({ handleClick, dropDownList, id, value, title, de
             return (
               <Fragment key={index}>
                 <div className="flex items-center space-x-2 py-1">
-                <RadioGroupItem value={`${item[`${id}`]}`} id="r1" />
-                <Label htmlFor="r1">{`${item[`${value}`]}`}</Label>
-              </div>
+                  <RadioGroupItem value={`${item[`${id}`]}`} id="r1" />
+                  <Label htmlFor="r1">{`${item[`${value}`]}`}</Label>
+                </div>
               </Fragment>
             )
           })}

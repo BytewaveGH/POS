@@ -1,10 +1,9 @@
-
-import { create } from 'zustand';
-import { devtools } from 'zustand/middleware';
+import { create } from 'zustand'
+import { devtools } from 'zustand/middleware'
 
 interface GeneralTypes<T extends object> {
-  zusState: T;
-  zusUpdateState: <K extends keyof T>(key: K, value: T[K]) => void;
+  zusState: T
+  zusUpdateState: <K extends keyof T>(key: K, value: T[K]) => void
 }
 
 // Usage example:
@@ -26,5 +25,4 @@ export const useGeneralStore = create<GeneralTypes<Record<string, unknown>>>()(
         `zusUpdateState: ${String(key)}` // Custom action name in DevTools
       ),
   }))
-);
-
+)

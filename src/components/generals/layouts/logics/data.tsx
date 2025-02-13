@@ -1,5 +1,3 @@
-import { ITopNavItems } from "./interface";
+import { ITopNavItems } from './interface'
 
-export const topNavItems : ITopNavItems[] = [
-    {id: 1, label:"", content:""}
-]
+export const topNavItems: ITopNavItems[] = [{ id: 1, label: '', content: '' }]
