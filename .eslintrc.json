@@ -13,16 +13,14 @@
         "allow": ["warn", "error"]
       }
     ], // this disallows console types except [warn, error]
-    "react/react-in-jsx-scope": "off",
-    "@typescript-eslint/no-require-imports": "off",
-    // "@typescript-eslint/no-unused-vars": ["error"], //this makes no unused variables
+   
     // Variable Naming
     // "camelcase": ["error", { "properties": "always" }],
     "@typescript-eslint/naming-convention": [
       "error",
       {
         "selector": "variable",
-        "format": ["camelCase", "PascalCase"],
+        "format": ["camelCase", "PascalCase", "UPPERCASE"],
         "leadingUnderscore": "allow"
       },
       {
@@ -48,7 +46,12 @@
     // ],
     "unicorn/prevent-abbreviations": "off",
     "unicorn/no-await-expression-member": "off",
-    "unicorn/no-empty-file": "error"
+    "unicorn/no-empty-file": "error",
+    "@typescript-eslint/no-explicit-any": "off",
+    "@typescript-eslint/no-namespace": "off",
+    "react/react-in-jsx-scope": "off",
+    "@typescript-eslint/no-require-imports": "off"
+    // "@typescript-eslint/no-unused-vars": ["error"], //this makes no unused variables
   }
   // "overrides": [
   //   {
