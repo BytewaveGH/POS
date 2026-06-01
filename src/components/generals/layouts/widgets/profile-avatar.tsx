@@ -1,12 +1,11 @@
 'use client'
 
-import { signOut } from 'next-auth/react'
+import { signOut, useSession } from 'next-auth/react'
 import React from 'react'
 import { LogOut } from 'lucide-react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useParams } from 'next/navigation'
 import AvatarTemplate from '@/components/templates/avatar'
 import Link from 'next/link'
-import { useBrowserStorage } from '@/hooks/use-browser-storage'
 import { PopoverTemplate } from '@/components/templates/popover'
 
 
@@ -16,9 +15,13 @@ interface ProfileAvatarProps {
 
 const ProfileAvatar = ({ image }: ProfileAvatarProps) => {
   const router = useRouter()
-  const { getValue } = useBrowserStorage('local')
+  const params = useParams()
+  const { data: session } = useSession()
 
-  // useEffect(() => {}, [router])
+  const locale = (params?.locale as string) || 'en'
+  const username = session?.user?.username ?? ''
+  const email = session?.user?.email ?? ''
+  const initial = username[0]?.toUpperCase() ?? 'U'
 
   return (
     <PopoverTemplate
@@ -27,10 +30,10 @@ const ProfileAvatar = ({ image }: ProfileAvatarProps) => {
       content={[
         // <div className="space-y-1">
         <div key={"avatar"} className="w-full flex gap-2 items-center">
-          <AvatarTemplate src={""} />
+          <AvatarTemplate src={session?.user?.avatar || ''} fallback={initial} />
           <div className='w-full'>
-            <p className="seedstars-paragraph font-mulish-semi-bold line-clamp-2">{`${""} `}</p>
-            <h5 className="seedstars-link text-endeavour  line-clamp-1 text-ellipsis overflow-hidden whitespace-nowrap">{`${""}`}</h5>
+            <p className="seedstars-paragraph font-mulish-semi-bold line-clamp-2">{username}</p>
+            <h5 className="seedstars-link text-endeavour line-clamp-1 text-ellipsis overflow-hidden whitespace-nowrap">{email}</h5>
           </div>
         </div>,
 
@@ -44,22 +47,8 @@ const ProfileAvatar = ({ image }: ProfileAvatarProps) => {
             key={"logout"}
           className="p-2 hover:bg-gray-100 rounded cursor-pointer flex items-center"
           onClick={async () => {
-            await signOut({ callbackUrl: `/${getValue('locale') ?? 'en'}`, redirect: false })
-            // alert("You've been logged out. Redirecting to the home page...")
-            router.push(`/${getValue('locale') ?? 'en'}`)
-            // if (typeof window !== 'undefined') {
-            //   const subDomain = window.location.host.split('.')[0]
-            //   const domain = window.location.host.split('.')[1]
-            //   const org = window.location.host.split('.')[2]
-            //   const url = `${window.location.protocol}//${subDomain}.${domain}.${org}/en`
-            //   console.log({ pathname: window.location.hostname })
-            //   if (window.location.hostname === 'localhost') {
-            //     //window.location.replace(window.location.protocol + window.location.host + '/en')
-            //     router.push('/')
-            //   } else {
-            //     window.location.replace(url)
-            //   }
-            // }
+            await signOut({ callbackUrl: `/${locale}`, redirect: false })
+            router.push(`/${locale}`)
           }}
         >
           <LogOut size={16} className="text-endeavour" />{' '}

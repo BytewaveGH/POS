@@ -13,7 +13,7 @@ import { DropdownMenuItem, RadioGroup } from '@radix-ui/react-dropdown-menu'
 import { Fragment, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { ISubGeneric } from './templates'
+import { ISubGeneric } from './logics/templates'
 import { RadioGroupItem } from '@radix-ui/react-radio-group'
 
 type LaunchDropDownProps = {

@@ -6,7 +6,7 @@ import { Textarea } from '../ui/textarea'
 import { Label } from '@radix-ui/react-label'
 import { cn } from '@/lib/utils'
 import { Search } from 'lucide-react'
-import { InputsProps } from './templates'
+import { InputsProps } from './logics/templates'
 
 const InputsTemplate = forwardRef<HTMLInputElement | HTMLTextAreaElement, InputsProps>(
   (

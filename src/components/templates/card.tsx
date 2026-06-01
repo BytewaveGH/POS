@@ -4,7 +4,7 @@
 import { Card, CardContent, CardDescription, CardFooter } from '../ui/card'
 import { Copy, EllipsisVertical, PencilLine, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { CardProps } from './templates'
+import { CardProps } from './logics/templates'
 import { DropdownTemplate } from './dropdown-menu'
 
 

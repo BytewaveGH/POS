@@ -41,7 +41,16 @@ export const SelectTemplate: React.FC<SelectTemplateProps> = ({
       render={({ field }) => (
         <FormItem>
           {label && <FormLabel className={cn('bytewave-paragraph text-endeavour font-mulish-regular', labelClassName)}>{label}</FormLabel>}
-          <Select onValueChange={onValueChange || field.onChange} value={field.value || defaultValue || 'placeholder'}>
+          <Select
+            onValueChange={onValueChange || field.onChange}
+            value={
+              // Always stringify: numeric form values (e.g. unitId=2) must match
+              // string SelectItem values (e.g. "2"). Falsy/zero → show placeholder.
+              (field.value != null && field.value !== '' && field.value !== 0)
+                ? String(field.value)
+                : (defaultValue || 'placeholder')
+            }
+          >
             <FormControl>
               <SelectTrigger className={cn('border border-grey-100  bytewave-paragraph placeholder:text-grey-100', triggerClassName)}>
                 <SelectValue

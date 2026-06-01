@@ -1,5 +1,8 @@
-import { MouseEventHandler } from "react"
+import { AgGridReact } from "ag-grid-react"
+import { CSSProperties, MouseEventHandler } from "react"
 import { Control, FieldValues } from "react-hook-form"
+import { CellClassRules, ColDef, RowClassRules } from 'ag-grid-community'
+
 
 
 export interface IGeneric {
@@ -127,8 +130,8 @@ export interface CardProps {
 
 
   export interface DatagridProps<T = any> {
-    // ref?: AgGridReact
-    // columns: ColDef[]
+    ref?: AgGridReact
+    columns: ColDef[]
     data: T[]
     enablePagination: boolean
     recordSelection?: boolean
@@ -137,8 +140,8 @@ export interface CardProps {
     containerStyles?: React.CSSProperties
     gridHeight?: number | string
     selectionType: 'singleRow' | 'multiRow'
-    // rowClassRules?: RowClassRules
-    // cellClassRules?: CellClassRules
+    rowClassRules?: RowClassRules
+    cellClassRules?: CellClassRules
     handleRowClick?: (data: T) => void
     handleRowSelectonClick?: (data: T) => void
     handlePageChanged?: (data: T) => void
@@ -149,3 +152,45 @@ export interface CardProps {
     paginationPageSizeSelector?: number[]
     loadingIndicator?: boolean
   }
+
+  export interface ChartProps<T = any> {
+    chartType: 'line' | 'bar' | 'pie' | 'donut'  | 'combination' | 'bubble' | 'scatter' | 'area' | any
+  }
+
+  export interface TabsProps<T = any> {
+    className: string
+    items:{id:string | number, key:string, label:string | React.ReactNode, content:string | React.ReactNode}[]
+    
+  }
+
+  export type SheetProps = {
+  classname?: string
+  isDisabled?: boolean
+  title: string | React.ReactNode
+  extraButton?: string | React.ReactNode
+  isExtraButton?: boolean
+  buttonTitle?: string | React.ReactNode
+  content: string | React.ReactNode
+  sheetDescription?: string | React.ReactNode
+  headerRightText?: string | React.ReactNode
+  prefixIcon?: string | React.ReactNode
+  footer?: string | React.ReactNode
+  buttonClassName?: string
+  triggerClassName?: string
+  titleClassName?: string
+  descriptionClassName?: string
+  contentClassName?: string
+  contentBodyClassName?: string
+  closeClassName?: string
+  side?: 'top' | 'bottom' | 'left' | 'right' | null | undefined
+  closeText?: string
+  modal?: boolean
+  hideButton?: boolean
+  open?: boolean
+  style?: CSSProperties | undefined
+  handleClick?: (e?: any) => void
+  handleOpen?: (e?: any) => void
+  handleOpenChanged?: (e?: any) => void
+  handleClose?: () => void
+  onInteractOutside?: boolean
+}

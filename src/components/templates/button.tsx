@@ -2,7 +2,7 @@
 
 import React from 'react'
 import { cn } from '@/lib/utils'
-import { ButtonProps } from './templates'
+import { ButtonProps } from './logics/templates'
 import { Button } from '../ui/button'
 
 const ButtonTemplate = ({

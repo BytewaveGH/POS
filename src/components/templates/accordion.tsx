@@ -3,7 +3,7 @@ import React, { Fragment, useEffect, useState } from 'react'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion'
 import { cn } from '@/lib/utils'
 import { usePathname } from 'next/navigation'
-import { AccordionProps } from './templates'
+import { AccordionProps } from './logics/templates'
 
 const AccordionTemplate: React.FC<AccordionProps> = ({
   itemContents,

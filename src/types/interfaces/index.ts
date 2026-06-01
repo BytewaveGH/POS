@@ -2,9 +2,30 @@ export interface IGeneric {
   [x: string]: string | number | undefined | ISubGeneric | File | null
 }
 
-// Apparently we forgot that IGENERIC itself is a type. So we need to create a base one
 export interface ISubGeneric {
   [x: string]: string | number | undefined | File | string[] | number[] | []
+}
+
+export namespace IAuth {
+  export interface Response {
+    data: {
+      accessToken: string
+      refreshToken: string
+      accessTokenExpiry: number
+      refreshTokenExpiry: number
+      user: {
+        id: number
+        username: string
+        accountType: string
+        avatar: string
+        phone: string
+        email: string
+        createdAt: string
+        updatedAt: string
+      }
+    }
+    status: boolean
+  }
 }
 
 export interface UserPayload {
@@ -15,10 +36,13 @@ export interface UserPayload {
     refreshTokenExpiry: number
     user: {
       id: number
-      displayName: string
-      email: string
+      username: string
+      accountType: string
       avatar: string
-      tenant: string
+      phone: string
+      email: string
+      createdAt: string
+      updatedAt: string
     }
   }
   status: boolean
