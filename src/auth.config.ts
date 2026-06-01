@@ -12,8 +12,9 @@ const whichTenant = (req: Request): string => {
       return 'admin'
     }
     default: {
-      const tenant = host?.split('.')[0]!
-      return tenant
+      // const tenant = host?.split('.')[0]!
+      // return tenant
+      return 'admin'
     }
   }
 }
