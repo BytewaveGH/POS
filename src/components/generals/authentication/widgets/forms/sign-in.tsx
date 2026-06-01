@@ -59,6 +59,8 @@ export default function SignInForm() {
             } else {
                 router.push(`/${locale}/stores/overview`)
             }
+
+            console.log({result})
         } catch {
             setError('Something went wrong. Please try again.')
         } finally {
