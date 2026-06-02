@@ -1,6 +1,5 @@
 'use client'
 
-
 import { cn } from '@/lib/utils'
 import React from 'react'
 import { Control, FieldValues } from 'react-hook-form'
@@ -46,9 +45,7 @@ export const SelectTemplate: React.FC<SelectTemplateProps> = ({
             value={
               // Always stringify: numeric form values (e.g. unitId=2) must match
               // string SelectItem values (e.g. "2"). Falsy/zero → show placeholder.
-              (field.value != null && field.value !== '' && field.value !== 0)
-                ? String(field.value)
-                : (defaultValue || 'placeholder')
+              field.value != null && field.value !== '' && field.value !== 0 ? String(field.value) : defaultValue || 'placeholder'
             }
           >
             <FormControl>

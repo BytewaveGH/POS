@@ -79,7 +79,6 @@ const InputsTemplate = forwardRef<HTMLInputElement | HTMLTextAreaElement, Inputs
                       readOnly={readOnly}
                       onBlur={handleBlurTextarea}
                       onKeyDown={onKeyDown}
-                      
                     />
                   ) : (
                     <div className="flex w-full relative items-center">

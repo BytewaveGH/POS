@@ -28,7 +28,7 @@ const ButtonTemplate = ({
         disabled={isDisabled}
         onClick={handleClick}
         id={buttonID}
-        className={cn( 
+        className={cn(
           `border-[1px] p-4 flex justify-center items-center  border-slate-200  bg-endeavour  text-white text-xs  hover:bg-veniceBlue h-9 px-6 mt-4 rounded-md`,
           classname
         )}

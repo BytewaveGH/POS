@@ -7,20 +7,20 @@ import type { NextAuthRequest } from 'next-auth'
 const intlMiddleware = createMiddleware(routing)
 
 export default auth((req: NextAuthRequest) => {
-    const isLoggedIn = !!req.auth
-    const pathname = req.nextUrl.pathname
+  const isLoggedIn = !!req.auth
+  const pathname = req.nextUrl.pathname
 
-    // Locale root pages are the login page — no auth required
-    const isAuthPage = /^\/(en|fr)\/?$/.test(pathname) || pathname === '/'
+  // Locale root pages are the login page — no auth required
+  const isAuthPage = /^\/(en|fr)\/?$/.test(pathname) || pathname === '/'
 
-    if (!isLoggedIn && !isAuthPage) {
-        const loginUrl = new URL('/en', req.url)
-        return Response.redirect(loginUrl)
-    }
+  if (!isLoggedIn && !isAuthPage) {
+    const loginUrl = new URL('/en', req.url)
+    return Response.redirect(loginUrl)
+  }
 
-    return intlMiddleware(req as unknown as NextRequest)
+  return intlMiddleware(req as unknown as NextRequest)
 })
 
 export const config = {
-    matcher: ['/', '/(fr|en)/:path*'],
+  matcher: ['/', '/(fr|en)/:path*'],
 }
