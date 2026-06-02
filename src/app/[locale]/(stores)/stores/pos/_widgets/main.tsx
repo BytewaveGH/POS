@@ -312,7 +312,7 @@ const Main = () => {
       <select
         value={warehouseId}
         onChange={(e) => setWarehouseId(Number(e.target.value))}
-        className="w-full mb-2.5 px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-stone-600 focus:outline-none focus:ring-1 focus:ring-endeavour bg-white"
+        className="w-full mb-2.5 px-3 py-2.5 border border-gray-200 rounded-xl text-base md:text-sm text-stone-600 focus:outline-none focus:ring-1 focus:ring-endeavour bg-white"
       >
         <option value={0} disabled>
           Select warehouse
@@ -429,25 +429,23 @@ const Main = () => {
             disabled={!canCharge}
             onClick={() => handleCharge('momo')}
             className={cn(
-              'flex-1 py-3.5 rounded-2xl font-bold text-sm transition-all flex flex-col items-center gap-0.5',
+              'flex-1 py-2.5 rounded-xl font-semibold text-sm transition-all',
               !canCharge
                 ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                 : 'bg-endeavour text-white hover:bg-veniceBlue active:scale-[0.97]'
             )}
           >
-            <span>{isSubmitting ? 'Processing...' : 'MoMo'}</span>
-            {!isSubmitting && <span className="text-[10px] font-normal opacity-75">₵{total.toFixed(2)}</span>}
+            {isSubmitting ? 'Processing...' : `MoMo · ₵${total.toFixed(2)}`}
           </button>
           <button
             disabled={!canCharge}
             onClick={() => handleCharge('cash')}
             className={cn(
-              'flex-1 py-3.5 rounded-2xl font-bold text-sm transition-all flex flex-col items-center gap-0.5',
+              'flex-1 py-2.5 rounded-xl font-semibold text-sm transition-all',
               !canCharge ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700 active:scale-[0.97]'
             )}
           >
-            <span>{isSubmitting ? 'Processing...' : 'Cash'}</span>
-            {!isSubmitting && <span className="text-[10px] font-normal opacity-75">₵{total.toFixed(2)}</span>}
+            {isSubmitting ? 'Processing...' : `Cash · ₵${total.toFixed(2)}`}
           </button>
         </div>
       </div>
@@ -469,7 +467,7 @@ const Main = () => {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search products..."
-                className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm text-stone-600 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-endeavour bg-white"
+                className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-base md:text-sm text-stone-600 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-endeavour bg-white"
               />
             </div>
             <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">

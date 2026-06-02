@@ -10,7 +10,7 @@ import {
   Hourglass,
   CheckCircle,
   Users,
-  UserCheck,
+  UserCog,
   Settings,
   CreditCard,
 } from 'lucide-react'
@@ -46,7 +46,7 @@ export const sidebarItems = [
     title: 'Users',
     items: [
       { label: 'Customers', href: '/en/stores/customers', icon: Users },
-      { label: 'storess', href: '/en/stores/storess', icon: UserCheck },
+      { label: 'Employees', href: '/en/stores/users', icon: UserCog },
     ],
   },
   {
