@@ -1,10 +1,10 @@
 'use client'
 
-import React, { useState, useMemo, useEffect } from 'react'
+import React, { useState, useMemo, useEffect, useRef } from 'react'
 import { Search, Plus, Minus, Trash2, ShoppingCart, Package, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { PopoverTemplate } from '@/components/templates/popover'
-import { Sheet, SheetContent, SheetClose } from '@/components/ui/sheet'
+import { Sheet, SheetContent, SheetClose } from '@/components/ui/sheet' // SheetClose used by unit picker
 import { useFetchData } from '@/hooks/use-fetch'
 import { useAxios } from '@/hooks/use-axios'
 import { ProductServices } from '../../products/inventory/_logics/services'
@@ -103,6 +103,43 @@ const Main = () => {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [cartSheetOpen, setCartSheetOpen] = useState(false)
   const [unitPickerProduct, setUnitPickerProduct] = useState<Product | null>(null)
+
+  // ── Draggable cart sheet ────────────────────────────────────────────────
+  const [cartHeight, setCartHeight] = useState(56)   // dvh
+  const [dragging, setDragging] = useState(false)
+  const dragStartY = useRef(0)
+  const dragStartH = useRef(56)
+  const liveH = useRef(56)                           // tracks height without re-renders
+
+  const closeCartSheet = () => {
+    setCartSheetOpen(false)
+    setTimeout(() => { setCartHeight(56); liveH.current = 56 }, 50)
+  }
+
+  const onHandleTouchStart = (e: React.TouchEvent) => {
+    dragStartY.current = e.touches[0].clientY
+    dragStartH.current = liveH.current
+    setDragging(true)
+  }
+
+  const onHandleTouchMove = (e: React.TouchEvent) => {
+    const dy = dragStartY.current - e.touches[0].clientY
+    const newH = Math.min(97, Math.max(12, dragStartH.current + (dy / window.innerHeight) * 100))
+    liveH.current = newH
+    setCartHeight(newH)
+  }
+
+  const onHandleTouchEnd = () => {
+    setDragging(false)
+    const h = liveH.current
+    if (h < 25) {
+      closeCartSheet()
+    } else if (h > 72) {
+      setCartHeight(95); liveH.current = 95
+    } else {
+      setCartHeight(56); liveH.current = 56
+    }
+  }
 
   const { data: warehousesData } = useFetchData('warehouses', WarehouseServices.FetchAll() as unknown as IGeneric)
   const warehouses = (warehousesData as any[] | undefined) ?? []
@@ -448,8 +485,8 @@ const Main = () => {
             </div>
           </div>
 
-          {/* Product grid */}
-          <div className="flex-1 overflow-y-auto">
+          {/* Product grid — pb-24 leaves room for the fixed cart bar on mobile */}
+          <div className="flex-1 overflow-y-auto pb-24 md:pb-2">
             {isLoading ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 pb-4">
                 {Array.from({ length: 8 }).map((_, i) => (
@@ -569,70 +606,85 @@ const Main = () => {
         </div>
       </div>
 
-      {/* ── Mobile: sticky cart bar ── */}
-      <button
-        className={cn(
-          'md:hidden flex-shrink-0 w-full flex items-center justify-between px-4 py-3 rounded-2xl mt-3 transition-all',
-          cartCount > 0 ? 'bg-endeavour text-white active:bg-veniceBlue' : 'bg-gray-100 text-gray-500 cursor-default'
-        )}
-        onClick={() => {
-          if (cartCount > 0) setCartSheetOpen(true)
-        }}
-      >
-        <div className="flex items-center gap-3">
-          <div
-            className={cn(
-              'w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0',
-              cartCount > 0 ? 'bg-white/20' : 'bg-gray-200'
-            )}
-          >
-            <ShoppingCart className="h-4 w-4" />
-          </div>
-          <div className="text-left">
-            <p className="text-sm font-bold leading-tight">
-              {cartCount > 0 ? `${cartCount} item${cartCount !== 1 ? 's' : ''} in cart` : 'Cart is empty'}
-            </p>
-            {cartCount > 0 && <p className="text-xs opacity-75">Tap to view & checkout</p>}
-          </div>
-        </div>
-        {cartCount > 0 && <span className="font-bold text-base">₵{total.toFixed(2)}</span>}
-      </button>
-
-      {/* ── Mobile: cart bottom sheet ── */}
-      <Sheet open={cartSheetOpen} onOpenChange={setCartSheetOpen}>
-        <SheetContent side="bottom" className="p-0 gap-0 rounded-t-3xl max-h-[92dvh] flex flex-col">
-          {/* Drag handle */}
-          <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
-            <div className="w-10 h-1 bg-gray-200 rounded-full" />
-          </div>
-          {/* Sheet header */}
-          <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
-            <div className="flex items-center gap-2">
-              <ShoppingCart className="h-4 w-4 text-endeavour" />
-              <span className="font-semibold text-stone-700 text-sm">Current Order</span>
-              {cartCount > 0 && (
-                <span className="bg-endeavour text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                  {cartCount}
-                </span>
-              )}
+      {/* ── Mobile: fixed floating cart bar ── */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 px-3 pb-4 pt-2">
+        <button
+          className={cn(
+            'w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all shadow-lg shadow-black/10',
+            cartCount > 0 ? 'bg-endeavour text-white active:bg-veniceBlue' : 'bg-gray-100 text-gray-400 cursor-default'
+          )}
+          onClick={() => { if (cartCount > 0) setCartSheetOpen(true) }}
+        >
+          <div className="flex items-center gap-3">
+            <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0', cartCount > 0 ? 'bg-white/20' : 'bg-gray-200')}>
+              <ShoppingCart className="h-4 w-4" />
             </div>
-            <div className="flex items-center gap-3">
-              {cart.length > 0 && (
-                <button onClick={clearCart} className="text-xs text-gray-400 hover:text-red-500 transition-colors">
-                  Clear all
-                </button>
-              )}
-              <SheetClose asChild>
-                <button className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 transition-colors">
+            <div className="text-left">
+              <p className="text-sm font-bold leading-tight">
+                {cartCount > 0 ? `${cartCount} item${cartCount !== 1 ? 's' : ''} in cart` : 'Cart is empty'}
+              </p>
+              {cartCount > 0 && <p className="text-xs opacity-75">Tap to view & checkout</p>}
+            </div>
+          </div>
+          {cartCount > 0 && <span className="font-bold text-base">₵{total.toFixed(2)}</span>}
+        </button>
+      </div>
+
+      {/* ── Mobile: draggable cart overlay ── */}
+      {cartSheetOpen && (
+        <div className="md:hidden fixed inset-0 z-50">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/40 animate-in fade-in-0 duration-200"
+            onClick={closeCartSheet}
+          />
+          {/* Sheet — height controlled by drag */}
+          <div
+            className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl flex flex-col overflow-hidden shadow-2xl animate-in slide-in-from-bottom-[100%] duration-300"
+            style={{
+              height: `${cartHeight}dvh`,
+              transition: dragging ? 'none' : 'height 0.3s cubic-bezier(0.32,0.72,0,1)',
+            }}
+          >
+            {/* Drag handle — touch target */}
+            <div
+              className="flex justify-center pt-3 pb-2 flex-shrink-0 touch-none"
+              onTouchStart={onHandleTouchStart}
+              onTouchMove={onHandleTouchMove}
+              onTouchEnd={onHandleTouchEnd}
+            >
+              <div className={cn('w-12 h-1.5 rounded-full transition-colors', dragging ? 'bg-gray-400' : 'bg-gray-200')} />
+            </div>
+            {/* Header */}
+            <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <ShoppingCart className="h-4 w-4 text-endeavour" />
+                <span className="font-semibold text-stone-700 text-sm">Current Order</span>
+                {cartCount > 0 && (
+                  <span className="bg-endeavour text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                    {cartCount}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-3">
+                {cart.length > 0 && (
+                  <button onClick={clearCart} className="text-xs text-gray-400 hover:text-red-500 transition-colors">
+                    Clear all
+                  </button>
+                )}
+                <button
+                  onClick={closeCartSheet}
+                  className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 transition-colors"
+                >
                   <X className="h-3.5 w-3.5" />
                 </button>
-              </SheetClose>
+              </div>
             </div>
+            <CartControls />
+            <CartBody />
           </div>
-          <CartControls />
-          <CartBody />
-        </SheetContent>
-      </Sheet>
+        </div>
+      )}
 
       {/* ── Mobile: unit picker bottom sheet ── */}
       <Sheet
