@@ -15,7 +15,7 @@ const ILayout = ({ children }: { children: React.ReactNode }) => {
         <AppSidebar isGrouped groupedItems={sidebarItems} />
         <main className='w-full flex'>
           <SidebarTrigger />
-          <div className='w-full p-4'>
+          <div className='w-full p-3 md:p-4'>
             {children}
           </div>
         </main>

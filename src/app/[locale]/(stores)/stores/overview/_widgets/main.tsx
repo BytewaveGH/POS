@@ -72,27 +72,36 @@ const Main = () => {
     const dateParams = { ...(from ? { from } : {}), ...(to ? { to } : {}) }
 
     const { data: overviewRaw } = useFetchData(`stats-overview-${dateKey}`, StatisticsServices.FetchAll(dateParams) as unknown as IGeneric)
-    // ── Weekly chart duration selector ──────────────────────────────────────
-    const [chartDuration, setChartDuration] = useState<'this-week' | '7d' | '14d' | '30d'>('this-week')
+    // ── Daily chart date range ──────────────────────────────────────────────
+    const isoDate = (d: Date) => d.toISOString().split('T')[0]
 
-    const weekRange = useMemo(() => {
-        const iso = (d: Date) => d.toISOString().split('T')[0]
+    const thisWeekRange = () => {
         const now = new Date()
-        if (chartDuration === 'this-week') {
-            const dow = now.getDay()
-            const diffToMon = dow === 0 ? -6 : 1 - dow
-            const mon = new Date(now); mon.setDate(now.getDate() + diffToMon)
-            const sun = new Date(mon); sun.setDate(mon.getDate() + 6)
-            return { from: iso(mon), to: iso(sun) }
+        const dow = now.getDay()
+        const diffToMon = dow === 0 ? -6 : 1 - dow
+        const mon = new Date(now); mon.setDate(now.getDate() + diffToMon)
+        const sun = new Date(mon); sun.setDate(mon.getDate() + 6)
+        return { from: isoDate(mon), to: isoDate(sun) }
+    }
+
+    const [chartFrom, setChartFrom] = useState(() => thisWeekRange().from)
+    const [chartTo,   setChartTo]   = useState(() => thisWeekRange().to)
+
+    const applyChartPreset = (preset: 'this-week' | '7d' | '14d' | '30d') => {
+        const now = new Date()
+        if (preset === 'this-week') {
+            const { from, to } = thisWeekRange()
+            setChartFrom(from); setChartTo(to)
+        } else {
+            const days = preset === '7d' ? 7 : preset === '14d' ? 14 : 30
+            const start = new Date(now); start.setDate(now.getDate() - (days - 1))
+            setChartFrom(isoDate(start)); setChartTo(isoDate(now))
         }
-        const days = chartDuration === '7d' ? 7 : chartDuration === '14d' ? 14 : 30
-        const start = new Date(now); start.setDate(now.getDate() - (days - 1))
-        return { from: iso(start), to: iso(now) }
-    }, [chartDuration])
+    }
 
     const { data: dailySalesRaw, refetch: refetchDailyChart } = useFetchData(
-        `stats-sales-week-${weekRange.from}-${weekRange.to}`,
-        StatisticsServices.FetchSales({ granularity: 'day', from: weekRange.from, to: weekRange.to }) as unknown as IGeneric
+        `stats-sales-week-${chartFrom}-${chartTo}`,
+        StatisticsServices.FetchSales({ granularity: 'day', from: chartFrom, to: chartTo }) as unknown as IGeneric
     )
     // Monthly chart uses its own 12-month range — independent of the date picker
     // so the current month always appears with its accumulated data so far.
@@ -105,7 +114,7 @@ const Main = () => {
         return { from: iso(start), to: iso(now) }
     }, [])
 
-    const { data: monthlySalesRaw } = useFetchData(
+    const { data: monthlySalesRaw, refetch: refetchMonthlyChart } = useFetchData(
         `stats-sales-month-${monthlyRange.from}`,
         StatisticsServices.FetchSales({ granularity: 'month', from: monthlyRange.from, to: monthlyRange.to }) as unknown as IGeneric,
     )
@@ -123,12 +132,10 @@ const Main = () => {
     )
     const { data: allSoldRaw } = useFetchData(`stats-all-sold-${dateKey}`, StatisticsServices.FetchProducts({ limit: 1000, ...dateParams }) as unknown as IGeneric)
 
-    // Separate fetch scoped to the chart's own date range (weekRange) — used to
-    // compute the correct profit margin for the daily chart, independent of the
-    // date picker above.
+    // Separate fetch scoped to the chart's own date range — profit margin for daily chart
     const { data: chartSoldRaw } = useFetchData(
-        `stats-chart-sold-${weekRange.from}-${weekRange.to}`,
-        StatisticsServices.FetchProducts({ limit: 1000, from: weekRange.from, to: weekRange.to }) as unknown as IGeneric,
+        `stats-chart-sold-${chartFrom}-${chartTo}`,
+        StatisticsServices.FetchProducts({ limit: 1000, from: chartFrom, to: chartTo }) as unknown as IGeneric,
     )
     const { data: warehousesRaw, total: whTotal } = useFetchPaginated(
         `stats-warehouses-${dateKey}`,
@@ -139,31 +146,14 @@ const Main = () => {
     const { data: allProductsRaw } = useFetchData('overview-products', ProductServices.FetchAll() as unknown as IGeneric)
 
     const overview = overviewRaw as any
-    // Fill all 7 days Mon–Sun; days with no sales default to 0
     const dailySales = useMemo(() => {
         const entries = (dailySalesRaw as any[]) ?? []
-
-        if (chartDuration === 'this-week') {
-            const byDay: Record<string, { revenue: number; count: number }> = {}
-            entries.forEach((d: any) => {
-                const [y, m, dy] = (d.date as string).split('-').map(Number)
-                const label = new Date(y, m - 1, dy).toLocaleDateString('en-US', { weekday: 'short' })
-                byDay[label] = { revenue: d.revenue ?? 0, count: d.count ?? 0 }
-            })
-            return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => ({
-                day,
-                revenue: byDay[day]?.revenue ?? 0,
-                count:   byDay[day]?.count   ?? 0,
-            }))
-        }
-
-        // Multi-day range: label as "Mon 28"
         return entries.map((d: any) => {
             const [y, m, dy] = (d.date as string).split('-').map(Number)
             const label = new Date(y, m - 1, dy).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' })
             return { day: label, revenue: d.revenue ?? 0, count: d.count ?? 0 }
         })
-    }, [dailySalesRaw, chartDuration])
+    }, [dailySalesRaw])
     const monthlySalesRawArr = (monthlySalesRaw as any[]) ?? []
     const topProducts = (topProductsRaw as any[]) ?? []
     const allSold = (allSoldRaw as any[]) ?? []
@@ -359,38 +349,51 @@ const Main = () => {
             {/* Charts */}
             <section className="grid grid-cols-1 md:grid-cols-5 gap-4">
                 <div className="md:col-span-3 bg-white rounded-xl border border-gray-200 p-4">
-                    <div className="flex items-start justify-between mb-3">
-                        <div>
-                            <p className="bytewave-paragraph font-semibold text-stone-700">Daily Performance</p>
-                            <p className="bytewave-paragraph text-xs text-gray-400">Revenue · Profit · Sales count</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            {/* Refresh button */}
+                    <div className="flex flex-col gap-2.5 mb-3">
+                        {/* Title row */}
+                        <div className="flex items-start justify-between gap-2">
+                            <div>
+                                <p className="bytewave-paragraph font-semibold text-stone-700">Daily Performance</p>
+                                <p className="bytewave-paragraph text-xs text-gray-400">Revenue · Profit · Sales count</p>
+                            </div>
                             <button
                                 onClick={() => refetchDailyChart()}
                                 title="Refresh chart data"
-                                className="p-1.5 rounded-lg border border-gray-200 text-gray-400 hover:text-endeavour hover:border-endeavour transition-colors"
+                                className="p-1.5 rounded-lg border border-gray-200 text-gray-400 hover:text-endeavour hover:border-endeavour transition-colors flex-shrink-0"
                             >
                                 <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                                 </svg>
                             </button>
-                            {/* Duration selector */}
-                            <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs">
+                        </div>
+                        {/* Date range + presets */}
+                        <div className="flex flex-wrap items-center gap-2">
+                            <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                                <input
+                                    type="date"
+                                    value={chartFrom}
+                                    onChange={e => setChartFrom(e.target.value)}
+                                    className="flex-1 min-w-0 border border-gray-200 rounded-lg px-2 py-1.5 bytewave-paragraph text-xs text-stone-700 focus:outline-none focus:ring-1 focus:ring-endeavour"
+                                />
+                                <span className="text-gray-400 text-xs flex-shrink-0">→</span>
+                                <input
+                                    type="date"
+                                    value={chartTo}
+                                    onChange={e => setChartTo(e.target.value)}
+                                    className="flex-1 min-w-0 border border-gray-200 rounded-lg px-2 py-1.5 bytewave-paragraph text-xs text-stone-700 focus:outline-none focus:ring-1 focus:ring-endeavour"
+                                />
+                            </div>
+                            <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs flex-shrink-0">
                                 {([
-                                    { key: 'this-week', label: 'This Week' },
-                                    { key: '7d',        label: '7 Days'    },
-                                    { key: '14d',       label: '14 Days'   },
-                                    { key: '30d',       label: '30 Days'   },
+                                    { key: 'this-week', label: 'Week' },
+                                    { key: '7d',        label: '7d'   },
+                                    { key: '14d',       label: '14d'  },
+                                    { key: '30d',       label: '30d'  },
                                 ] as const).map(opt => (
                                     <button
                                         key={opt.key}
-                                        onClick={() => setChartDuration(opt.key)}
-                                        className={`px-2.5 py-1 bytewave-paragraph transition-colors ${
-                                            chartDuration === opt.key
-                                                ? 'bg-endeavour text-white'
-                                                : 'bg-white text-gray-500 hover:bg-gray-50'
-                                        }`}
+                                        onClick={() => applyChartPreset(opt.key)}
+                                        className="px-2.5 py-1.5 bytewave-paragraph transition-colors whitespace-nowrap bg-white text-gray-500 hover:bg-gray-50 hover:text-endeavour border-l border-gray-200 first:border-l-0"
                                     >
                                         {opt.label}
                                     </button>
@@ -401,9 +404,20 @@ const Main = () => {
                     <AgCharts options={dailyChartOptions} style={{ height: '240px' }} />
                 </div>
                 <div className="md:col-span-2 bg-white rounded-xl border border-gray-200 p-4">
-                    <div className="mb-3">
-                        <p className="bytewave-paragraph font-semibold text-stone-700">Monthly Performance</p>
-                        <p className="bytewave-paragraph text-xs text-gray-400">Revenue by month</p>
+                    <div className="flex items-start justify-between mb-3 gap-2">
+                        <div>
+                            <p className="bytewave-paragraph font-semibold text-stone-700">Monthly Performance</p>
+                            <p className="bytewave-paragraph text-xs text-gray-400">Revenue by month (last 12 months)</p>
+                        </div>
+                        <button
+                            onClick={() => refetchMonthlyChart()}
+                            title="Refresh chart data"
+                            className="p-1.5 rounded-lg border border-gray-200 text-gray-400 hover:text-endeavour hover:border-endeavour transition-colors flex-shrink-0"
+                        >
+                            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                        </button>
                     </div>
                     <AgCharts options={monthlyChartOptions} style={{ height: '240px' }} />
                 </div>
@@ -416,7 +430,9 @@ const Main = () => {
                         <BarChart2 className="h-4 w-4 text-endeavour" />
                         <p className="bytewave-paragraph font-semibold text-stone-700">Top Products</p>
                     </div>
-                    <DatagridTemplate columns={topProductCols} data={topProductsWithProfit} enablePagination={false} paginationPageSize={topPageSize} selectionType="singleRow" />
+                    <div className="overflow-x-auto">
+                        <DatagridTemplate columns={topProductCols} data={topProductsWithProfit} enablePagination={false} paginationPageSize={topPageSize} selectionType="singleRow" />
+                    </div>
                     <Pagination page={topPage} pageSize={topPageSize} total={topTotal} onPage={setTopPage} onPageSize={setTopPageSize} />
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 overflow-hidden flex flex-col">
@@ -424,7 +440,9 @@ const Main = () => {
                         <Building2 className="h-4 w-4 text-endeavour" />
                         <p className="bytewave-paragraph font-semibold text-stone-700">Warehouses</p>
                     </div>
-                    <DatagridTemplate columns={warehouseCols} data={warehouses} enablePagination={false} paginationPageSize={whPageSize} selectionType="singleRow" />
+                    <div className="overflow-x-auto">
+                        <DatagridTemplate columns={warehouseCols} data={warehouses} enablePagination={false} paginationPageSize={whPageSize} selectionType="singleRow" />
+                    </div>
                     <Pagination page={whPage} pageSize={whPageSize} total={whTotal} onPage={setWhPage} onPageSize={setWhPageSize} />
                 </div>
             </section>

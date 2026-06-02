@@ -116,7 +116,7 @@ const Main = () => {
     ], [])
 
     return (
-        <div className='w-full h-full flex space-x-2'>
+        <div className='w-full h-full flex flex-col lg:flex-row gap-4'>
 
             <SheetTemplate
                 open={states.isModalOpen}
@@ -170,15 +170,17 @@ const Main = () => {
                         />
                     </aside>
                 </nav>
-                <DatagridTemplate
-                    columns={unitCols}
-                    data={(units as unknown as any[]) ?? []}
-                    loadingIndicator={unitsLoading}
-                    enablePagination
-                    paginationPageSize={20}
-                    paginationPageSizeSelector={[10, 20, 50]}
-                    selectionType='singleRow'
-                />
+                <div className="overflow-x-auto">
+                    <DatagridTemplate
+                        columns={unitCols}
+                        data={(units as unknown as any[]) ?? []}
+                        loadingIndicator={unitsLoading}
+                        enablePagination
+                        paginationPageSize={20}
+                        paginationPageSizeSelector={[10, 20, 50]}
+                        selectionType='singleRow'
+                    />
+                </div>
             </div>
 
             {/* Warehouses */}
@@ -196,15 +198,17 @@ const Main = () => {
                         />
                     </aside>
                 </nav>
-                <DatagridTemplate
-                    columns={warehouseCols}
-                    data={(warehouses as unknown as any[]) ?? []}
-                    loadingIndicator={warehousesLoading}
-                    enablePagination
-                    paginationPageSize={20}
-                    paginationPageSizeSelector={[10, 20, 50]}
-                    selectionType='singleRow'
-                />
+                <div className="overflow-x-auto">
+                    <DatagridTemplate
+                        columns={warehouseCols}
+                        data={(warehouses as unknown as any[]) ?? []}
+                        loadingIndicator={warehousesLoading}
+                        enablePagination
+                        paginationPageSize={20}
+                        paginationPageSizeSelector={[10, 20, 50]}
+                        selectionType='singleRow'
+                    />
+                </div>
             </div>
         </div>
     )

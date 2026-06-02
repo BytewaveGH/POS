@@ -686,11 +686,15 @@ const Main = () => {
 
       {/* ── Sale detail modal ── */}
       {viewSale && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-          <div className="bg-white rounded-2xl shadow-xl w-[540px] max-h-[85vh] flex flex-col overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/30 p-0 sm:p-4">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-[540px] max-h-[90vh] sm:max-h-[85vh] flex flex-col overflow-hidden">
 
+            {/* Drag handle (mobile) */}
+            <div className="flex justify-center pt-3 pb-1 sm:hidden flex-shrink-0">
+              <div className="w-10 h-1 bg-gray-200 rounded-full" />
+            </div>
             {/* Header */}
-            <div className="px-5 py-4 border-b border-gray-100 flex items-start justify-between">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-start justify-between flex-shrink-0">
               <div>
                 <h2 className="bytewave-heading text-base">Sale #{viewSale.id}</h2>
                 <p className="bytewave-paragraph text-xs text-gray-400">
@@ -757,11 +761,14 @@ const Main = () => {
 
       {/* ── Invoice detail modal ── */}
       {viewInvoice && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-          <div className="bg-white rounded-2xl shadow-xl w-[560px] max-h-[85vh] flex flex-col overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/30 p-0 sm:p-4">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-[560px] max-h-[90vh] sm:max-h-[85vh] flex flex-col overflow-hidden">
 
+            <div className="flex justify-center pt-3 pb-1 sm:hidden flex-shrink-0">
+              <div className="w-10 h-1 bg-gray-200 rounded-full" />
+            </div>
             {/* Header */}
-            <div className="px-5 py-4 border-b border-gray-100 flex items-start justify-between">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-start justify-between flex-shrink-0">
               <div>
                 <h2 className="bytewave-heading text-base">Invoice #{viewInvoice.id}</h2>
                 <p className="bytewave-paragraph text-xs text-gray-400">
@@ -849,8 +856,11 @@ const Main = () => {
 
       {/* ── Restock dialog ── */}
       {restockTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-          <div className="bg-white rounded-2xl shadow-xl p-6 w-[360px] flex flex-col gap-4">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/30 p-0 sm:p-4">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl p-6 w-full sm:max-w-[360px] flex flex-col gap-4">
+            <div className="flex justify-center -mt-3 mb-1 sm:hidden">
+              <div className="w-10 h-1 bg-gray-200 rounded-full" />
+            </div>
             <div>
               <h2 className="bytewave-heading text-base">{restockTarget.productName}</h2>
               <p className="bytewave-paragraph text-xs text-gray-400">{restockTarget.warehouseName} · Current qty: {restockTarget.currentQty}</p>
@@ -911,10 +921,13 @@ const Main = () => {
 
       {/* ── Stock History modal ── */}
       {historyTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-          <div className="bg-white rounded-2xl shadow-xl w-[520px] max-h-[80vh] flex flex-col overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/30 p-0 sm:p-4">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-[520px] max-h-[90vh] sm:max-h-[80vh] flex flex-col overflow-hidden">
+            <div className="flex justify-center pt-3 pb-1 sm:hidden flex-shrink-0">
+              <div className="w-10 h-1 bg-gray-200 rounded-full" />
+            </div>
             {/* Header */}
-            <div className="px-5 py-4 border-b border-gray-100 flex items-start justify-between">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-start justify-between flex-shrink-0">
               <div>
                 <h2 className="bytewave-heading text-base">{historyTarget.productName}</h2>
                 <p className="bytewave-paragraph text-xs text-gray-400">{historyTarget.warehouseName} · Restock History</p>
@@ -1029,31 +1042,31 @@ const Main = () => {
         </div>
       )}
 
-      <div className='w-full flex justify-between items-center mb-4'>
-        <aside className="w-1/3">
+      <div className='w-full flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4'>
+        <div>
           <h1 className='bytewave-heading'>{"Inventory"}</h1>
           <p className='bytewave-paragraph'>{"Manage your stock, units, and categories"}</p>
-        </aside>
-        <aside className="w-2/3 flex justify-end gap-2">
+        </div>
+        <div className="flex flex-wrap gap-2 sm:justify-end">
           <ButtonTemplate
-            classname="px-4 py-2 border border-endeavour text-white rounded-md"
+            classname="px-3 py-2 border border-endeavour text-white rounded-md text-xs"
             isText
             text={"Add Operation"}
             handleClick={() => { setSelectedOperation(null); setOperationModal(true) }}
           />
           <ButtonTemplate
-            classname="px-4 py-2 border border-endeavour text-white rounded-md"
+            classname="px-3 py-2 border border-endeavour text-white rounded-md text-xs"
             isText
             text={"Add Invoice"}
             handleClick={() => setInvoiceModal(true)}
           />
           <ButtonTemplate
-            classname="px-4 py-2 bg-endeavour text-white rounded-md"
+            classname="px-3 py-2 bg-endeavour text-white rounded-md text-xs"
             isText
             text={"Add Product"}
             handleClick={() => { UpdateStates(setStates, 'isModalOpen', true) }}
           />
-        </aside>
+        </div>
       </div>
 
       {/* ── Dashboard summary cards ── */}
@@ -1132,14 +1145,16 @@ const Main = () => {
             ...tab,
             content: tab.key === 'Transactions' ? (
               <div className="flex flex-col">
-                <DatagridTemplate
-                  columns={saleCols}
-                  data={sales}
-                  loadingIndicator={salesLoading}
-                  enablePagination={false}
-                  paginationPageSize={salesPageSize}
-                  selectionType="singleRow"
-                />
+                <div className="overflow-x-auto">
+                  <DatagridTemplate
+                    columns={saleCols}
+                    data={sales}
+                    loadingIndicator={salesLoading}
+                    enablePagination={false}
+                    paginationPageSize={salesPageSize}
+                    selectionType="singleRow"
+                  />
+                </div>
                 <Pagination
                   page={salesPage}
                   pageSize={salesPageSize}
@@ -1150,14 +1165,16 @@ const Main = () => {
               </div>
             ) : tab.key === 'Invoices' ? (
               <div className="flex flex-col">
-                <DatagridTemplate
-                  columns={invoiceCols}
-                  data={invoices}
-                  loadingIndicator={invoicesLoading}
-                  enablePagination={false}
-                  paginationPageSize={invoicePageSize}
-                  selectionType="singleRow"
-                />
+                <div className="overflow-x-auto">
+                  <DatagridTemplate
+                    columns={invoiceCols}
+                    data={invoices}
+                    loadingIndicator={invoicesLoading}
+                    enablePagination={false}
+                    paginationPageSize={invoicePageSize}
+                    selectionType="singleRow"
+                  />
+                </div>
                 <Pagination
                   page={invoicePage}
                   pageSize={invoicePageSize}
@@ -1168,14 +1185,16 @@ const Main = () => {
               </div>
             ) : tab.key === 'Operations' ? (
               <div className="flex flex-col">
-                <DatagridTemplate
-                  columns={operationCols}
-                  data={operations}
-                  loadingIndicator={opLoading}
-                  enablePagination={false}
-                  paginationPageSize={opPageSize}
-                  selectionType="singleRow"
-                />
+                <div className="overflow-x-auto">
+                  <DatagridTemplate
+                    columns={operationCols}
+                    data={operations}
+                    loadingIndicator={opLoading}
+                    enablePagination={false}
+                    paginationPageSize={opPageSize}
+                    selectionType="singleRow"
+                  />
+                </div>
                 <Pagination
                   page={opPage}
                   pageSize={opPageSize}
@@ -1186,26 +1205,30 @@ const Main = () => {
               </div>
             ) : tab.key === 'Stocks' ? (
               <div className="flex flex-col">
-                <DatagridTemplate
-                  columns={stockCols}
-                  data={stockRows}
-                  loadingIndicator={isLoading}
-                  enablePagination
-                  paginationPageSize={20}
-                  paginationPageSizeSelector={[10, 20, 50, 100]}
-                  selectionType="singleRow"
-                />
+                <div className="overflow-x-auto">
+                  <DatagridTemplate
+                    columns={stockCols}
+                    data={stockRows}
+                    loadingIndicator={isLoading}
+                    enablePagination
+                    paginationPageSize={20}
+                    paginationPageSizeSelector={[10, 20, 50, 100]}
+                    selectionType="singleRow"
+                  />
+                </div>
               </div>
             ) : (
               <div className="flex flex-col">
-                <DatagridTemplate
-                  columns={productCols}
-                  data={flatRows}
-                  loadingIndicator={isLoading}
-                  enablePagination={false}
-                  paginationPageSize={productPageSize}
-                  selectionType="singleRow"
-                />
+                <div className="overflow-x-auto">
+                  <DatagridTemplate
+                    columns={productCols}
+                    data={flatRows}
+                    loadingIndicator={isLoading}
+                    enablePagination={false}
+                    paginationPageSize={productPageSize}
+                    selectionType="singleRow"
+                  />
+                </div>
                 <Pagination
                   page={productPage}
                   pageSize={productPageSize}
