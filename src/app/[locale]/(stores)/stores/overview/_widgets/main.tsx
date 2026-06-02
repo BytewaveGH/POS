@@ -519,9 +519,9 @@ const Main = () => {
               {(
                 [
                   { key: 'this-week', label: 'This Week' },
-                  { key: '7d',        label: '7 Days'    },
-                  { key: '14d',       label: '14 Days'   },
-                  { key: '30d',       label: '30 Days'   },
+                  { key: '7d', label: '7 Days' },
+                  { key: '14d', label: '14 Days' },
+                  { key: '30d', label: '30 Days' },
                 ] as const
               ).map((opt) => (
                 <button

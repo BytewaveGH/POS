@@ -105,15 +105,18 @@ const Main = () => {
   const [unitPickerProduct, setUnitPickerProduct] = useState<Product | null>(null)
 
   // ── Draggable cart sheet ────────────────────────────────────────────────
-  const [cartHeight, setCartHeight] = useState(56)   // dvh
+  const [cartHeight, setCartHeight] = useState(56) // dvh
   const [dragging, setDragging] = useState(false)
   const dragStartY = useRef(0)
   const dragStartH = useRef(56)
-  const liveH = useRef(56)                           // tracks height without re-renders
+  const liveH = useRef(56) // tracks height without re-renders
 
   const closeCartSheet = () => {
     setCartSheetOpen(false)
-    setTimeout(() => { setCartHeight(56); liveH.current = 56 }, 50)
+    setTimeout(() => {
+      setCartHeight(56)
+      liveH.current = 56
+    }, 50)
   }
 
   const onHandleTouchStart = (e: React.TouchEvent) => {
@@ -135,9 +138,11 @@ const Main = () => {
     if (h < 25) {
       closeCartSheet()
     } else if (h > 72) {
-      setCartHeight(95); liveH.current = 95
+      setCartHeight(95)
+      liveH.current = 95
     } else {
-      setCartHeight(56); liveH.current = 56
+      setCartHeight(56)
+      liveH.current = 56
     }
   }
 
@@ -613,10 +618,17 @@ const Main = () => {
             'w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all shadow-lg shadow-black/10',
             cartCount > 0 ? 'bg-endeavour text-white active:bg-veniceBlue' : 'bg-gray-100 text-gray-400 cursor-default'
           )}
-          onClick={() => { if (cartCount > 0) setCartSheetOpen(true) }}
+          onClick={() => {
+            if (cartCount > 0) setCartSheetOpen(true)
+          }}
         >
           <div className="flex items-center gap-3">
-            <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0', cartCount > 0 ? 'bg-white/20' : 'bg-gray-200')}>
+            <div
+              className={cn(
+                'w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0',
+                cartCount > 0 ? 'bg-white/20' : 'bg-gray-200'
+              )}
+            >
               <ShoppingCart className="h-4 w-4" />
             </div>
             <div className="text-left">
@@ -634,10 +646,7 @@ const Main = () => {
       {cartSheetOpen && (
         <div className="md:hidden fixed inset-0 z-50">
           {/* Backdrop */}
-          <div
-            className="absolute inset-0 bg-black/40 animate-in fade-in-0 duration-200"
-            onClick={closeCartSheet}
-          />
+          <div className="absolute inset-0 bg-black/40 animate-in fade-in-0 duration-200" onClick={closeCartSheet} />
           {/* Sheet — height controlled by drag */}
           <div
             className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl flex flex-col overflow-hidden shadow-2xl animate-in slide-in-from-bottom-[100%] duration-300"
