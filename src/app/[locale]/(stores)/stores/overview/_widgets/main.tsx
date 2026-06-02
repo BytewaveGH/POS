@@ -498,41 +498,40 @@ const Main = () => {
                 </svg>
               </button>
             </div>
-            {/* Date range + presets */}
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                <input
-                  type="date"
-                  value={chartFrom}
-                  onChange={(e) => setChartFrom(e.target.value)}
-                  className="flex-1 min-w-0 border border-gray-200 rounded-lg px-2 py-1.5 bytewave-paragraph text-xs text-stone-700 focus:outline-none focus:ring-1 focus:ring-endeavour"
-                />
-                <span className="text-gray-400 text-xs flex-shrink-0">→</span>
-                <input
-                  type="date"
-                  value={chartTo}
-                  onChange={(e) => setChartTo(e.target.value)}
-                  className="flex-1 min-w-0 border border-gray-200 rounded-lg px-2 py-1.5 bytewave-paragraph text-xs text-stone-700 focus:outline-none focus:ring-1 focus:ring-endeavour"
-                />
-              </div>
-              <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs flex-shrink-0">
-                {(
-                  [
-                    { key: 'this-week', label: 'Week' },
-                    { key: '7d', label: '7d' },
-                    { key: '14d', label: '14d' },
-                    { key: '30d', label: '30d' },
-                  ] as const
-                ).map((opt) => (
-                  <button
-                    key={opt.key}
-                    onClick={() => applyChartPreset(opt.key)}
-                    className="px-2.5 py-1.5 bytewave-paragraph transition-colors whitespace-nowrap bg-white text-gray-500 hover:bg-gray-50 hover:text-endeavour border-l border-gray-200 first:border-l-0"
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
+            {/* Date range — own row, full width */}
+            <div className="flex items-center gap-1.5">
+              <input
+                type="date"
+                value={chartFrom}
+                onChange={(e) => setChartFrom(e.target.value)}
+                className="flex-1 min-w-0 border border-gray-200 rounded-lg px-2 py-1.5 bytewave-paragraph text-xs text-stone-700 focus:outline-none focus:ring-1 focus:ring-endeavour"
+              />
+              <span className="text-gray-400 text-xs flex-shrink-0">→</span>
+              <input
+                type="date"
+                value={chartTo}
+                onChange={(e) => setChartTo(e.target.value)}
+                className="flex-1 min-w-0 border border-gray-200 rounded-lg px-2 py-1.5 bytewave-paragraph text-xs text-stone-700 focus:outline-none focus:ring-1 focus:ring-endeavour"
+              />
+            </div>
+            {/* Quick presets — own row below dates */}
+            <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs">
+              {(
+                [
+                  { key: 'this-week', label: 'This Week' },
+                  { key: '7d', label: '7 Days' },
+                  { key: '14d', label: '14 Days' },
+                  { key: '30d', label: '30 Days' },
+                ] as const
+              ).map((opt) => (
+                <button
+                  key={opt.key}
+                  onClick={() => applyChartPreset(opt.key)}
+                  className="flex-1 py-1.5 bytewave-paragraph transition-colors whitespace-nowrap bg-white text-gray-500 hover:bg-gray-50 hover:text-endeavour border-l border-gray-200 first:border-l-0 text-center"
+                >
+                  {opt.label}
+                </button>
+              ))}
             </div>
           </div>
           <AgCharts options={dailyChartOptions} style={{ height: '240px' }} />
