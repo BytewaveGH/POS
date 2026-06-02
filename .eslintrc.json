@@ -13,7 +13,7 @@
         "allow": ["warn", "error"]
       }
     ], // this disallows console types except [warn, error]
-   
+
     // Variable Naming
     // "camelcase": ["error", { "properties": "always" }],
     "@typescript-eslint/naming-convention": [

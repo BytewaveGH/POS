@@ -3,8 +3,8 @@ import Main from './_widgets/main'
 
 export default function Page() {
   return (
-    <div className='w-full'>
-        <Main />
+    <div className="w-full">
+      <Main />
     </div>
   )
 }

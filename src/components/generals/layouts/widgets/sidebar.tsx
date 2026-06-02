@@ -1,6 +1,6 @@
-"use client"
+'use client'
 
-import { Calendar, Home, Inbox, Search, Settings } from "lucide-react"
+import { Calendar, Home, Inbox, Search, Settings } from 'lucide-react'
 
 import {
   Sidebar,
@@ -11,11 +11,10 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-} from "@/components/ui/sidebar"
-import { Fragment } from "react"
-import Image from "next/image"
-import byteLogo from "@/assets/images/byte.png"
-
+} from '@/components/ui/sidebar'
+import { Fragment } from 'react'
+import Image from 'next/image'
+import byteLogo from '@/assets/images/byte.png'
 
 interface SidebarProps {
   isGrouped?: boolean
@@ -24,28 +23,28 @@ interface SidebarProps {
 // Menu items.
 const items = [
   {
-    title: "Home",
-    url: "#",
+    title: 'Home',
+    url: '#',
     icon: Home,
   },
   {
-    title: "Inbox",
-    url: "#",
+    title: 'Inbox',
+    url: '#',
     icon: Inbox,
   },
   {
-    title: "Calendar",
-    url: "#",
+    title: 'Calendar',
+    url: '#',
     icon: Calendar,
   },
   {
-    title: "Search",
-    url: "#",
+    title: 'Search',
+    url: '#',
     icon: Search,
   },
   {
-    title: "Settings",
-    url: "#",
+    title: 'Settings',
+    url: '#',
     icon: Settings,
   },
 ]
@@ -54,11 +53,11 @@ export function AppSidebar({ isGrouped, groupedItems = [] }: SidebarProps) {
   return (
     <Sidebar>
       <SidebarContent>
-        <Image src={byteLogo} alt="" width={300} height={50}/>
+        <Image src={byteLogo} alt="" width={300} height={50} />
         <SidebarGroup>
           {isGrouped ? (
             <>
-              {groupedItems.map((group:{title:string, items: {label:string, href:string, icon:React.ReactNode | any}[]}) => {
+              {groupedItems.map((group: { title: string; items: { label: string; href: string; icon: React.ReactNode | any }[] }) => {
                 return (
                   <>
                     <SidebarGroupLabel>{group.title}</SidebarGroupLabel>
@@ -80,30 +79,27 @@ export function AppSidebar({ isGrouped, groupedItems = [] }: SidebarProps) {
                 )
               })}
             </>
-
-          ) :
-            (
-              <Fragment key={"no-group"}>
-                <SidebarGroupLabel>Application</SidebarGroupLabel>
-                <SidebarGroupContent>
-                  <SidebarMenu>
-                    {items.map((item) => (
-                      <SidebarMenuItem key={item.title}>
-                        <SidebarMenuButton asChild>
-                          <a href={item.url}>
-                            <item.icon />
-                            <span>{item.title}</span>
-                          </a>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    ))}
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </Fragment>
-            )
-          }
+          ) : (
+            <Fragment key={'no-group'}>
+              <SidebarGroupLabel>Application</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {items.map((item) => (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton asChild>
+                        <a href={item.url}>
+                          <item.icon />
+                          <span>{item.title}</span>
+                        </a>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </Fragment>
+          )}
         </SidebarGroup>
-      </SidebarContent >
-    </Sidebar >
+      </SidebarContent>
+    </Sidebar>
   )
 }

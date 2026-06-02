@@ -8,7 +8,6 @@ export const StatisticsServices = {
     method: 'GET',
     url: `/stats/sales`,
     params,
-
   }),
   FetchProducts: (params?: any) => ({
     method: 'GET',

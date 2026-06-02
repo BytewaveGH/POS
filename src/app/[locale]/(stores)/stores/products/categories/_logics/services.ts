@@ -4,7 +4,6 @@ export const UnitServices = {
     url: `/units/`,
     params,
   }),
-  
 
   Create: (payload: any, params?: any) => ({
     method: 'POST',
@@ -24,7 +23,6 @@ export const UnitServices = {
     data: payload,
     params,
   }),
-
 }
 
 export const WarehouseServices = {

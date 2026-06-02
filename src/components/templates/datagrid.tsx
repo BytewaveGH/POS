@@ -10,11 +10,7 @@ import { DatagridProps } from './logics/templates'
 ModuleRegistry.registerModules([AllCommunityModule, CsvExportModule, CsvExportModule])
 
 export const CustomTooltip = (props: any) => {
-  return (
-    <div className=" text-stone-500 seedstars-paragraph bg-white p-2 rounded-lg shadow-lg max-w-xs">
-      {props.value}
-    </div>
-  )
+  return <div className=" text-stone-500 seedstars-paragraph bg-white p-2 rounded-lg shadow-lg max-w-xs">{props.value}</div>
 }
 
 const DatagridTemplate = ({
@@ -42,14 +38,14 @@ const DatagridTemplate = ({
 }: DatagridProps) => {
   const gridRef = useRef<any>(null)
   const containerStyle = useMemo(() => ({ width: '100%', height: containerHeight ?? 500, ...containerStyles }), [containerHeight])
-  const gridStyle = useMemo(() => ({ height: gridHeight ?? '100%', width: '100%',...containerStyles }), [gridHeight])
+  const gridStyle = useMemo(() => ({ height: gridHeight ?? '100%', width: '100%', ...containerStyles }), [gridHeight])
   // const paginationPageSizeSelector = [200, 500, 1000]
 
   const defaultColDef = useMemo(() => {
     return {
       filter: true, //"agTextColumnFilter",
       // floatingFilter: true,
-      
+
       sortable: true,
       resizable: true,
       wrapHeaderText: true,
@@ -94,13 +90,13 @@ const DatagridTemplate = ({
       {/* <ButtonTemplate handleClick={onBtnExport} /> */}
       <div style={gridStyle}>
         <AgGridReact
-        enableCellSpan={true}
+          enableCellSpan={true}
           ref={gridRef}
           // onGridReady={onGridReady}
           loading={loadingIndicator}
           // localeText={}
           // debug={true}
-         
+
           theme={themeQuartz}
           rowData={data || []}
           columnDefs={columns || []}
@@ -127,7 +123,6 @@ const DatagridTemplate = ({
             handleRowClick && handleRowClick(rowData)
           }} //use this to get the selected row if it is single selection
           onCellValueChanged={onCellValueChanged}
-          
           // tooltipShowDelay={0}
           // tooltipHideDelay={2000} //hides in 2 seconds
           suppressServerSideFullWidthLoadingRow={true}
@@ -137,7 +132,6 @@ const DatagridTemplate = ({
           paginationPageSizeSelector={paginationPageSizeSelector}
           onPaginationChanged={handlePageChanged}
           paginationAutoPageSize={pageSizeAuto}
-         
         />
       </div>
     </div>

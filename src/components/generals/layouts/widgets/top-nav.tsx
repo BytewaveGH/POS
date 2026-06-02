@@ -1,4 +1,4 @@
-"use client"
+'use client'
 
 import React, { Fragment } from 'react'
 import ProfileAvatar from './profile-avatar'
@@ -11,7 +11,7 @@ interface TopNavProps {
   trigger?: any
 }
 
-const TopNav = ({trigger}:TopNavProps) => {
+const TopNav = ({ trigger }: TopNavProps) => {
   const router = useRouter()
   const { data: session } = useSession()
 
@@ -19,13 +19,20 @@ const TopNav = ({trigger}:TopNavProps) => {
   const email = session?.user?.email ?? ''
   const initial = username[0]?.toUpperCase() ?? 'U'
 
-  const navItems= [
+  const navItems = [
     {
-      id:5,
+      id: 5,
       label: 'Access POS',
-      comp: <button onClick={()=>{
-        router.push('/en/stores/pos')
-      }} className='px-3 py-1.5 md:px-4 md:py-2 bg-endeavour text-white rounded-md text-xs md:text-sm'>{"Access POS"}</button>
+      comp: (
+        <button
+          onClick={() => {
+            router.push('/en/stores/pos')
+          }}
+          className="px-3 py-1.5 md:px-4 md:py-2 bg-endeavour text-white rounded-md text-xs md:text-sm"
+        >
+          {'Access POS'}
+        </button>
+      ),
     },
     {
       id: 6,
@@ -40,7 +47,7 @@ const TopNav = ({trigger}:TopNavProps) => {
   ]
 
   return (
-    <main className='w-full'>
+    <main className="w-full">
       <section className={cn('w-full h-full flex justify-between items-center px-2 border-slate-100  border-b-2 ')}>
         {/* Left Side */}
         <aside className={cn('w-[20%] flex items-center pl-2 space-x-2')}>

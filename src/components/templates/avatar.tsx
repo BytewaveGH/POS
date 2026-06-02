@@ -53,7 +53,7 @@ const AvatarTemplate: React.FC<AvatarProps> = ({ avatarStyles, className, src, a
           />
         </>
       ) : (
-        <AvatarFallback delayMs={600}>{fallback || "<SeedstarUserAvatarIcon width={100} height={100} />"}</AvatarFallback>
+        <AvatarFallback delayMs={600}>{fallback || '<SeedstarUserAvatarIcon width={100} height={100} />'}</AvatarFallback>
       )}
     </Avatar>
   )

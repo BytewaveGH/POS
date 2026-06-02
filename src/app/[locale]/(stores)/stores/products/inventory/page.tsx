@@ -3,7 +3,7 @@ import Main from './_widgets/main'
 
 const Page = () => {
   return (
-    <div className='w-full'>
+    <div className="w-full">
       <Main />
     </div>
   )

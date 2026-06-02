@@ -5,12 +5,11 @@ export const ProductServices = {
     params,
   }),
 
-  FetchAllUnit:(params?:any)=>({
+  FetchAllUnit: (params?: any) => ({
     method: 'GET',
     url: `/units/`,
     params,
   }),
-  
 
   Create: (payload: any, params?: any) => ({
     method: 'POST',
@@ -47,7 +46,6 @@ export const ProductServices = {
     method: 'DELETE',
     url: `/products/${productId}/units/${unitRecordId}`,
   }),
-
 }
 
 export const InvoiceServices = {
@@ -56,8 +54,6 @@ export const InvoiceServices = {
     url: `/invoices/`,
     params,
   }),
-
-
 
   Create: (payload: any, params?: any) => ({
     method: 'POST',
@@ -92,7 +88,6 @@ export const InvoiceServices = {
     url: `/invoices/`,
     params: { ...params, status },
   }),
-
 }
 export const StocksServices = {
   FetchShortages: (params?: any) => ({
