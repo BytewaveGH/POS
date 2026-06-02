@@ -25,15 +25,15 @@ const TopNav = ({trigger}:TopNavProps) => {
       label: 'Access POS',
       comp: <button onClick={()=>{
         router.push('/en/stores/pos')
-      }} className='px-4 py-2 bg-endeavour text-white rounded-md'>{"Access POS"}</button>
+      }} className='px-3 py-1.5 md:px-4 md:py-2 bg-endeavour text-white rounded-md text-xs md:text-sm'>{"Access POS"}</button>
     },
     {
       id: 6,
       label: '',
       comp: (
         <div className="flex items-center gap-2">
-          <AvatarTemplate src={session?.user?.avatar || ''} fallback={initial} className="size-10" />
-          <span className="text-sm text-gray-600">{email}</span>
+          <AvatarTemplate src={session?.user?.avatar || ''} fallback={initial} className="size-8 md:size-10" />
+          <span className="hidden sm:inline text-sm text-gray-600">{email}</span>
         </div>
       ),
     },
