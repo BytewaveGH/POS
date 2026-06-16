@@ -1,7 +1,7 @@
 export const EmployeeServices = {
     FetchAll: (params?: any) => ({
         method: 'GET',
-        url: '/employees',
+        url: '/employees/',
         params,
     }),
 
@@ -12,7 +12,7 @@ export const EmployeeServices = {
 
     Create: (payload: any) => ({
         method: 'POST',
-        url: '/employees',
+        url: '/employees/',
         data: payload,
     }),
 
