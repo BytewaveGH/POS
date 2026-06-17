@@ -3,23 +3,39 @@ import Credentials from 'next-auth/providers/credentials'
 import type { ExtendedUser } from './types/next-auth'
 import { SignInFormSchema } from './types/schemas/schema'
 import { IAuth } from './types/interfaces'
+import * as z from 'zod'
+
+const EmployeeSignInSchema = z.object({
+  username: z.string().min(1),
+  password: z.string().min(1),
+})
+
+// ── Permission defaults ───────────────────────────────────────────────────────
+const ADMIN_PERMS = {
+  canViewReports:      true,
+  canManageProducts:   true,
+  canManageStock:      true,
+  canManageSales:      true,
+  canManageInvoices:   true,
+  canManageOperations: true,
+  canManageWarehouses: true,
+  canManageEmployees:  true,
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 const whichTenant = (req: Request): string => {
   const host = req.headers.get('host')
   switch (host) {
     case 'localhost:3000':
-    case '127.0.0.1:3000': {
+    case '127.0.0.1:3000':
       return 'admin'
-    }
-    default: {
-      // const tenant = host?.split('.')[0]!
-      // return tenant
+    default:
       return 'admin'
-    }
   }
 }
 
-async function loginRequest(
+async function adminLoginRequest(
   body: { email: string; password: string },
   tenant: string
 ): Promise<(IAuth.Response['data'] & { tenant: string }) | null> {
@@ -31,13 +47,36 @@ async function loginRequest(
     })
     if (!response.ok) {
       const text = await response.text()
-      console.error('[auth] backend error', response.status, text)
+      console.error('[auth] admin login error', response.status, text)
       return null
     }
     const data: IAuth.Response = await response.json()
     return { ...data.data, tenant }
   } catch (err) {
-    console.error('[auth] loginRequest failed:', err)
+    console.error('[auth] adminLoginRequest failed:', err)
+    return null
+  }
+}
+
+async function employeeLoginRequest(
+  body: { username: string; password: string },
+  tenant: string
+): Promise<any | null> {
+  try {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/employees/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Tenant-Domain': tenant || 'admin' },
+      body: JSON.stringify(body),
+    })
+    if (!response.ok) {
+      const text = await response.text()
+      console.error('[auth] employee login error', response.status, text)
+      return null
+    }
+    const data = await response.json()
+    return { ...data.data, tenant }
+  } catch (err) {
+    console.error('[auth] employeeLoginRequest failed:', err)
     return null
   }
 }
@@ -57,7 +96,7 @@ async function refreshAccessToken(tokenObject: any) {
     if (!response.ok) return { ...tokenObject, error: 'RefreshAccessTokenError' }
     const data: IAuth.Response = await response.json()
     return {
-      ...tokenObject,
+      ...tokenObject, // preserves permission fields for employees
       userId: data.data.user.id,
       username: data.data.user.username,
       accountType: data.data.user.accountType,
@@ -75,18 +114,22 @@ async function refreshAccessToken(tokenObject: any) {
   }
 }
 
+// ── Auth config ───────────────────────────────────────────────────────────────
+
 export default {
   providers: [
+    // Admin / store owner login
     Credentials({
+      id: 'credentials',
       credentials: {
-        email: { label: 'Email', type: 'email' },
+        email:    { label: 'Email',    type: 'email' },
         password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials, req) {
         const parsed = SignInFormSchema.safeParse(credentials)
         if (!parsed.success) return null
         const tenant = whichTenant(req as Request)
-        const res = await loginRequest(parsed.data, tenant)
+        const res = await adminLoginRequest(parsed.data, tenant)
         if (!res) return null
         return {
           id: String(res.user.id),
@@ -101,27 +144,77 @@ export default {
           refreshToken: res.refreshToken,
           accessTokenExpiry: res.accessTokenExpiry,
           refreshTokenExpiry: res.refreshTokenExpiry,
+          ...ADMIN_PERMS,
+        }
+      },
+    }),
+
+    // Employee / staff login
+    Credentials({
+      id: 'employee-credentials',
+      credentials: {
+        username: { label: 'Username', type: 'text' },
+        password: { label: 'Password', type: 'password' },
+      },
+      async authorize(credentials, req) {
+        const parsed = EmployeeSignInSchema.safeParse(credentials)
+        if (!parsed.success) return null
+        const tenant = whichTenant(req as Request)
+        const res = await employeeLoginRequest(parsed.data, tenant)
+        if (!res) return null
+        const emp = res.user ?? res   // handle flat or nested response
+        return {
+          id:             String(emp.id),
+          userId:         emp.id,
+          username:       emp.username         ?? '',
+          accountType:    'employee',
+          avatar:         emp.avatar           ?? '',
+          phone:          emp.phone            ?? '',
+          email:          emp.email            ?? '',
+          tenant:         res.tenant,
+          accessToken:    res.accessToken,
+          refreshToken:   res.refreshToken,
+          accessTokenExpiry:  res.accessTokenExpiry,
+          refreshTokenExpiry: res.refreshTokenExpiry,
+          canViewReports:      emp.canViewReports      ?? false,
+          canManageProducts:   emp.canManageProducts   ?? false,
+          canManageStock:      emp.canManageStock       ?? false,
+          canManageSales:      emp.canManageSales       ?? false,
+          canManageInvoices:   emp.canManageInvoices    ?? false,
+          canManageOperations: emp.canManageOperations  ?? false,
+          canManageWarehouses: emp.canManageWarehouses  ?? false,
+          canManageEmployees:  emp.canManageEmployees   ?? false,
         }
       },
     }),
   ],
+
   callbacks: {
     async jwt({ token, user, session, trigger }) {
       if (trigger === 'update') return { ...token, ...session.user }
       if (user) {
         const u = user as ExtendedUser
-        token.userId = u.userId
-        token.username = u.username
-        token.accountType = u.accountType
-        token.avatar = u.avatar
-        token.phone = u.phone
-        token.email = u.email
-        token.tenant = u.tenant
-        token.accessToken = u.accessToken
-        token.refreshToken = u.refreshToken
-        token.accessTokenExpiry = toAbsoluteExpiry(u.accessTokenExpiry)
+        token.userId             = u.userId
+        token.username           = u.username
+        token.accountType        = u.accountType
+        token.avatar             = u.avatar
+        token.phone              = u.phone
+        token.email              = u.email
+        token.tenant             = u.tenant
+        token.accessToken        = u.accessToken
+        token.refreshToken       = u.refreshToken
+        token.accessTokenExpiry  = toAbsoluteExpiry(u.accessTokenExpiry)
         token.refreshTokenExpiry = toAbsoluteExpiry(u.refreshTokenExpiry)
-        token.exp = toAbsoluteExpiry(u.refreshTokenExpiry)
+        token.exp                = toAbsoluteExpiry(u.refreshTokenExpiry)
+        // Permissions (admins always get all; employees get what the API returned)
+        token.canViewReports      = u.canViewReports
+        token.canManageProducts   = u.canManageProducts
+        token.canManageStock      = u.canManageStock
+        token.canManageSales      = u.canManageSales
+        token.canManageInvoices   = u.canManageInvoices
+        token.canManageOperations = u.canManageOperations
+        token.canManageWarehouses = u.canManageWarehouses
+        token.canManageEmployees  = u.canManageEmployees
         return token
       }
 
@@ -130,26 +223,36 @@ export default {
 
       return refreshAccessToken(token)
     },
+
     async session({ token, session }) {
-      session.user.userId = token.userId as number
-      session.user.username = token.username as string
-      session.user.accountType = token.accountType as string
-      session.user.avatar = token.avatar as string
-      session.user.phone = token.phone as string
-      session.user.email = token.email as string
-      session.user.tenant = token.tenant as string
-      session.user.accessToken = token.accessToken as string
-      session.user.refreshToken = token.refreshToken as string
-      session.user.accessTokenExpiry = token.accessTokenExpiry as number
+      session.user.userId             = token.userId as number
+      session.user.username           = token.username as string
+      session.user.accountType        = token.accountType as string
+      session.user.avatar             = token.avatar as string
+      session.user.phone              = token.phone as string
+      session.user.email              = token.email as string
+      session.user.tenant             = token.tenant as string
+      session.user.accessToken        = token.accessToken as string
+      session.user.refreshToken       = token.refreshToken as string
+      session.user.accessTokenExpiry  = token.accessTokenExpiry as number
       session.user.refreshTokenExpiry = token.refreshTokenExpiry as number
+      session.user.canViewReports      = token.canViewReports      as boolean
+      session.user.canManageProducts   = token.canManageProducts   as boolean
+      session.user.canManageStock      = token.canManageStock      as boolean
+      session.user.canManageSales      = token.canManageSales      as boolean
+      session.user.canManageInvoices   = token.canManageInvoices   as boolean
+      session.user.canManageOperations = token.canManageOperations as boolean
+      session.user.canManageWarehouses = token.canManageWarehouses as boolean
+      session.user.canManageEmployees  = token.canManageEmployees  as boolean
       return session
     },
   },
+
   session: { strategy: 'jwt' },
   pages: {
     signIn: '/en',
     signOut: '/en',
-    error: '/en',
+    error:   '/en',
   },
   secret: process.env.BETTER_AUTH_SECRET,
 } satisfies NextAuthConfig
