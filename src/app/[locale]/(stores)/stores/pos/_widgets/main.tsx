@@ -689,7 +689,7 @@ const Main = () => {
           {/* Product area with A-Z sidebar */}
           <div className="relative flex-1 overflow-hidden min-h-0">
             {/* Scrollable grid */}
-            <div ref={gridScrollRef} className={cn('h-full overflow-y-auto pb-24 md:pb-2', showSidebar && 'pr-6')}>
+            <div ref={gridScrollRef} className={cn('h-full overflow-y-auto pb-24 md:pb-2', showSidebar && 'pr-8')}>
               {isLoading ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 pb-4">
                   {Array.from({ length: 8 }).map((_, i) => (
@@ -759,12 +759,12 @@ const Main = () => {
             {/* ── A-Z Sidebar ── */}
             {showSidebar && (
               <div className="absolute right-0 top-0 bottom-0 flex flex-col justify-center z-20 py-1">
-                <div className="bg-white/80 backdrop-blur-sm rounded-l-xl border border-r-0 border-gray-200 shadow-sm py-1.5 flex flex-col items-center gap-0">
+                <div className="bg-white/80 backdrop-blur-sm rounded-l-xl border border-r-0 border-gray-200 shadow-sm py-1 flex flex-col items-center gap-0">
                   {letterGroups.map(([letter]) => (
                     <button
                       key={letter}
                       onClick={() => scrollToLetter(letter)}
-                      className="w-5 text-[9px] font-bold text-gray-400 hover:text-endeavour active:text-endeavour py-[2px] transition-colors leading-none"
+                      className="w-7 h-7 text-[11px] font-bold text-gray-400 hover:text-endeavour active:text-endeavour active:bg-endeavour/10 transition-colors flex items-center justify-center rounded-lg"
                     >
                       {letter}
                     </button>

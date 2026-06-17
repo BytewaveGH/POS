@@ -1,6 +1,17 @@
 import { type DefaultSession } from 'next-auth'
 
-export interface ExtendedUser extends DefaultSession['user'] {
+export interface EmployeePermissions {
+  canViewReports: boolean
+  canManageProducts: boolean
+  canManageStock: boolean
+  canManageSales: boolean
+  canManageInvoices: boolean
+  canManageOperations: boolean
+  canManageWarehouses: boolean
+  canManageEmployees: boolean
+}
+
+export interface ExtendedUser extends DefaultSession['user'], EmployeePermissions {
   userId: number
   username: string
   accountType: string
@@ -15,7 +26,7 @@ export interface ExtendedUser extends DefaultSession['user'] {
 }
 
 declare module 'next-auth' {
-  interface User {
+  interface User extends EmployeePermissions {
     id: string
     userId: number
     username: string
@@ -35,7 +46,7 @@ declare module 'next-auth' {
 }
 
 declare module 'next-auth/jwt' {
-  interface JWT {
+  interface JWT extends EmployeePermissions {
     userId: number
     username: string
     accountType: string
