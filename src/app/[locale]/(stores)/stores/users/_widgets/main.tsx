@@ -31,7 +31,8 @@ const EmployeeCard = ({
     onEdit: () => void
     onDelete: () => void
 }) => {
-    const [expanded, setExpanded] = useState(false)
+    const [expanded,        setExpanded]        = useState(false)
+    const [confirmingDelete, setConfirmingDelete] = useState(false)
     const enabled  = PERMISSIONS.filter(p => emp[p.key])
     const disabled = PERMISSIONS.filter(p => !emp[p.key])
 
@@ -58,20 +59,39 @@ const EmployeeCard = ({
                     </div>
                 </div>
                 <div className="flex items-center gap-1 flex-shrink-0">
-                    <button
-                        onClick={onEdit}
-                        className="p-2 rounded-xl text-gray-400 hover:text-endeavour hover:bg-endeavour/5 active:scale-90 transition-all"
-                        title="Edit employee"
-                    >
-                        <Edit2 className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                        onClick={onDelete}
-                        className="p-2 rounded-xl text-gray-400 hover:text-red-500 hover:bg-red-50 active:scale-90 transition-all"
-                        title="Delete employee"
-                    >
-                        <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                    {confirmingDelete ? (
+                        <>
+                            <button
+                                onClick={() => { onDelete(); setConfirmingDelete(false) }}
+                                className="px-2 py-1 rounded-lg bg-red-500 text-white text-[11px] font-semibold active:scale-95 transition-all"
+                            >
+                                Delete
+                            </button>
+                            <button
+                                onClick={() => setConfirmingDelete(false)}
+                                className="px-2 py-1 rounded-lg border border-gray-200 text-gray-500 text-[11px] active:scale-95 transition-all"
+                            >
+                                Cancel
+                            </button>
+                        </>
+                    ) : (
+                        <>
+                            <button
+                                onClick={onEdit}
+                                className="p-2 rounded-xl text-gray-400 hover:text-endeavour hover:bg-endeavour/5 active:scale-90 transition-all"
+                                title="Edit employee"
+                            >
+                                <Edit2 className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                                onClick={() => setConfirmingDelete(true)}
+                                className="p-2 rounded-xl text-gray-400 hover:text-red-500 hover:bg-red-50 active:scale-90 transition-all"
+                                title="Delete employee"
+                            >
+                                <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                        </>
+                    )}
                 </div>
             </div>
 

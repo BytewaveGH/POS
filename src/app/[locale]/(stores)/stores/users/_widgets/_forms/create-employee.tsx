@@ -1,7 +1,7 @@
 'use client'
 
 import * as z from 'zod'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Form, FormField, FormItem, FormLabel, FormControl } from '@/components/ui/form'
@@ -15,6 +15,34 @@ import {
     FileText, Settings2, Building2, Users, Shield,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+
+// ── Role presets (frontend-only convenience — auto-fills permission toggles) ──
+export const ROLE_PRESETS = [
+    {
+        label: 'Admin',
+        desc: 'All permissions',
+        color: 'bg-indigo-100 text-indigo-700 border-indigo-200',
+        perms: { canViewReports: true,  canManageProducts: true,  canManageStock: true,  canManageSales: true,  canManageInvoices: true,  canManageOperations: true,  canManageWarehouses: true,  canManageEmployees: true  },
+    },
+    {
+        label: 'Manager',
+        desc: 'All except employee mgmt',
+        color: 'bg-purple-100 text-purple-700 border-purple-200',
+        perms: { canViewReports: true,  canManageProducts: true,  canManageStock: true,  canManageSales: true,  canManageInvoices: true,  canManageOperations: true,  canManageWarehouses: true,  canManageEmployees: false },
+    },
+    {
+        label: 'Cashier',
+        desc: 'Sales only',
+        color: 'bg-green-100 text-green-700 border-green-200',
+        perms: { canViewReports: false, canManageProducts: false, canManageStock: false, canManageSales: true,  canManageInvoices: false, canManageOperations: false, canManageWarehouses: false, canManageEmployees: false },
+    },
+    {
+        label: 'Stock Keeper',
+        desc: 'Stock & warehouses',
+        color: 'bg-amber-100 text-amber-700 border-amber-200',
+        perms: { canViewReports: false, canManageProducts: false, canManageStock: true,  canManageSales: false, canManageInvoices: false, canManageOperations: false, canManageWarehouses: true,  canManageEmployees: false },
+    },
+] as const
 
 // ── Permission config (exported so the card list can reuse it) ───────────────
 export const PERMISSIONS = [
@@ -77,6 +105,34 @@ const CreateEmployee = ({ mode = 'create', employeeId, initialData, onSuccess }:
             canManageEmployees:  initialData?.canManageEmployees  ?? false,
         },
     })
+
+    // Re-sync form when switching between employees (sheet stays mounted)
+    const initKey = initialData?.id ?? 'new'
+    useEffect(() => {
+        form.reset({
+            name:                initialData?.name                ?? '',
+            email:               initialData?.email               ?? '',
+            username:            initialData?.username            ?? '',
+            phone:               initialData?.phone               ?? '',
+            password:            '',
+            canViewReports:      initialData?.canViewReports      ?? false,
+            canManageProducts:   initialData?.canManageProducts   ?? false,
+            canManageStock:      initialData?.canManageStock      ?? false,
+            canManageSales:      initialData?.canManageSales      ?? false,
+            canManageInvoices:   initialData?.canManageInvoices   ?? false,
+            canManageOperations: initialData?.canManageOperations ?? false,
+            canManageWarehouses: initialData?.canManageWarehouses ?? false,
+            canManageEmployees:  initialData?.canManageEmployees  ?? false,
+        })
+        setSubmitError('')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [initKey])
+
+    const applyRolePreset = (perms: Record<string, boolean>) => {
+        Object.entries(perms).forEach(([key, value]) => {
+            form.setValue(key as keyof EmployeeForm, value as any)
+        })
+    }
 
     const onSubmit = async (data: EmployeeForm) => {
         // Enforce password on create
@@ -176,6 +232,27 @@ const CreateEmployee = ({ mode = 'create', employeeId, initialData, onSuccess }:
                             <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">
                                 Permissions
                             </p>
+                        </div>
+
+                        {/* Role preset quick-fill */}
+                        <div className="flex flex-col gap-1.5 mb-3">
+                            <p className="text-[10px] text-gray-400">Quick presets — tap to fill:</p>
+                            <div className="flex flex-wrap gap-1.5">
+                                {ROLE_PRESETS.map((role) => (
+                                    <button
+                                        key={role.label}
+                                        type="button"
+                                        onClick={() => applyRolePreset(role.perms as unknown as Record<string, boolean>)}
+                                        className={cn(
+                                            'px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-all active:scale-95',
+                                            role.color
+                                        )}
+                                    >
+                                        {role.label}
+                                        <span className="ml-1 opacity-60 font-normal">— {role.desc}</span>
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                         <div className="flex flex-col rounded-xl border border-gray-200 overflow-hidden divide-y divide-gray-100">
                             {PERMISSIONS.map(({ key, label, icon: Icon, color }) => (

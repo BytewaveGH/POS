@@ -5,7 +5,7 @@ import {
   TrendingUp, TrendingDown, Package, ShoppingCart, AlertTriangle,
   Building2, BarChart2, DollarSign, Calendar, Lightbulb,
   Target, Percent, ArrowUpRight, ArrowDownRight,
-  Wallet, Zap,
+  Wallet, Zap, Clock, Activity,
 } from 'lucide-react'
 import { AgCharts } from 'ag-charts-react'
 import { AgChartOptions } from 'ag-charts-community'
@@ -34,6 +34,23 @@ const trendPct = (current: number, prev: number): number | null => {
 }
 
 const isoDate = (d: Date) => d.toISOString().split('T')[0]
+
+// ── Extract hour + JS day-of-week from an API hourly entry ────────────────────
+// Handles both { date: "2026-06-15T10:00:00" } and { date: "2026-06-15", hour: 10 }
+const extractHourDay = (d: any): { hour: number | null; dayOfWeek: number | null } => {
+  if (d.hour !== undefined) {
+    const dt = new Date(d.date as string)
+    if (isNaN(dt.getTime())) return { hour: null, dayOfWeek: null }
+    return { hour: Number(d.hour), dayOfWeek: dt.getDay() }
+  }
+  const dt = new Date(d.date as string)
+  if (!isNaN(dt.getTime())) return { hour: dt.getHours(), dayOfWeek: dt.getDay() }
+  return { hour: null, dayOfWeek: null }
+}
+
+// Mon-first ordering for the heatmap (JS getDay: Sun=0, Mon=1…Sat=6)
+const HEATMAP_DAYS   = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+const HEATMAP_DAY_JS = [1, 2, 3, 4, 5, 6, 0]
 
 // ── Refresh button ─────────────────────────────────────────────────────────────
 const RefreshBtn = ({ onClick }: { onClick: () => void }) => (
@@ -242,6 +259,7 @@ const Main = () => {
   const { data: warehousesRaw,   refetch: refetchWarehouses }   = useFetchData(`analytics-wh-${dateKey}`,    StatisticsServices.FetchWarehouses(dateParams)                                              as unknown as IGeneric)
   const { data: allProductsRaw }                                 = useFetchData('analytics-products',         ProductServices.FetchAll()                                                                  as unknown as IGeneric)
   const { data: shortagesRaw }                                   = useFetchData('analytics-shortages',        StatisticsServices.FetchShortages()                                                         as unknown as IGeneric)
+  const { data: hourlySalesRaw, refetch: refetchHourlyChart }   = useFetchData(`analytics-hourly-${dateKey}`, StatisticsServices.FetchSales({ granularity: 'hour', ...dateParams })                     as unknown as IGeneric)
 
   const monthlyRange = useMemo(() => {
     const now = new Date()
@@ -410,6 +428,57 @@ const Main = () => {
     legend: { enabled: false },
   }), [momoRevenue, cashRevenue])
 
+  // ── Hourly aggregation (summed across all days in the date range) ────────────
+  const hourlySalesData = useMemo(() => {
+    const raw = (hourlySalesRaw as any[]) ?? []
+    const byHour: Record<number, { revenue: number; sales: number }> = {}
+    raw.forEach((d: any) => {
+      const { hour } = extractHourDay(d)
+      if (hour === null) return
+      if (!byHour[hour]) byHour[hour] = { revenue: 0, sales: 0 }
+      byHour[hour].revenue += d.revenue ?? 0
+      byHour[hour].sales   += d.count   ?? 0
+    })
+    return Array.from({ length: 24 }, (_, h) => ({
+      hour:    h < 12 ? `${h === 0 ? 12 : h}am` : `${h === 12 ? 12 : h - 12}pm`,
+      revenue: byHour[h]?.revenue ?? 0,
+      sales:   byHour[h]?.sales   ?? 0,
+    }))
+  }, [hourlySalesRaw])
+
+  // ── Heatmap grid [dayOfWeek 0-6][hour 0-23] = cumulative revenue ──────────
+  const heatmapGrid = useMemo(() => {
+    const raw = (hourlySalesRaw as any[]) ?? []
+    const grid: number[][] = Array.from({ length: 7 }, () => new Array(24).fill(0))
+    raw.forEach((d: any) => {
+      const { hour, dayOfWeek } = extractHourDay(d)
+      if (hour === null || dayOfWeek === null) return
+      grid[dayOfWeek][hour] += d.revenue ?? 0
+    })
+    return grid
+  }, [hourlySalesRaw])
+
+  const heatmapMax = useMemo(() => Math.max(1, ...heatmapGrid.flat()), [heatmapGrid])
+
+  // ── Hourly bar chart ──────────────────────────────────────────────────────
+  const hourlyChartOptions: AgChartOptions = useMemo(() => ({
+    data: hourlySalesData,
+    series: [
+      { type: 'bar' as const, xKey: 'hour', yKey: 'revenue', yName: 'Revenue (₵)', fill: '#0865AC' },
+    ],
+    axes: [
+      { type: 'category' as const, position: 'bottom' as const } as any,
+      { type: 'number'   as const, position: 'left'   as const, min: 0, tick: { count: 4 } } as any,
+    ],
+    background: { fill: 'transparent' },
+  }), [hourlySalesData])
+
+  // ── Peak hour (for the insights insight) ─────────────────────────────────
+  const peakHour = useMemo(() => {
+    const peak = hourlySalesData.reduce((best, d) => d.revenue > best.revenue ? d : best, hourlySalesData[0])
+    return peak?.revenue > 0 ? peak : null
+  }, [hourlySalesData])
+
   // ── AG Grid column defs ────────────────────────────────────────────────────
   const topProductCols = useMemo(() => [
     { field: 'productName', headerName: 'Product', flex: 1, minWidth: 140 },
@@ -500,6 +569,14 @@ const Main = () => {
           type: 'positive',
         })
       }
+    }
+
+    if (peakHour) {
+      list.push({
+        icon: Clock,
+        text: `Busiest hour of the day is ${peakHour.hour} with ${fmtShort(peakHour.revenue)} in revenue across the period.`,
+        type: 'neutral',
+      })
     }
 
     if (shortages.length > 0) {
@@ -663,55 +740,21 @@ const Main = () => {
           <AgCharts options={dailyChartOptions} style={{ height: '260px' }} />
         </div>
 
-        {/* Payment method split */}
+        {/* Hourly sales distribution */}
         <div className="bg-white rounded-xl border border-gray-200 p-4 flex flex-col">
-          <SectionHeader icon={Wallet} color="bg-endeavour" title="Payment Methods" sub="Revenue by payment type" />
-          <div className="flex-1 flex flex-col justify-between gap-3 mt-3">
-            <AgCharts options={paymentSplitOptions} style={{ height: '180px' }} />
-            <div className="flex flex-col gap-2.5">
-              {/* MoMo bar */}
-              <div className="flex flex-col gap-1">
-                <div className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-endeavour flex-shrink-0" />
-                    <span className="text-gray-600 font-medium">MoMo</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-400 text-[10px]">
-                      {totalRevenue > 0 ? `${(momoRevenue / totalRevenue * 100).toFixed(0)}%` : '0%'}
-                    </span>
-                    <span className="font-semibold text-stone-700">{fmtShort(momoRevenue)}</span>
-                  </div>
-                </div>
-                <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                  <div className="h-full rounded-full bg-endeavour" style={{ width: totalRevenue > 0 ? `${momoRevenue / totalRevenue * 100}%` : '0%' }} />
-                </div>
-              </div>
-              {/* Cash bar */}
-              <div className="flex flex-col gap-1">
-                <div className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-emerald-500 flex-shrink-0" />
-                    <span className="text-gray-600 font-medium">Cash</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-400 text-[10px]">
-                      {totalRevenue > 0 ? `${(cashRevenue / totalRevenue * 100).toFixed(0)}%` : '0%'}
-                    </span>
-                    <span className="font-semibold text-stone-700">{fmtShort(cashRevenue)}</span>
-                  </div>
-                </div>
-                <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                  <div className="h-full rounded-full bg-emerald-500" style={{ width: totalRevenue > 0 ? `${cashRevenue / totalRevenue * 100}%` : '0%' }} />
-                </div>
-              </div>
-              {/* Total */}
-              <div className="flex items-center justify-between pt-1 border-t border-gray-100 text-xs">
-                <span className="text-gray-500">Total Revenue</span>
-                <span className="font-bold text-stone-800">{fmtShort(totalRevenue)}</span>
-              </div>
-            </div>
+          <div className="flex items-start justify-between gap-2 mb-3">
+            <SectionHeader icon={Clock} color="bg-blue-500" title="Hourly Sales" sub="Revenue by hour of day" />
+            <RefreshBtn onClick={() => refetchHourlyChart()} />
           </div>
+          <AgCharts options={hourlyChartOptions} style={{ height: '220px' }} />
+          {peakHour && (
+            <div className="mt-3 flex items-center gap-2 p-2.5 bg-blue-50 rounded-xl border border-blue-100">
+              <Zap className="h-3.5 w-3.5 text-blue-500 flex-shrink-0" />
+              <p className="text-xs text-blue-700">
+                Peak at <span className="font-semibold">{peakHour.hour}</span> — {fmtShort(peakHour.revenue)} revenue
+              </p>
+            </div>
+          )}
         </div>
       </section>
 
@@ -725,6 +768,70 @@ const Main = () => {
           <RefreshBtn onClick={() => refetchMonthlyChart()} />
         </div>
         <AgCharts options={monthlyChartOptions} style={{ height: '280px' }} />
+      </section>
+
+      {/* ── Revenue Heatmap ─────────────────────────────────────────────── */}
+      <section className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="flex items-start justify-between gap-2 mb-4">
+          <SectionHeader
+            icon={Activity} color="bg-rose-500"
+            title="Revenue Heatmap"
+            sub="Day of week × hour — darker = higher revenue"
+          />
+          <RefreshBtn onClick={() => refetchHourlyChart()} />
+        </div>
+
+        <div className="overflow-x-auto">
+          <div style={{ minWidth: '580px' }}>
+            {/* Hour labels row */}
+            <div className="flex items-center mb-1" style={{ paddingLeft: '36px' }}>
+              {Array.from({ length: 24 }, (_, h) => (
+                <div key={h} className="flex-1 text-center" style={{ fontSize: '9px', color: '#9ca3af' }}>
+                  {h % 3 === 0 ? (h === 0 ? '12a' : h < 12 ? `${h}a` : h === 12 ? '12p' : `${h - 12}p`) : ''}
+                </div>
+              ))}
+            </div>
+
+            {/* Day rows */}
+            {HEATMAP_DAYS.map((day, rowIdx) => {
+              const jsDay = HEATMAP_DAY_JS[rowIdx]
+              return (
+                <div key={day} className="flex items-center gap-0 mb-0.5">
+                  {/* Day label */}
+                  <div className="text-[10px] text-gray-400 font-medium flex-shrink-0 text-right pr-2" style={{ width: '36px' }}>
+                    {day}
+                  </div>
+                  {/* 24 cells */}
+                  {Array.from({ length: 24 }, (_, h) => {
+                    const value     = heatmapGrid[jsDay][h]
+                    const intensity = value / heatmapMax
+                    const bg        = intensity < 0.01
+                      ? 'rgba(243,244,246,1)'
+                      : `rgba(8,101,172,${(0.12 + intensity * 0.88).toFixed(2)})`
+                    return (
+                      <div
+                        key={h}
+                        className="flex-1 rounded-sm transition-colors cursor-default"
+                        style={{ height: '22px', backgroundColor: bg }}
+                        title={value > 0 ? `${day} ${h}:00 — ${fmt(value)}` : `${day} ${h}:00 — no sales`}
+                      />
+                    )
+                  })}
+                </div>
+              )
+            })}
+
+            {/* Legend */}
+            <div className="flex items-center gap-2 mt-3" style={{ paddingLeft: '36px' }}>
+              <span className="text-[10px] text-gray-400">No sales</span>
+              <div
+                className="flex-1 h-2 rounded-full"
+                style={{ background: 'linear-gradient(to right, rgba(243,244,246,1), rgba(8,101,172,0.2), rgba(8,101,172,1))' }}
+              />
+              <span className="text-[10px] text-gray-400">Peak {fmtShort(heatmapMax)}</span>
+            </div>
+          </div>
+        </div>
       </section>
 
       {/* ── Top Products + Smart Insights ──────────────────────────────── */}
