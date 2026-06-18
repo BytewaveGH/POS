@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button'
 import InputsTemplate from '@/components/templates/inputs'
 
 const formSchema = z.object({
-  username: z.string().min(1, 'Username is required'),
+  email:    z.string().min(1, 'Email is required'),
   password: z.string().min(1, 'Password is required'),
 })
 
@@ -28,7 +28,7 @@ export default function StaffSignInForm() {
 
   const form = useForm<FormType>({
     resolver: zodResolver(formSchema),
-    defaultValues: { username: '', password: '' },
+    defaultValues: { email: '', password: '' },
   })
 
   const onSubmit = async (data: FormType) => {
@@ -36,14 +36,14 @@ export default function StaffSignInForm() {
     setIsLoading(true)
     try {
       const result = await signIn('employee-credentials', {
-        username: data.username,
+        email:    data.email,
         password: data.password,
         redirect: false,
       })
       if (result?.error) {
-        setError('Invalid username or password')
+        setError('Invalid email or password')
       } else {
-        // Middleware will redirect to the first allowed route if /pos is blocked
+        // Middleware redirects to first allowed route if /pos is blocked
         router.push(`/${locale}/stores/pos`)
       }
     } catch {
@@ -74,9 +74,10 @@ export default function StaffSignInForm() {
               <form onSubmit={form.handleSubmit(onSubmit)}>
                 <InputsTemplate
                   control={form.control}
-                  name="username"
-                  label="Username"
-                  placeholder="Enter your username"
+                  name="email"
+                  label="Email"
+                  placeholder="Enter your email"
+                  inputType="email"
                 />
                 <InputsTemplate
                   control={form.control}

@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useMemo, useState, useEffect } from 'react'
+import React, { useMemo, useState, useEffect, useCallback } from 'react'
 import {
   TrendingUp,
   TrendingDown,
@@ -361,6 +361,24 @@ const Main = () => {
     topPage,
     topPageSize
   )
+
+  // ── Global refresh + auto-refresh every 10 min ────────────────────────────
+  const [lastUpdated, setLastUpdated] = useState(() => new Date())
+
+  const refreshAll = useCallback(() => {
+    refetchOverview()
+    refetchDailyChart()
+    refetchHourlyChart()
+    refetchMonthlyChart()
+    refetchTop()
+    refetchWarehouses()
+    setLastUpdated(new Date())
+  }, [refetchOverview, refetchDailyChart, refetchHourlyChart, refetchMonthlyChart, refetchTop, refetchWarehouses])
+
+  useEffect(() => {
+    const id = setInterval(refreshAll, 10 * 60 * 1000)
+    return () => clearInterval(id)
+  }, [refreshAll])
 
   // ── Raw casts ──────────────────────────────────────────────────────────────
   const overview = overviewRaw as any
@@ -753,19 +771,19 @@ const Main = () => {
             <h1 className="bytewave-heading">Analytics</h1>
             <p className="bytewave-paragraph text-gray-500">Deep insights into your store performance</p>
           </div>
-          <div className="flex items-center gap-1.5 flex-shrink-0 self-start">
+          <div className="flex items-center gap-2 flex-shrink-0 self-start">
+            <span className="text-xs text-gray-400 hidden sm:inline">
+              Updated {lastUpdated.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+            </span>
             <button
-              onClick={() => refetchOverview()}
-              className="p-1.5 rounded-lg border border-gray-200 text-gray-400 hover:text-endeavour hover:border-endeavour transition-colors"
-              title="Refresh all"
+              onClick={refreshAll}
+              title="Refresh all data"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:text-endeavour hover:border-endeavour transition-colors text-xs font-medium"
             >
               <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
+              Refresh
             </button>
           </div>
         </div>
@@ -1061,7 +1079,10 @@ const Main = () => {
 
         {/* Smart insights */}
         <div className="bg-white rounded-xl border border-gray-200 p-4 flex flex-col gap-3">
-          <SectionHeader icon={Lightbulb} color="bg-amber-500" title="Smart Insights" sub="Auto-generated from your data" />
+          <div className="flex items-start justify-between gap-2">
+            <SectionHeader icon={Lightbulb} color="bg-amber-500" title="Smart Insights" sub="Auto-generated from your data" />
+            <RefreshBtn onClick={() => refetchOverview()} />
+          </div>
           {insights.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 gap-2 text-gray-400">
               <Lightbulb className="h-8 w-8 opacity-30" />
