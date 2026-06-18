@@ -6,7 +6,7 @@ import { IAuth } from './types/interfaces'
 import * as z from 'zod'
 
 const EmployeeSignInSchema = z.object({
-  username: z.string().min(1),
+  email:    z.string().min(1),
   password: z.string().min(1),
 })
 
@@ -59,7 +59,7 @@ async function adminLoginRequest(
 }
 
 async function employeeLoginRequest(
-  body: { username: string; password: string },
+  body: { email: string; password: string },
   tenant: string
 ): Promise<any | null> {
   try {
@@ -73,8 +73,11 @@ async function employeeLoginRequest(
       console.error('[auth] employee login error', response.status, text)
       return null
     }
-    const data = await response.json()
-    return { ...data.data, tenant }
+    const raw = await response.json()
+    console.log('[auth] employee login response:', JSON.stringify(raw))
+    // Support both { data: { user, accessToken, ... } } and flat { user, accessToken, ... }
+    const payload = raw.data ?? raw
+    return { ...payload, tenant }
   } catch (err) {
     console.error('[auth] employeeLoginRequest failed:', err)
     return null
@@ -153,7 +156,7 @@ export default {
     Credentials({
       id: 'employee-credentials',
       credentials: {
-        username: { label: 'Username', type: 'text' },
+        email:    { label: 'Email',    type: 'email' },
         password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials, req) {
