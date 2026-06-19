@@ -183,7 +183,7 @@ const Main = () => {
   const { data: warehousesData } = useFetchData('warehouses', WarehouseServices.FetchAll() as unknown as IGeneric)
   const warehouses = (warehousesData as any[] | undefined) ?? []
 
-  const { data: rawProducts, isLoading } = useFetchData('pos-products', ProductServices.FetchAll())
+  const { data: rawProducts, isLoading } = useFetchData('pos-products', ProductServices.FetchAll({ limit: 1000, offset: 0 }))
 
   const products: Product[] = useMemo(() => {
     const list = (rawProducts as any[] | undefined) ?? []
