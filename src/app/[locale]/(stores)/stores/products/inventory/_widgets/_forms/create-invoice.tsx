@@ -1,7 +1,7 @@
 'use client'
 
 import * as z from 'zod'
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useForm, useFieldArray, useWatch, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Form } from '@/components/ui/form'
@@ -34,6 +34,9 @@ const invoiceSchema = z.object({
 type InvoiceForm = z.infer<typeof invoiceSchema>
 
 interface CreateInvoiceProps {
+  mode?: 'create' | 'update'
+  invoiceId?: number
+  initialData?: Partial<InvoiceForm>
   onSuccess?: () => void
 }
 
@@ -154,7 +157,7 @@ const SearchableUnitSelect = ({ value, onChange, options, placeholder = 'Select 
 
 // ── Main form ───────────────────────────────────────────────────────────────
 
-const CreateInvoice = ({ onSuccess }: CreateInvoiceProps) => {
+const CreateInvoice = ({ mode = 'create', invoiceId, initialData, onSuccess }: CreateInvoiceProps) => {
   const request = useAxios()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
@@ -190,14 +193,27 @@ const CreateInvoice = ({ onSuccess }: CreateInvoiceProps) => {
   const form = useForm<InvoiceForm>({
     resolver: zodResolver(invoiceSchema),
     defaultValues: {
-      customerName: '',
-      customerPhone: '',
-      date: today,
-      paymentType: 'cash',
-      paymentStatus: 'pending',
-      items: [{ productUnitId: 0, quantity: 1, pricingType: 'retail' }],
+      customerName: initialData?.customerName ?? '',
+      customerPhone: initialData?.customerPhone ?? '',
+      date: initialData?.date ?? today,
+      paymentType: initialData?.paymentType ?? 'cash',
+      paymentStatus: initialData?.paymentStatus ?? 'pending',
+      items: initialData?.items?.length ? initialData.items : [{ productUnitId: 0, quantity: 1, pricingType: 'retail' }],
     },
   })
+
+  useEffect(() => {
+    if (!initialData) return
+    form.reset({
+      customerName: initialData.customerName ?? '',
+      customerPhone: initialData.customerPhone ?? '',
+      date: initialData.date ?? today,
+      paymentType: initialData.paymentType ?? 'cash',
+      paymentStatus: initialData.paymentStatus ?? 'pending',
+      items: initialData.items?.length ? initialData.items : [{ productUnitId: 0, quantity: 1, pricingType: 'retail' }],
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invoiceId])
 
   const { fields, append, remove } = useFieldArray({ control: form.control, name: 'items' })
   const watchedItems = (useWatch({ control: form.control, name: 'items' }) ?? []) as any[]
@@ -218,12 +234,17 @@ const CreateInvoice = ({ onSuccess }: CreateInvoiceProps) => {
     setSubmitError('')
     setIsSubmitting(true)
     try {
-      await request(InvoiceServices.Create(data))
+      if (mode === 'update' && invoiceId) {
+        await request(InvoiceServices.Update(invoiceId, data))
+      } else {
+        await request(InvoiceServices.Create(data))
+      }
       form.reset({
         customerName: '',
         customerPhone: '',
         date: today,
         paymentType: 'cash',
+        paymentStatus: 'pending',
         items: [{ productUnitId: 0, quantity: 1, pricingType: 'retail' }],
       })
       onSuccess?.()
@@ -351,7 +372,7 @@ const CreateInvoice = ({ onSuccess }: CreateInvoiceProps) => {
             </div>
           )}
           {submitError && <p className="text-sm text-red-500">{submitError}</p>}
-          <ButtonTemplate isText text={isSubmitting ? 'Saving...' : 'Save Invoice'} type="submit" isDisabled={isSubmitting} />
+          <ButtonTemplate isText text={isSubmitting ? 'Saving...' : mode === 'update' ? 'Update Invoice' : 'Save Invoice'} type="submit" isDisabled={isSubmitting} />
         </div>
       </form>
     </Form>

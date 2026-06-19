@@ -50,15 +50,26 @@ const isoDate = (d: Date) => d.toISOString().split('T')[0]
 
 // ── Extract hour + JS day-of-week from an API hourly entry ────────────────────
 // Handles both { date: "2026-06-15T10:00:00" } and { date: "2026-06-15", hour: 10 }
+// Date-only strings (no "T") are parsed as UTC midnight by JS — append T00:00:00
+// so getDay()/getHours() return the correct LOCAL values.
 const extractHourDay = (d: any): { hour: number | null; dayOfWeek: number | null } => {
-  if (d.hour !== undefined) {
-    const dt = new Date(d.date as string)
-    if (isNaN(dt.getTime())) return { hour: null, dayOfWeek: null }
-    return { hour: Number(d.hour), dayOfWeek: dt.getDay() }
-  }
-  const dt = new Date(d.date as string)
-  if (!isNaN(dt.getTime())) return { hour: dt.getHours(), dayOfWeek: dt.getDay() }
-  return { hour: null, dayOfWeek: null }
+  const raw = d.date as string
+  if (!raw) return { hour: null, dayOfWeek: null }
+  const normalized = raw.includes('T') ? raw : `${raw}T00:00:00`
+  const dt = new Date(normalized)
+  if (isNaN(dt.getTime())) return { hour: null, dayOfWeek: null }
+  if (d.hour !== undefined) return { hour: Number(d.hour), dayOfWeek: dt.getDay() }
+  return { hour: dt.getHours(), dayOfWeek: dt.getDay() }
+}
+
+// Unwrap the hourly API response — handles plain array, { data: [] }, { sales: [] }, etc.
+const toHourlyArray = (raw: any): any[] => {
+  if (Array.isArray(raw)) return raw
+  if (raw?.hourly && Array.isArray(raw.hourly)) return raw.hourly
+  if (raw?.sales && Array.isArray(raw.sales)) return raw.sales
+  if (raw?.items && Array.isArray(raw.items)) return raw.items
+  if (raw?.data && Array.isArray(raw.data)) return raw.data
+  return []
 }
 
 // Mon-first ordering for the heatmap (JS getDay: Sun=0, Mon=1…Sat=6)
@@ -560,14 +571,14 @@ const Main = () => {
 
   // ── Hourly aggregation (summed across all days in the date range) ────────────
   const hourlySalesData = useMemo(() => {
-    const raw = (hourlySalesRaw as any[]) ?? []
+    const raw = toHourlyArray(hourlySalesRaw)
     const byHour: Record<number, { revenue: number; sales: number }> = {}
     raw.forEach((d: any) => {
       const { hour } = extractHourDay(d)
       if (hour === null) return
       if (!byHour[hour]) byHour[hour] = { revenue: 0, sales: 0 }
-      byHour[hour].revenue += d.revenue ?? 0
-      byHour[hour].sales += d.count ?? 0
+      byHour[hour].revenue += d.revenue ?? d.totalRevenue ?? d.total ?? d.amount ?? 0
+      byHour[hour].sales += d.count ?? d.salesCount ?? d.orders ?? d.totalOrders ?? 0
     })
     return Array.from({ length: 24 }, (_, h) => ({
       hour: h < 12 ? `${h === 0 ? 12 : h}am` : `${h === 12 ? 12 : h - 12}pm`,
@@ -578,12 +589,12 @@ const Main = () => {
 
   // ── Heatmap grid [dayOfWeek 0-6][hour 0-23] = cumulative revenue ──────────
   const heatmapGrid = useMemo(() => {
-    const raw = (hourlySalesRaw as any[]) ?? []
+    const raw = toHourlyArray(hourlySalesRaw)
     const grid: number[][] = Array.from({ length: 7 }, () => new Array(24).fill(0))
     raw.forEach((d: any) => {
       const { hour, dayOfWeek } = extractHourDay(d)
       if (hour === null || dayOfWeek === null) return
-      grid[dayOfWeek][hour] += d.revenue ?? 0
+      grid[dayOfWeek][hour] += d.revenue ?? d.totalRevenue ?? d.total ?? d.amount ?? 0
     })
     return grid
   }, [hourlySalesRaw])
