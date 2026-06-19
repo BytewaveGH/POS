@@ -7,20 +7,18 @@ import { auth } from '@/auth'
 
 const ILayout = async ({ children }: { children: React.ReactNode }) => {
   const session = await auth()
-  const user     = session?.user as any
+  const user = session?.user as any
   const isEmployee = user?.accountType === 'employee'
 
   // For employees, remove sidebar items their permissions don't cover.
   // Admins always see everything.
   const visibleItems = isEmployee
     ? sidebarItems
-        .map(group => ({
+        .map((group) => ({
           ...group,
-          items: group.items.filter(item =>
-            !item.requiredPermission || !!user?.[item.requiredPermission]
-          ),
+          items: group.items.filter((item) => !item.requiredPermission || !!user?.[item.requiredPermission]),
         }))
-        .filter(group => group.items.length > 0)
+        .filter((group) => group.items.length > 0)
     : sidebarItems
 
   return (

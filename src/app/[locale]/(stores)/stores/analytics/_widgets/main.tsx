@@ -49,16 +49,32 @@ const trendPct = (current: number, prev: number): number | null => {
 const isoDate = (d: Date) => d.toISOString().split('T')[0]
 
 // ── Extract hour + JS day-of-week from an API hourly entry ────────────────────
-// Handles both { date: "2026-06-15T10:00:00" } and { date: "2026-06-15", hour: 10 }
-// Date-only strings (no "T") are parsed as UTC midnight by JS — append T00:00:00
-// so getDay()/getHours() return the correct LOCAL values.
+// The API returns date as "YYYY-MM-DDTHH" (no minutes/seconds), which new Date()
+// cannot parse. Split on T, parse the hour integer, and build the date from the
+// date-only part (appended with T00:00:00 so JS treats it as local midnight).
 const extractHourDay = (d: any): { hour: number | null; dayOfWeek: number | null } => {
   const raw = d.date as string
   if (!raw) return { hour: null, dayOfWeek: null }
-  const normalized = raw.includes('T') ? raw : `${raw}T00:00:00`
-  const dt = new Date(normalized)
+
+  const tIdx = raw.indexOf('T')
+  if (tIdx !== -1) {
+    const datePart = raw.slice(0, tIdx)          // "2026-05-29"
+    const hourStr  = raw.slice(tIdx + 1)         // "11"
+    const hour     = parseInt(hourStr, 10)
+    const dt       = new Date(`${datePart}T00:00:00`)
+    if (isNaN(dt.getTime()) || isNaN(hour)) return { hour: null, dayOfWeek: null }
+    return { hour, dayOfWeek: dt.getDay() }
+  }
+
+  // Fallback: { date: "YYYY-MM-DD", hour: N } or full ISO datetime
+  if (d.hour !== undefined) {
+    const dt = new Date(`${raw}T00:00:00`)
+    if (isNaN(dt.getTime())) return { hour: null, dayOfWeek: null }
+    return { hour: Number(d.hour), dayOfWeek: dt.getDay() }
+  }
+
+  const dt = new Date(raw.includes('T') ? raw : `${raw}T00:00:00`)
   if (isNaN(dt.getTime())) return { hour: null, dayOfWeek: null }
-  if (d.hour !== undefined) return { hour: Number(d.hour), dayOfWeek: dt.getDay() }
   return { hour: dt.getHours(), dayOfWeek: dt.getDay() }
 }
 
@@ -792,7 +808,11 @@ const Main = () => {
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:text-endeavour hover:border-endeavour transition-colors text-xs font-medium"
             >
               <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                />
               </svg>
               Refresh
             </button>

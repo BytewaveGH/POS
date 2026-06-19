@@ -1163,7 +1163,10 @@ const Main = () => {
             classname="px-3 py-2 border border-endeavour text-white rounded-md text-xs"
             isText
             text={'Add Invoice'}
-            handleClick={() => { setSelectedInvoice(null); setInvoiceModal(true) }}
+            handleClick={() => {
+              setSelectedInvoice(null)
+              setInvoiceModal(true)
+            }}
           />
           <ButtonTemplate
             classname="px-3 py-2 bg-endeavour text-white rounded-md text-xs"

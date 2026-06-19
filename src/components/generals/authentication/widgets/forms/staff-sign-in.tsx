@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button'
 import InputsTemplate from '@/components/templates/inputs'
 
 const formSchema = z.object({
-  email:    z.string().min(1, 'Email is required'),
+  email: z.string().min(1, 'Email is required'),
   password: z.string().min(1, 'Password is required'),
 })
 
@@ -23,7 +23,7 @@ export default function StaffSignInForm() {
   const params = useParams()
   const locale = (params?.locale as string) || 'en'
 
-  const [error,     setError]     = useState('')
+  const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
 
   const form = useForm<FormType>({
@@ -36,7 +36,7 @@ export default function StaffSignInForm() {
     setIsLoading(true)
     try {
       const result = await signIn('employee-credentials', {
-        email:    data.email,
+        email: data.email,
         password: data.password,
         redirect: false,
       })
@@ -64,21 +64,11 @@ export default function StaffSignInForm() {
             <div className="bytewave-heading font-mulish-regular text-gray-700 mb-1">Staff Login</div>
             <p className="bytewave-paragraph text-gray-400 mb-4">Sign in with your staff credentials</p>
 
-            {error && (
-              <p className="text-center bytewave-sub-heading text-red-500 font-mulish-regular italic mb-2">
-                {error}
-              </p>
-            )}
+            {error && <p className="text-center bytewave-sub-heading text-red-500 font-mulish-regular italic mb-2">{error}</p>}
 
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)}>
-                <InputsTemplate
-                  control={form.control}
-                  name="email"
-                  label="Email"
-                  placeholder="Enter your email"
-                  inputType="email"
-                />
+                <InputsTemplate control={form.control} name="email" label="Email" placeholder="Enter your email" inputType="email" />
                 <InputsTemplate
                   control={form.control}
                   isPassword

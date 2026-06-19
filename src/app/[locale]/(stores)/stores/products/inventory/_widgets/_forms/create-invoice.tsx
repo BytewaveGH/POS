@@ -212,7 +212,7 @@ const CreateInvoice = ({ mode = 'create', invoiceId, initialData, onSuccess }: C
       paymentStatus: initialData.paymentStatus ?? 'pending',
       items: initialData.items?.length ? initialData.items : [{ productUnitId: 0, quantity: 1, pricingType: 'retail' }],
     })
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [invoiceId])
 
   const { fields, append, remove } = useFieldArray({ control: form.control, name: 'items' })
@@ -372,7 +372,12 @@ const CreateInvoice = ({ mode = 'create', invoiceId, initialData, onSuccess }: C
             </div>
           )}
           {submitError && <p className="text-sm text-red-500">{submitError}</p>}
-          <ButtonTemplate isText text={isSubmitting ? 'Saving...' : mode === 'update' ? 'Update Invoice' : 'Save Invoice'} type="submit" isDisabled={isSubmitting} />
+          <ButtonTemplate
+            isText
+            text={isSubmitting ? 'Saving...' : mode === 'update' ? 'Update Invoice' : 'Save Invoice'}
+            type="submit"
+            isDisabled={isSubmitting}
+          />
         </div>
       </form>
     </Form>
