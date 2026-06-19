@@ -25,26 +25,26 @@ export function usePermissions(): Permissions {
   if (!isEmployee) {
     return {
       isEmployee: false,
-      canViewReports:      true,
-      canManageProducts:   true,
-      canManageStock:      true,
-      canManageSales:      true,
-      canManageInvoices:   true,
+      canViewReports: true,
+      canManageProducts: true,
+      canManageStock: true,
+      canManageSales: true,
+      canManageInvoices: true,
       canManageOperations: true,
       canManageWarehouses: true,
-      canManageEmployees:  true,
+      canManageEmployees: true,
     }
   }
 
   return {
     isEmployee: true,
-    canViewReports:      !!user?.canViewReports,
-    canManageProducts:   !!user?.canManageProducts,
-    canManageStock:      !!user?.canManageStock,
-    canManageSales:      !!user?.canManageSales,
-    canManageInvoices:   !!user?.canManageInvoices,
+    canViewReports: !!user?.canViewReports,
+    canManageProducts: !!user?.canManageProducts,
+    canManageStock: !!user?.canManageStock,
+    canManageSales: !!user?.canManageSales,
+    canManageInvoices: !!user?.canManageInvoices,
     canManageOperations: !!user?.canManageOperations,
     canManageWarehouses: !!user?.canManageWarehouses,
-    canManageEmployees:  !!user?.canManageEmployees,
+    canManageEmployees: !!user?.canManageEmployees,
   }
 }

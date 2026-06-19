@@ -105,6 +105,7 @@ const Main = () => {
   })
 
   const [invoiceModal, setInvoiceModal] = useState(false)
+  const [selectedInvoice, setSelectedInvoice] = useState<any | null>(null)
   const [viewSale, setViewSale] = useState<any | null>(null)
   const [viewInvoice, setViewInvoice] = useState<any | null>(null)
 
@@ -501,7 +502,7 @@ const Main = () => {
       {
         field: 'actions',
         headerName: '',
-        width: 170,
+        width: 220,
         pinned: 'right' as const,
         sortable: false,
         filter: false,
@@ -511,6 +512,16 @@ const Main = () => {
             <div className="flex items-center gap-2 h-full">
               <button className="text-xs text-endeavour hover:underline font-medium" onClick={() => setViewInvoice(row)}>
                 View
+              </button>
+              <span className="text-gray-300">|</span>
+              <button
+                className="text-xs text-amber-600 hover:underline font-medium"
+                onClick={() => {
+                  setSelectedInvoice(row)
+                  setInvoiceModal(true)
+                }}
+              >
+                Edit
               </button>
               <span className="text-gray-300">|</span>
               {paid ? (
@@ -698,15 +709,38 @@ const Main = () => {
       <SheetTemplate
         open={invoiceModal}
         handleOpen={() => setInvoiceModal(true)}
-        handleClose={() => setInvoiceModal(false)}
-        title="Add Invoice"
+        handleClose={() => {
+          setInvoiceModal(false)
+          setSelectedInvoice(null)
+        }}
+        title={selectedInvoice ? 'Edit Invoice' : 'Add Invoice'}
         contentBodyClassName="flex flex-col"
         contentClassName="md:min-w-[40rem]"
         content={
           <CreateInvoice
+            key={selectedInvoice?.id ?? 'new'}
+            mode={selectedInvoice ? 'update' : 'create'}
+            invoiceId={selectedInvoice?.id}
+            initialData={
+              selectedInvoice
+                ? {
+                    customerName: selectedInvoice.customerName ?? '',
+                    customerPhone: selectedInvoice.customerPhone ?? '',
+                    date: selectedInvoice.date?.split('T')[0] ?? selectedInvoice.date ?? '',
+                    paymentType: selectedInvoice.paymentType ?? 'cash',
+                    paymentStatus: selectedInvoice.paymentStatus ?? (selectedInvoice.isPaid ? 'paid' : 'pending'),
+                    items: (selectedInvoice.items ?? []).map((i: any) => ({
+                      productUnitId: Number(i.productUnitId ?? i.unitId ?? 0),
+                      quantity: Number(i.quantity ?? 1),
+                      pricingType: (i.pricingType ?? 'retail') as 'retail' | 'wholesale',
+                    })),
+                  }
+                : undefined
+            }
             onSuccess={() => {
               refetchInvoices()
               setInvoiceModal(false)
+              setSelectedInvoice(null)
             }}
           />
         }
@@ -1129,7 +1163,10 @@ const Main = () => {
             classname="px-3 py-2 border border-endeavour text-white rounded-md text-xs"
             isText
             text={'Add Invoice'}
-            handleClick={() => setInvoiceModal(true)}
+            handleClick={() => {
+              setSelectedInvoice(null)
+              setInvoiceModal(true)
+            }}
           />
           <ButtonTemplate
             classname="px-3 py-2 bg-endeavour text-white rounded-md text-xs"
