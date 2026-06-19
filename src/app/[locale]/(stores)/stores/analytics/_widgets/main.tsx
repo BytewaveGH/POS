@@ -58,10 +58,10 @@ const extractHourDay = (d: any): { hour: number | null; dayOfWeek: number | null
 
   const tIdx = raw.indexOf('T')
   if (tIdx !== -1) {
-    const datePart = raw.slice(0, tIdx)          // "2026-05-29"
-    const hourStr  = raw.slice(tIdx + 1)         // "11"
-    const hour     = parseInt(hourStr, 10)
-    const dt       = new Date(`${datePart}T00:00:00`)
+    const datePart = raw.slice(0, tIdx) // "2026-05-29"
+    const hourStr = raw.slice(tIdx + 1) // "11"
+    const hour = parseInt(hourStr, 10)
+    const dt = new Date(`${datePart}T00:00:00`)
     if (isNaN(dt.getTime()) || isNaN(hour)) return { hour: null, dayOfWeek: null }
     return { hour, dayOfWeek: dt.getDay() }
   }
@@ -93,7 +93,7 @@ const HEATMAP_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const HEATMAP_DAY_JS = [1, 2, 3, 4, 5, 6, 0]
 // Visible hour range: 7 am → 8 pm
 const HOUR_START = 7
-const HOUR_END   = 20
+const HOUR_END = 20
 const HEATMAP_HOURS = Array.from({ length: HOUR_END - HOUR_START + 1 }, (_, i) => i + HOUR_START)
 
 // ── Refresh button ─────────────────────────────────────────────────────────────

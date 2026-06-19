@@ -81,7 +81,11 @@ async function employeeLoginRequest(body: { email: string; password: string }, t
   }
 }
 
-const toAbsoluteExpiry = (v: number) => (v < 86400 ? Math.floor(Date.now() / 1000) + v : v)
+const toAbsoluteExpiry = (v: number | undefined | null): number => {
+  if (!v || isNaN(Number(v))) return Math.floor(Date.now() / 1000) + 3600
+  const n = Number(v)
+  return n < 86400 ? Math.floor(Date.now() / 1000) + n : n
+}
 
 async function refreshAccessToken(tokenObject: any) {
   try {
@@ -153,37 +157,57 @@ export default {
     Credentials({
       id: 'employee-credentials',
       credentials: {
-        email: { label: 'Email', type: 'email' },
+        email:    { label: 'Email',    type: 'email' },
         password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials, req) {
-        const parsed = EmployeeSignInSchema.safeParse(credentials)
-        if (!parsed.success) return null
-        const tenant = whichTenant(req as Request)
-        const res = await employeeLoginRequest({ email: parsed.data.email, password: parsed.data.password }, tenant)
-        if (!res) return null
-        const emp = res.user ?? res // handle flat or nested response
-        return {
-          id: String(emp.id),
-          userId: emp.id,
-          username: emp.username ?? '',
-          accountType: 'employee',
-          avatar: emp.avatar ?? '',
-          phone: emp.phone ?? '',
-          email: emp.email ?? '',
-          tenant: res.tenant,
-          accessToken: res.accessToken,
-          refreshToken: res.refreshToken,
-          accessTokenExpiry: res.accessTokenExpiry,
-          refreshTokenExpiry: res.refreshTokenExpiry,
-          canViewReports: emp.canViewReports ?? false,
-          canManageProducts: emp.canManageProducts ?? false,
-          canManageStock: emp.canManageStock ?? false,
-          canManageSales: emp.canManageSales ?? false,
-          canManageInvoices: emp.canManageInvoices ?? false,
-          canManageOperations: emp.canManageOperations ?? false,
-          canManageWarehouses: emp.canManageWarehouses ?? false,
-          canManageEmployees: emp.canManageEmployees ?? false,
+        try {
+          const parsed = EmployeeSignInSchema.safeParse(credentials)
+          if (!parsed.success) {
+            console.error('[auth] employee schema parse failed:', parsed.error.flatten())
+            return null
+          }
+          const tenant = whichTenant(req as Request)
+          const res = await employeeLoginRequest(
+            { email: parsed.data.email, password: parsed.data.password },
+            tenant
+          )
+          if (!res) return null
+
+          // Support { user: {...}, accessToken } and flat { id, email, accessToken }
+          const emp = res.user ?? res
+          if (!emp?.id) {
+            console.error('[auth] employee login: no user id in response', JSON.stringify(res))
+            return null
+          }
+
+          // Permissions may sit on emp directly or under emp.permissions
+          const perms = emp.permissions ?? emp
+          return {
+            id:                  String(emp.id),
+            userId:              emp.id,
+            username:            emp.username         ?? emp.name         ?? '',
+            accountType:         'employee' as const,
+            avatar:              emp.avatar           ?? emp.profilePicture ?? '',
+            phone:               emp.phone            ?? '',
+            email:               emp.email            ?? parsed.data.email,
+            tenant:              res.tenant           ?? tenant,
+            accessToken:         res.accessToken      ?? res.token        ?? '',
+            refreshToken:        res.refreshToken     ?? '',
+            accessTokenExpiry:   toAbsoluteExpiry(res.accessTokenExpiry  ?? res.expiresIn),
+            refreshTokenExpiry:  toAbsoluteExpiry(res.refreshTokenExpiry ?? res.refreshExpiresIn),
+            canViewReports:      !!(perms.canViewReports      ?? false),
+            canManageProducts:   !!(perms.canManageProducts   ?? false),
+            canManageStock:      !!(perms.canManageStock       ?? false),
+            canManageSales:      !!(perms.canManageSales       ?? false),
+            canManageInvoices:   !!(perms.canManageInvoices    ?? false),
+            canManageOperations: !!(perms.canManageOperations  ?? false),
+            canManageWarehouses: !!(perms.canManageWarehouses  ?? false),
+            canManageEmployees:  !!(perms.canManageEmployees   ?? false),
+          }
+        } catch (err) {
+          console.error('[auth] employee authorize threw:', err)
+          return null
         }
       },
     }),
