@@ -91,6 +91,10 @@ const toHourlyArray = (raw: any): any[] => {
 // Mon-first ordering for the heatmap (JS getDay: Sun=0, Mon=1…Sat=6)
 const HEATMAP_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const HEATMAP_DAY_JS = [1, 2, 3, 4, 5, 6, 0]
+// Visible hour range: 7 am → 8 pm
+const HOUR_START = 7
+const HOUR_END   = 20
+const HEATMAP_HOURS = Array.from({ length: HOUR_END - HOUR_START + 1 }, (_, i) => i + HOUR_START)
 
 // ── Refresh button ─────────────────────────────────────────────────────────────
 const RefreshBtn = ({ onClick }: { onClick: () => void }) => (
@@ -596,8 +600,8 @@ const Main = () => {
       byHour[hour].revenue += d.revenue ?? d.totalRevenue ?? d.total ?? d.amount ?? 0
       byHour[hour].sales += d.count ?? d.salesCount ?? d.orders ?? d.totalOrders ?? 0
     })
-    return Array.from({ length: 24 }, (_, h) => ({
-      hour: h < 12 ? `${h === 0 ? 12 : h}am` : `${h === 12 ? 12 : h - 12}pm`,
+    return HEATMAP_HOURS.map((h) => ({
+      hour: h < 12 ? `${h}am` : h === 12 ? '12pm' : `${h - 12}pm`,
       revenue: byHour[h]?.revenue ?? 0,
       sales: byHour[h]?.sales ?? 0,
     }))
@@ -1009,9 +1013,9 @@ const Main = () => {
           <div style={{ minWidth: '580px' }}>
             {/* Hour labels row */}
             <div className="flex items-center mb-1" style={{ paddingLeft: '36px' }}>
-              {Array.from({ length: 24 }, (_, h) => (
+              {HEATMAP_HOURS.map((h) => (
                 <div key={h} className="flex-1 text-center" style={{ fontSize: '9px', color: '#9ca3af' }}>
-                  {h % 3 === 0 ? (h === 0 ? '12a' : h < 12 ? `${h}a` : h === 12 ? '12p' : `${h - 12}p`) : ''}
+                  {h % 2 === 1 ? (h < 12 ? `${h}a` : h === 12 ? '12p' : `${h - 12}p`) : ''}
                 </div>
               ))}
             </div>
@@ -1025,17 +1029,18 @@ const Main = () => {
                   <div className="text-[10px] text-gray-400 font-medium flex-shrink-0 text-right pr-2" style={{ width: '36px' }}>
                     {day}
                   </div>
-                  {/* 24 cells */}
-                  {Array.from({ length: 24 }, (_, h) => {
+                  {/* 7am–8pm cells */}
+                  {HEATMAP_HOURS.map((h) => {
                     const value = heatmapGrid[jsDay][h]
                     const intensity = value / heatmapMax
                     const bg = intensity < 0.01 ? 'rgba(243,244,246,1)' : `rgba(8,101,172,${(0.12 + intensity * 0.88).toFixed(2)})`
+                    const label = h < 12 ? `${h}am` : h === 12 ? '12pm' : `${h - 12}pm`
                     return (
                       <div
                         key={h}
                         className="flex-1 rounded-sm transition-colors cursor-default"
                         style={{ height: '22px', backgroundColor: bg }}
-                        title={value > 0 ? `${day} ${h}:00 — ${fmt(value)}` : `${day} ${h}:00 — no sales`}
+                        title={value > 0 ? `${day} ${label} — ${fmt(value)}` : `${day} ${label} — no sales`}
                       />
                     )
                   })}
