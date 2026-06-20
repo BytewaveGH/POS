@@ -62,7 +62,7 @@ async function employeeLoginRequest(body: { email: string; password: string }, t
   try {
     const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/employees/login`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json'},
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     })
     if (!response.ok) {
@@ -157,7 +157,7 @@ export default {
     Credentials({
       id: 'employee-credentials',
       credentials: {
-        email:    { label: 'Email',    type: 'email' },
+        email: { label: 'Email', type: 'email' },
         password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials, req) {
@@ -168,42 +168,39 @@ export default {
             return null
           }
           const tenant = whichTenant(req as Request)
-          const res = await employeeLoginRequest(
-            { email: parsed.data.email, password: parsed.data.password },
-            tenant
-          )
+          const res = await employeeLoginRequest({ email: parsed.data.email, password: parsed.data.password }, tenant)
           if (!res) return null
 
-          // Support { user: {...}, accessToken } and flat { id, email, accessToken }
-          const emp = res.user ?? res
+          // API returns { employee: {...}, token, expireAt }
+          const emp = res.employee ?? res.user ?? res
           if (!emp?.id) {
             console.error('[auth] employee login: no user id in response', JSON.stringify(res))
             return null
           }
 
-          // Permissions may sit on emp directly or under emp.permissions
+          // Permissions sit directly on emp
           const perms = emp.permissions ?? emp
           return {
-            id:                  String(emp.id),
-            userId:              emp.id,
-            username:            emp.username         ?? emp.name         ?? '',
-            accountType:         'employee' as const,
-            avatar:              emp.avatar           ?? emp.profilePicture ?? '',
-            phone:               emp.phone            ?? '',
-            email:               emp.email            ?? parsed.data.email,
-            tenant:              res.tenant           ?? tenant,
-            accessToken:         res.accessToken      ?? res.token        ?? '',
-            refreshToken:        res.refreshToken     ?? '',
-            accessTokenExpiry:   toAbsoluteExpiry(res.accessTokenExpiry  ?? res.expiresIn),
-            refreshTokenExpiry:  toAbsoluteExpiry(res.refreshTokenExpiry ?? res.refreshExpiresIn),
-            canViewReports:      !!(perms.canViewReports      ?? false),
-            canManageProducts:   !!(perms.canManageProducts   ?? false),
-            canManageStock:      !!(perms.canManageStock       ?? false),
-            canManageSales:      !!(perms.canManageSales       ?? false),
-            canManageInvoices:   !!(perms.canManageInvoices    ?? false),
-            canManageOperations: !!(perms.canManageOperations  ?? false),
-            canManageWarehouses: !!(perms.canManageWarehouses  ?? false),
-            canManageEmployees:  !!(perms.canManageEmployees   ?? false),
+            id: String(emp.id),
+            userId: emp.id,
+            username: emp.username ?? emp.name ?? '',
+            accountType: 'employee' as const,
+            avatar: emp.avatar ?? emp.profilePicture ?? '',
+            phone: emp.phone ?? '',
+            email: emp.email ?? parsed.data.email,
+            tenant: res.tenant ?? tenant,
+            accessToken: res.accessToken ?? res.token ?? '',
+            refreshToken: res.refreshToken ?? '',
+            accessTokenExpiry: toAbsoluteExpiry(res.expireAt ?? res.accessTokenExpiry ?? res.expiresIn),
+            refreshTokenExpiry: toAbsoluteExpiry(res.refreshTokenExpiry ?? res.refreshExpiresIn),
+            canViewReports: !!(perms.canViewReports ?? false),
+            canManageProducts: !!(perms.canManageProducts ?? false),
+            canManageStock: !!(perms.canManageStock ?? false),
+            canManageSales: !!(perms.canManageSales ?? false),
+            canManageInvoices: !!(perms.canManageInvoices ?? false),
+            canManageOperations: !!(perms.canManageOperations ?? false),
+            canManageWarehouses: !!(perms.canManageWarehouses ?? false),
+            canManageEmployees: !!(perms.canManageEmployees ?? false),
           }
         } catch (err) {
           console.error('[auth] employee authorize threw:', err)
