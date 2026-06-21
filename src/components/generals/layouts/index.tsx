@@ -1,17 +1,17 @@
+'use client'
+
 import React from 'react'
 import { AppSidebar } from './widgets/sidebar'
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar'
 import TopNav from './widgets/top-nav'
 import { sidebarItems } from './logics/data'
-import { auth } from '@/auth'
+import { useSession } from 'next-auth/react'
 
-const ILayout = async ({ children }: { children: React.ReactNode }) => {
-  const session = await auth()
+const ILayout = ({ children }: { children: React.ReactNode }) => {
+  const { data: session } = useSession()
   const user = session?.user as any
   const isEmployee = user?.accountType === 'employee'
 
-  // For employees, remove sidebar items their permissions don't cover.
-  // Admins always see everything.
   const visibleItems = isEmployee
     ? sidebarItems
         .map((group) => ({
