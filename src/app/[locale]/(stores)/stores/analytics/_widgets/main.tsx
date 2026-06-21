@@ -27,7 +27,7 @@ import DatagridTemplate from '@/components/templates/datagrid'
 import { useFetchData } from '@/hooks/use-fetch'
 import { useFetchPaginated } from '@/hooks/use-fetch-paginated'
 import { StatisticsServices } from '../../overview/_logics/services'
-import { ProductServices } from '../../products/inventory/_logics/services'
+import { ProductServices, OperationsServices } from '../../products/inventory/_logics/services'
 import { IGeneric } from '@/types/interfaces'
 import { cn } from '@/lib/utils'
 
@@ -121,6 +121,7 @@ const KpiCard = ({
   icon: Icon,
   color,
   trend,
+  extra,
 }: {
   label: string
   value: string | number
@@ -128,6 +129,7 @@ const KpiCard = ({
   icon: React.ElementType
   color: string
   trend?: number | null
+  extra?: React.ReactNode
 }) => (
   <div className="bg-white rounded-xl border border-gray-200 p-4 flex flex-col gap-2 hover:shadow-sm transition-shadow">
     <div className="flex items-center justify-between">
@@ -151,6 +153,7 @@ const KpiCard = ({
       )}
       {sub && <p className="bytewave-paragraph text-[10px] text-gray-400 truncate">{sub}</p>}
     </div>
+    {extra}
   </div>
 )
 
@@ -363,6 +366,10 @@ const Main = () => {
   )
   const { data: allProductsRaw } = useFetchData('analytics-products', ProductServices.FetchAll() as unknown as IGeneric)
   const { data: shortagesRaw } = useFetchData('analytics-shortages', StatisticsServices.FetchShortages() as unknown as IGeneric)
+  const { data: operationsRaw } = useFetchData(
+    `analytics-ops-${dateKey}`,
+    OperationsServices.FetchAll({ limit: 1000, ...dateParams }) as unknown as IGeneric
+  )
   const { data: hourlySalesRaw, refetch: refetchHourlyChart } = useFetchData(
     `analytics-hourly-${dateKey}`,
     StatisticsServices.FetchSales({ granularity: 'hour', ...dateParams }) as unknown as IGeneric
@@ -420,6 +427,7 @@ const Main = () => {
   const warehouses = (warehousesRaw as any[]) ?? []
   const allProducts = (allProductsRaw as any[]) ?? []
   const shortages = (shortagesRaw as any[]) ?? []
+  const operations = (operationsRaw as any[]) ?? []
 
   // ── Profit calculation ─────────────────────────────────────────────────────
   const purchasePriceMap = useMemo(() => {
@@ -457,6 +465,13 @@ const Main = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [allSold, purchasePriceMap, refRetailMap]
   )
+
+  const totalOperations = useMemo(
+    () => operations.reduce((s: number, op: any) => s + (op.amount ?? 0), 0),
+    [operations]
+  )
+
+  const netProfit = totalProfit - totalOperations
 
   const overallMarginRatio = useMemo(() => {
     const sold = (chartSoldRaw as any[]) ?? []
@@ -888,6 +903,15 @@ const Main = () => {
           icon={DollarSign}
           color="bg-emerald-500"
           trend={trendPct(totalProfit, prevRevenue * overallMarginRatio)}
+          extra={
+            <div className="border-t border-gray-100 pt-2 mt-0.5 flex flex-col gap-0.5">
+              <p className="text-[10px] text-gray-400 uppercase tracking-widest font-semibold">Net Profit</p>
+              <p className={cn('text-sm font-bold leading-tight', netProfit >= 0 ? 'text-emerald-600' : 'text-red-500')}>
+                {fmtShort(netProfit)}
+              </p>
+              <p className="text-[10px] text-gray-400">after ops · {fmtShort(totalOperations)} expenses</p>
+            </div>
+          }
         />
         <KpiCard
           label="Total Sales"
