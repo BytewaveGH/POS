@@ -466,12 +466,9 @@ const Main = () => {
     [allSold, purchasePriceMap, refRetailMap]
   )
 
-  const totalOperations = useMemo(
-    () => operations.reduce((s: number, op: any) => s + (op.amount ?? 0), 0),
-    [operations]
-  )
+  const totalOperations = useMemo(() => operations.reduce((s: number, op: any) => s + (op.amount ?? 0), 0), [operations])
 
-  const netProfit = totalProfit - totalOperations
+  const netProfit = Math.max(0, totalProfit - totalOperations)
 
   const overallMarginRatio = useMemo(() => {
     const sold = (chartSoldRaw as any[]) ?? []
@@ -887,7 +884,7 @@ const Main = () => {
       </header>
 
       {/* ── KPI Cards ───────────────────────────────────────────────────── */}
-      <section className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+      <section className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
         <KpiCard
           label="Total Revenue"
           value={fmtShort(totalRevenue)}
@@ -903,15 +900,14 @@ const Main = () => {
           icon={DollarSign}
           color="bg-emerald-500"
           trend={trendPct(totalProfit, prevRevenue * overallMarginRatio)}
-          extra={
-            <div className="border-t border-gray-100 pt-2 mt-0.5 flex flex-col gap-0.5">
-              <p className="text-[10px] text-gray-400 uppercase tracking-widest font-semibold">Net Profit</p>
-              <p className={cn('text-sm font-bold leading-tight', netProfit >= 0 ? 'text-emerald-600' : 'text-red-500')}>
-                {fmtShort(netProfit)}
-              </p>
-              <p className="text-[10px] text-gray-400">after ops · {fmtShort(totalOperations)} expenses</p>
-            </div>
-          }
+        />
+        <KpiCard
+          label="Net Profit"
+          value={fmtShort(netProfit)}
+          sub={`after ${fmtShort(totalOperations)} expenses`}
+          icon={Wallet}
+          color="bg-teal-500"
+          trend={null}
         />
         <KpiCard
           label="Total Sales"
