@@ -11,4 +11,5 @@ export const InventoryTabs: InventoryTabsTypes[] = [
   { key: 'Adjustments', id: '7', label: 'Adjustments' },
   { key: 'Invoices', id: '9', label: 'Invoices' },
   { key: 'ExpiredItems', id: '10', label: 'Expired Items' },
+  { key: 'Transfers', id: '11', label: 'Transfers' },
 ]
