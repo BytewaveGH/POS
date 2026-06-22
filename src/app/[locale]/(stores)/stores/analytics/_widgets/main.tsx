@@ -904,10 +904,17 @@ const Main = () => {
         <KpiCard
           label="Net Profit"
           value={fmtShort(netProfit)}
-          sub={`after ${fmtShort(totalOperations)} expenses`}
+          sub="after goods + operations"
           icon={Wallet}
           color="bg-teal-500"
           trend={null}
+          extra={
+            <div className="border-t border-gray-100 pt-1.5 flex flex-col gap-0.5 text-[10px] text-gray-400">
+              <span>Revenue &nbsp;&nbsp;&nbsp;{fmtShort(totalRevenue)}</span>
+              <span>− Goods &nbsp;&nbsp;{fmtShort(totalRevenue - totalProfit)}</span>
+              <span>− Ops &nbsp;&nbsp;&nbsp;&nbsp;{fmtShort(totalOperations)}</span>
+            </div>
+          }
         />
         <KpiCard
           label="Total Sales"
