@@ -132,6 +132,37 @@ export const StocksServices = {
     method: 'DELETE',
     url: `/products/${productId}/stock/${stockId}`,
   }),
+
+  BulkCreate: (productId: number, payload: { warehouseId: number; quantity: number }[]) => ({
+    method: 'POST',
+    url: `/products/${productId}/stock/bulk`,
+    data: payload,
+  }),
+}
+
+export const TransferServices = {
+  FetchAll: (params?: any) => ({
+    method: 'GET',
+    url: `/transfers`,
+    params,
+  }),
+
+  Create: (payload: { fromStockId: number; toStockId: number; quantity: number; note?: string }) => ({
+    method: 'POST',
+    url: `/transfers`,
+    data: payload,
+  }),
+
+  Confirm: (id: number, payload: { confirmedBy: number }) => ({
+    method: 'PATCH',
+    url: `/transfers/${id}/confirm`,
+    data: payload,
+  }),
+
+  Cancel: (id: number) => ({
+    method: 'PATCH',
+    url: `/transfers/${id}/cancel`,
+  }),
 }
 
 /**

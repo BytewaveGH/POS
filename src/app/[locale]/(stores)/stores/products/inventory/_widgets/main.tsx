@@ -9,15 +9,18 @@ import { UpdateStates } from '@/lib/functions/update-states'
 import CreateProduct from './_forms/create-product'
 import CreateInvoice from './_forms/create-invoice'
 import CreateOperation from './_forms/create-operation'
+import BulkStock from './_forms/bulk-stock'
+import CreateTransfer from './_forms/create-transfer'
 import DatagridTemplate from '@/components/templates/datagrid'
 import { useFetchPaginated } from '@/hooks/use-fetch-paginated'
 import { useFetchData } from '@/hooks/use-fetch'
 import { useAxios } from '@/hooks/use-axios'
-import { ProductServices, InvoiceServices, StocksServices, OperationsServices } from '../_logics/services'
+import { ProductServices, InvoiceServices, StocksServices, OperationsServices, TransferServices } from '../_logics/services'
 import { StatisticsServices } from '../../../overview/_logics/services'
 import { IGeneric } from '@/types/interfaces'
 import { SalesServices } from '../../../pos/_logics/services'
-import { AlertTriangle, Package, FileText, ShoppingCart, Boxes } from 'lucide-react'
+import { AlertTriangle, Package, FileText, ShoppingCart, Boxes, ArrowLeftRight } from 'lucide-react'
+import { useSession } from 'next-auth/react'
 
 // ── Custom pagination controls ──────────────────────────────────────────────
 const Pagination = ({
@@ -97,6 +100,8 @@ const Pagination = ({
 
 const Main = () => {
   const request = useAxios()
+  const { data: session } = useSession()
+  const sessionUserId = (session?.user as any)?.id ?? 0
 
   const [states, setStates] = useState({
     mode: 'products',
@@ -115,6 +120,13 @@ const Main = () => {
   const [opPage, setOpPage] = useState(0)
   const [opPageSize, setOpPageSize] = useState(20)
 
+  // Transfer state
+  const [transferModal, setTransferModal] = useState(false)
+  const [bulkStockModal, setBulkStockModal] = useState(false)
+  const [confirmingTransferId, setConfirmingTransferId] = useState<number | null>(null)
+  const [transferPage, setTransferPage] = useState(0)
+  const [transferPageSize, setTransferPageSize] = useState(20)
+
   const {
     data: operations,
     total: opTotal,
@@ -122,12 +134,41 @@ const Main = () => {
     refetch: refetchOperations,
   } = useFetchPaginated('operations', OperationsServices.FetchAll() as unknown as IGeneric, opPage, opPageSize)
 
+  const {
+    data: transfers,
+    total: transferTotal,
+    isLoading: transfersLoading,
+    refetch: refetchTransfers,
+  } = useFetchPaginated('transfers', TransferServices.FetchAll() as unknown as IGeneric, transferPage, transferPageSize)
+
   const handleDeleteOperation = async (id: number) => {
     try {
       await request(OperationsServices.Delete(id))
       refetchOperations()
     } catch (err) {
       console.error('Delete operation failed:', err)
+    }
+  }
+
+  const handleConfirmTransfer = async (id: number) => {
+    setConfirmingTransferId(id)
+    try {
+      await request(TransferServices.Confirm(id, { confirmedBy: sessionUserId }) as any)
+      refetchTransfers()
+      refetchAllStock()
+    } catch (err) {
+      console.error('Confirm transfer failed:', err)
+    } finally {
+      setConfirmingTransferId(null)
+    }
+  }
+
+  const handleCancelTransfer = async (id: number) => {
+    try {
+      await request(TransferServices.Cancel(id) as any)
+      refetchTransfers()
+    } catch (err) {
+      console.error('Cancel transfer failed:', err)
     }
   }
 
@@ -591,12 +632,12 @@ const Main = () => {
       {
         field: 'actions',
         headerName: '',
-        width: 130,
+        width: 185,
         pinned: 'right' as const,
         sortable: false,
         filter: false,
         cellRenderer: ({ data: row }: any) => (
-          <div className="flex items-center gap-2 h-full">
+          <div className="flex items-center gap-1.5 h-full">
             <button
               className="text-xs text-endeavour hover:underline font-medium"
               onClick={() => {
@@ -612,6 +653,10 @@ const Main = () => {
               }}
             >
               Restock
+            </button>
+            <span className="text-gray-300">|</span>
+            <button className="text-xs text-indigo-500 hover:underline font-medium" onClick={() => setTransferModal(true)}>
+              Transfer
             </button>
             <span className="text-gray-300">|</span>
             <button
@@ -679,6 +724,62 @@ const Main = () => {
       },
     ],
     []
+  )
+
+  const transferCols = useMemo(
+    () => [
+      { field: 'id', headerName: 'Transfer #', width: 110 },
+      { field: 'fromProductName', headerName: 'Product', flex: 1, minWidth: 130, valueGetter: (p: any) => p.data?.fromProduct?.name ?? p.data?.productName ?? '—' },
+      { field: 'fromWarehouse', headerName: 'From', width: 140, valueGetter: (p: any) => p.data?.fromStock?.warehouseName ?? p.data?.fromWarehouseName ?? '—' },
+      { field: 'toWarehouse', headerName: 'To', width: 140, valueGetter: (p: any) => p.data?.toStock?.warehouseName ?? p.data?.toWarehouseName ?? '—' },
+      { field: 'quantity', headerName: 'Qty', width: 80 },
+      {
+        field: 'status',
+        headerName: 'Status',
+        width: 110,
+        cellRenderer: ({ value }: any) => {
+          const map: Record<string, string> = { pending: 'bg-amber-100 text-amber-700', confirmed: 'bg-green-100 text-green-700', cancelled: 'bg-red-100 text-red-600' }
+          return (
+            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium capitalize ${map[value] ?? 'bg-gray-100 text-gray-500'}`}>
+              {value ?? '—'}
+            </span>
+          )
+        },
+      },
+      { field: 'note', headerName: 'Note', flex: 1, valueFormatter: (p: any) => p.value ?? '—' },
+      { field: 'createdAt', headerName: 'Initiated', width: 140, valueFormatter: (p: any) => (p.value ? new Date(p.value).toLocaleString() : '—') },
+      { field: 'confirmedAt', headerName: 'Confirmed At', width: 140, valueFormatter: (p: any) => (p.value ? new Date(p.value).toLocaleString() : '—') },
+      { field: 'confirmedByName', headerName: 'Confirmed By', width: 130, valueGetter: (p: any) => p.data?.confirmedByUser?.name ?? p.data?.confirmedByName ?? (p.data?.confirmedBy ? `#${p.data.confirmedBy}` : '—') },
+      {
+        field: 'actions',
+        headerName: '',
+        width: 140,
+        pinned: 'right' as const,
+        sortable: false,
+        filter: false,
+        cellRenderer: ({ data: row }: any) => {
+          const isPending = row.status === 'pending'
+          if (!isPending) return <span className="text-xs text-gray-300 italic">{row.status}</span>
+          const isConfirming = confirmingTransferId === row.id
+          return (
+            <div className="flex items-center gap-2 h-full">
+              <button
+                disabled={isConfirming}
+                className="text-xs text-green-600 hover:underline font-medium disabled:opacity-50"
+                onClick={() => handleConfirmTransfer(row.id)}
+              >
+                {isConfirming ? 'Confirming...' : 'Confirm'}
+              </button>
+              <span className="text-gray-300">|</span>
+              <button className="text-xs text-red-500 hover:underline" onClick={() => handleCancelTransfer(row.id)}>
+                Cancel
+              </button>
+            </div>
+          )
+        },
+      },
+    ],
+    [confirmingTransferId]
   )
 
   return (
@@ -766,6 +867,44 @@ const Main = () => {
               refetchOperations()
               setOperationModal(false)
               setSelectedOperation(null)
+            }}
+          />
+        }
+      />
+
+      {/* ── Transfer sheet ── */}
+      <SheetTemplate
+        open={transferModal}
+        handleOpen={() => setTransferModal(true)}
+        handleClose={() => setTransferModal(false)}
+        title="Initiate Transfer"
+        contentBodyClassName="flex flex-col"
+        contentClassName="md:min-w-[36rem]"
+        content={
+          <CreateTransfer
+            stockRows={stockRows}
+            onSuccess={() => {
+              refetchTransfers()
+              setTransferModal(false)
+            }}
+          />
+        }
+      />
+
+      {/* ── Bulk stock sheet ── */}
+      <SheetTemplate
+        open={bulkStockModal}
+        handleOpen={() => setBulkStockModal(true)}
+        handleClose={() => setBulkStockModal(false)}
+        title="Add Product to Multiple Warehouses"
+        contentBodyClassName="flex flex-col"
+        contentClassName="md:min-w-[36rem]"
+        content={
+          <BulkStock
+            onSuccess={() => {
+              refetch()
+              refetchAllStock()
+              setBulkStockModal(false)
             }}
           />
         }
@@ -1151,6 +1290,18 @@ const Main = () => {
         </div>
         <div className="flex flex-wrap gap-2 sm:justify-end">
           <ButtonTemplate
+            classname="px-3 py-2 border border-gray-300 text-gray-600 rounded-md text-xs"
+            isText
+            text={'Bulk Add Stock'}
+            handleClick={() => setBulkStockModal(true)}
+          />
+          <ButtonTemplate
+            classname="px-3 py-2 border border-endeavour text-endeavour rounded-md text-xs"
+            isText
+            text={'New Transfer'}
+            handleClick={() => setTransferModal(true)}
+          />
+          <ButtonTemplate
             classname="px-3 py-2 border border-endeavour text-white rounded-md text-xs"
             isText
             text={'Add Operation'}
@@ -1321,6 +1472,40 @@ const Main = () => {
                       selectionType="singleRow"
                     />
                   </div>
+                </div>
+              ) : tab.key === 'Transfers' ? (
+                <div className="flex flex-col">
+                  {/* Transfers header */}
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <ArrowLeftRight className="h-4 w-4 text-endeavour" />
+                      <p className="bytewave-paragraph text-sm text-stone-700 font-medium">Stock Transfers</p>
+                    </div>
+                    <button
+                      onClick={() => setTransferModal(true)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-endeavour text-white rounded-lg text-xs font-semibold hover:bg-veniceBlue transition-colors"
+                    >
+                      <ArrowLeftRight className="h-3 w-3" />
+                      New Transfer
+                    </button>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <DatagridTemplate
+                      columns={transferCols}
+                      data={transfers}
+                      loadingIndicator={transfersLoading}
+                      enablePagination={false}
+                      paginationPageSize={transferPageSize}
+                      selectionType="singleRow"
+                    />
+                  </div>
+                  <Pagination
+                    page={transferPage}
+                    pageSize={transferPageSize}
+                    total={transferTotal}
+                    onPage={setTransferPage}
+                    onPageSize={setTransferPageSize}
+                  />
                 </div>
               ) : (
                 <div className="flex flex-col">

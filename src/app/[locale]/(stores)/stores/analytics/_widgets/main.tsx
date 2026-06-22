@@ -27,7 +27,7 @@ import DatagridTemplate from '@/components/templates/datagrid'
 import { useFetchData } from '@/hooks/use-fetch'
 import { useFetchPaginated } from '@/hooks/use-fetch-paginated'
 import { StatisticsServices } from '../../overview/_logics/services'
-import { ProductServices, OperationsServices } from '../../products/inventory/_logics/services'
+import { ProductServices } from '../../products/inventory/_logics/services'
 import { IGeneric } from '@/types/interfaces'
 import { cn } from '@/lib/utils'
 
@@ -366,10 +366,6 @@ const Main = () => {
   )
   const { data: allProductsRaw } = useFetchData('analytics-products', ProductServices.FetchAll() as unknown as IGeneric)
   const { data: shortagesRaw } = useFetchData('analytics-shortages', StatisticsServices.FetchShortages() as unknown as IGeneric)
-  const { data: operationsRaw } = useFetchData(
-    `analytics-ops-${dateKey}`,
-    OperationsServices.FetchAll({ limit: 1000, ...dateParams }) as unknown as IGeneric
-  )
   const { data: hourlySalesRaw, refetch: refetchHourlyChart } = useFetchData(
     `analytics-hourly-${dateKey}`,
     StatisticsServices.FetchSales({ granularity: 'hour', ...dateParams }) as unknown as IGeneric
@@ -427,14 +423,11 @@ const Main = () => {
   const warehouses = (warehousesRaw as any[]) ?? []
   const allProducts = (allProductsRaw as any[]) ?? []
   const shortages = (shortagesRaw as any[]) ?? []
-  const operations = (operationsRaw as any[]) ?? []
 
-  // ── Profit calculation ─────────────────────────────────────────────────────
+  // ── Per-product profit ratio (for top-products table only) ─────────────────
   const purchasePriceMap = useMemo(() => {
     const map: Record<number, number> = {}
-    allProducts.forEach((p: any) => {
-      map[p.id] = p.purchasePrice ?? 0
-    })
+    allProducts.forEach((p: any) => { map[p.id] = p.purchasePrice ?? 0 })
     return map
   }, [allProducts])
 
@@ -443,10 +436,7 @@ const Main = () => {
     allProducts.forEach((p: any) => {
       const units: any[] = p.units ?? []
       const halfBox = units.find((u: any) => u.pricingRule === 'half-box' && u.boxRetailPrice > 0)
-      if (halfBox) {
-        map[p.id] = halfBox.boxRetailPrice
-        return
-      }
+      if (halfBox) { map[p.id] = halfBox.boxRetailPrice; return }
       const prices = units.map((u: any) => u.retailPrice ?? 0).filter(Boolean)
       if (prices.length) map[p.id] = Math.max(...prices)
     })
@@ -460,27 +450,7 @@ const Main = () => {
     return revenue * Math.max(0, 1 - pp / rr)
   }
 
-  const totalProfit = useMemo(
-    () => allSold.reduce((s: number, p: any) => s + calcProfit(p.revenue ?? 0, p.productId), 0),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [allSold, purchasePriceMap, refRetailMap]
-  )
-
-  const totalOperations = useMemo(() => operations.reduce((s: number, op: any) => s + (op.amount ?? 0), 0), [operations])
-
-  const netProfit = Math.max(0, totalProfit - totalOperations)
-
-  const overallMarginRatio = useMemo(() => {
-    const sold = (chartSoldRaw as any[]) ?? []
-    const cRev = sold.reduce((s: number, p: any) => s + (p.revenue ?? 0), 0)
-    const cProf = sold.reduce((s: number, p: any) => s + calcProfit(p.revenue ?? 0, p.productId), 0)
-    if (cRev > 0) return Math.max(0, cProf / cRev)
-    const tRev = allSold.reduce((s: number, p: any) => s + (p.revenue ?? 0), 0)
-    return tRev > 0 ? Math.max(0, totalProfit / tRev) : 0
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chartSoldRaw, allSold, totalProfit, purchasePriceMap, refRetailMap])
-
-  // ── KPIs ──────────────────────────────────────────────────────────────────
+  // ── KPIs — use backend-computed values where available ─────────────────────
   const totalRevenue = overview?.revenue?.total ?? 0
   const prevRevenue = prevOverview?.revenue?.total ?? 0
   const totalSales = overview?.sales?.total ?? 0
@@ -490,7 +460,32 @@ const Main = () => {
   const momoRevenue = overview?.revenue?.momo ?? 0
   const cashRevenue = overview?.revenue?.cash ?? 0
   const lowStockCount = overview?.inventory?.lowStockProducts ?? 0
-  const profitMarginPct = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0
+
+  // Backend now supplies true profit = revenue − COGS − operations
+  const backendCogs = overview?.cogs ?? 0
+  const backendOperationsCost = overview?.operationsCost ?? 0
+  const backendProfit = overview?.profit ?? 0
+
+  // Gross profit = revenue − COGS (before operations)
+  const grossProfit = Math.max(0, totalRevenue - backendCogs)
+  // Net profit = backend value (revenue − COGS − operations)
+  const netProfit = Math.max(0, backendProfit)
+
+  const profitMarginPct = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0
+
+  // ── Overall margin ratio for chart estimates (gross margin per ₵ of revenue) ─
+  const overallMarginRatio = useMemo(() => {
+    if (totalRevenue > 0 && backendCogs > 0) return Math.max(0, (totalRevenue - backendCogs) / totalRevenue)
+    // Fallback: client-side estimate when backend doesn't yet provide cogs
+    const sold = (chartSoldRaw as any[]) ?? []
+    const cRev = sold.reduce((s: number, p: any) => s + (p.revenue ?? 0), 0)
+    const cProf = sold.reduce((s: number, p: any) => s + calcProfit(p.revenue ?? 0, p.productId), 0)
+    if (cRev > 0) return Math.max(0, cProf / cRev)
+    const tRev = allSold.reduce((s: number, p: any) => s + (p.revenue ?? 0), 0)
+    const tProf = allSold.reduce((s: number, p: any) => s + calcProfit(p.revenue ?? 0, p.productId), 0)
+    return tRev > 0 ? Math.max(0, tProf / tRev) : 0
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [totalRevenue, backendCogs, chartSoldRaw, allSold, purchasePriceMap, refRetailMap])
 
   // ── Daily chart data ───────────────────────────────────────────────────────
   const dailySalesWithProfit = useMemo(() => {
@@ -895,26 +890,19 @@ const Main = () => {
         />
         <KpiCard
           label="Gross Profit"
-          value={fmtShort(totalProfit)}
-          sub={`${profitMarginPct.toFixed(1)}% margin`}
+          value={fmtShort(grossProfit)}
+          sub={`after ${fmtShort(backendCogs)} COGS`}
           icon={DollarSign}
           color="bg-emerald-500"
-          trend={trendPct(totalProfit, prevRevenue * overallMarginRatio)}
+          trend={trendPct(grossProfit, prevRevenue * overallMarginRatio)}
         />
         <KpiCard
           label="Net Profit"
           value={fmtShort(netProfit)}
-          sub="after goods + operations"
+          sub={`${profitMarginPct.toFixed(1)}% margin · after ops`}
           icon={Wallet}
           color="bg-teal-500"
-          trend={null}
-          extra={
-            <div className="border-t border-gray-100 pt-1.5 flex flex-col gap-0.5 text-[10px] text-gray-400">
-              <span>Revenue &nbsp;&nbsp;&nbsp;{fmtShort(totalRevenue)}</span>
-              <span>− Goods &nbsp;&nbsp;{fmtShort(totalRevenue - totalProfit)}</span>
-              <span>− Ops &nbsp;&nbsp;&nbsp;&nbsp;{fmtShort(totalOperations)}</span>
-            </div>
-          }
+          trend={trendPct(netProfit, prevRevenue * overallMarginRatio)}
         />
         <KpiCard
           label="Total Sales"
@@ -1243,8 +1231,8 @@ const Main = () => {
                   </div>
                   <div className="bg-gray-50 rounded-xl p-3 flex flex-col gap-1">
                     <p className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold">Period Profit</p>
-                    <p className="text-base font-bold text-stone-800">{fmtShort(totalProfit)}</p>
-                    <p className="text-[10px] text-gray-400">{profitMarginPct.toFixed(1)}% margin</p>
+                    <p className="text-base font-bold text-stone-800">{fmtShort(netProfit)}</p>
+                    <p className="text-[10px] text-gray-400">{profitMarginPct.toFixed(1)}% net margin</p>
                   </div>
                 </div>
               </div>
