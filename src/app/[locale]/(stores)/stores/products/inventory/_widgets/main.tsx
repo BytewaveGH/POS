@@ -1290,13 +1290,13 @@ const Main = () => {
         </div>
         <div className="flex flex-wrap gap-2 sm:justify-end">
           <ButtonTemplate
-            classname="px-3 py-2 border border-gray-300 text-gray-600 rounded-md text-xs"
+            classname="px-3 py-2 border border-endeavour text-white rounded-md text-xs"
             isText
             text={'Bulk Add Stock'}
             handleClick={() => setBulkStockModal(true)}
           />
           <ButtonTemplate
-            classname="px-3 py-2 border border-endeavour text-endeavour rounded-md text-xs"
+            classname="px-3 py-2 border border-endeavour text-white rounded-md text-xs"
             isText
             text={'New Transfer'}
             handleClick={() => setTransferModal(true)}

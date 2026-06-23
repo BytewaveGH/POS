@@ -424,7 +424,7 @@ const Main = () => {
   const allProducts = (allProductsRaw as any[]) ?? []
   const shortages = (shortagesRaw as any[]) ?? []
 
-  // ── Per-product profit ratio (for top-products table only) ─────────────────
+  // ── Per-product profit maps (top-products table + client-side fallback) ──────
   const purchasePriceMap = useMemo(() => {
     const map: Record<number, number> = {}
     allProducts.forEach((p: any) => { map[p.id] = p.purchasePrice ?? 0 })
@@ -450,7 +450,14 @@ const Main = () => {
     return revenue * Math.max(0, 1 - pp / rr)
   }
 
-  // ── KPIs — use backend-computed values where available ─────────────────────
+  // Client-side gross profit estimate (purchase-price vs retail-price margin)
+  const totalProfit = useMemo(
+    () => allSold.reduce((s: number, p: any) => s + calcProfit(p.revenue ?? 0, p.productId), 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allSold, purchasePriceMap, refRetailMap]
+  )
+
+  // ── KPIs ──────────────────────────────────────────────────────────────────
   const totalRevenue = overview?.revenue?.total ?? 0
   const prevRevenue = prevOverview?.revenue?.total ?? 0
   const totalSales = overview?.sales?.total ?? 0
@@ -461,31 +468,27 @@ const Main = () => {
   const cashRevenue = overview?.revenue?.cash ?? 0
   const lowStockCount = overview?.inventory?.lowStockProducts ?? 0
 
-  // Backend now supplies true profit = revenue − COGS − operations
-  const backendCogs = overview?.cogs ?? 0
-  const backendOperationsCost = overview?.operationsCost ?? 0
-  const backendProfit = overview?.profit ?? 0
+  // Use backend exact values when the field is present; fall back to client-side estimate
+  const backendCogs: number | null = overview?.cogs ?? null
+  const backendProfit: number | null = overview?.profit ?? null
+  const backendOperationsCost: number = overview?.operationsCost ?? 0
 
-  // Gross profit = revenue − COGS (before operations)
-  const grossProfit = Math.max(0, totalRevenue - backendCogs)
-  // Net profit = backend value (revenue − COGS − operations)
-  const netProfit = Math.max(0, backendProfit)
+  const grossProfit = backendCogs !== null ? Math.max(0, totalRevenue - backendCogs) : totalProfit
+  const netProfit = backendProfit !== null ? Math.max(0, backendProfit) : Math.max(0, grossProfit - backendOperationsCost)
 
-  const profitMarginPct = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0
+  const profitMarginPct = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0
 
-  // ── Overall margin ratio for chart estimates (gross margin per ₵ of revenue) ─
+  // ── Overall margin ratio for chart profit lines ────────────────────────────
   const overallMarginRatio = useMemo(() => {
-    if (totalRevenue > 0 && backendCogs > 0) return Math.max(0, (totalRevenue - backendCogs) / totalRevenue)
-    // Fallback: client-side estimate when backend doesn't yet provide cogs
+    if (backendCogs !== null && totalRevenue > 0) return Math.max(0, (totalRevenue - backendCogs) / totalRevenue)
     const sold = (chartSoldRaw as any[]) ?? []
     const cRev = sold.reduce((s: number, p: any) => s + (p.revenue ?? 0), 0)
     const cProf = sold.reduce((s: number, p: any) => s + calcProfit(p.revenue ?? 0, p.productId), 0)
     if (cRev > 0) return Math.max(0, cProf / cRev)
     const tRev = allSold.reduce((s: number, p: any) => s + (p.revenue ?? 0), 0)
-    const tProf = allSold.reduce((s: number, p: any) => s + calcProfit(p.revenue ?? 0, p.productId), 0)
-    return tRev > 0 ? Math.max(0, tProf / tRev) : 0
+    return tRev > 0 ? Math.max(0, totalProfit / tRev) : 0
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [totalRevenue, backendCogs, chartSoldRaw, allSold, purchasePriceMap, refRetailMap])
+  }, [backendCogs, totalRevenue, chartSoldRaw, allSold, totalProfit, purchasePriceMap, refRetailMap])
 
   // ── Daily chart data ───────────────────────────────────────────────────────
   const dailySalesWithProfit = useMemo(() => {
@@ -891,7 +894,7 @@ const Main = () => {
         <KpiCard
           label="Gross Profit"
           value={fmtShort(grossProfit)}
-          sub={`after ${fmtShort(backendCogs)} COGS`}
+          sub={backendCogs !== null ? `after ${fmtShort(backendCogs)} COGS` : `${profitMarginPct.toFixed(1)}% est. margin`}
           icon={DollarSign}
           color="bg-emerald-500"
           trend={trendPct(grossProfit, prevRevenue * overallMarginRatio)}
@@ -899,7 +902,7 @@ const Main = () => {
         <KpiCard
           label="Net Profit"
           value={fmtShort(netProfit)}
-          sub={`${profitMarginPct.toFixed(1)}% margin · after ops`}
+          sub={backendProfit !== null ? `${profitMarginPct.toFixed(1)}% margin · after ops` : 'after operations'}
           icon={Wallet}
           color="bg-teal-500"
           trend={trendPct(netProfit, prevRevenue * overallMarginRatio)}

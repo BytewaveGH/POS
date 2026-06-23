@@ -162,7 +162,7 @@ const CreateInvoice = ({ mode = 'create', invoiceId, initialData, onSuccess }: C
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
 
-  const { data: productsData } = useFetchData('products', ProductServices.FetchAll({}) as unknown as IGeneric)
+  const { data: productsData } = useFetchData('products', ProductServices.FetchAll({ limit: 1000, offset: 0 }) as unknown as IGeneric)
 
   const unitOptions = useMemo(
     () =>
