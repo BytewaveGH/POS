@@ -69,10 +69,7 @@ export default auth((req: NextAuthRequest) => {
 
   // Locale root + staff login + super-admin login are public
   const isAuthPage =
-    /^\/(en|fr)\/?$/.test(pathname) ||
-    /^\/(en|fr)\/staff\/?$/.test(pathname) ||
-    SUPER_ADMIN_LOGIN_RE.test(pathname) ||
-    pathname === '/'
+    /^\/(en|fr)\/?$/.test(pathname) || /^\/(en|fr)\/staff\/?$/.test(pathname) || SUPER_ADMIN_LOGIN_RE.test(pathname) || pathname === '/'
 
   if (!isLoggedIn && !isAuthPage) {
     return Response.redirect(new URL('/en', req.url))

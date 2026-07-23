@@ -140,9 +140,7 @@ export default function TenantDetail({ tenant }: TenantDetailProps) {
                 <TrendingUp className="h-3.5 w-3.5 text-white" />
               </div>
             </div>
-            <p className="bytewave-heading text-xl text-stone-800">
-              {stats ? `₵${Number(stats.salesVolume).toLocaleString()}` : '—'}
-            </p>
+            <p className="bytewave-heading text-xl text-stone-800">{stats ? `₵${Number(stats.salesVolume).toLocaleString()}` : '—'}</p>
           </div>
         </div>
       )}
