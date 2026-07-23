@@ -11,6 +11,7 @@ import CreateInvoice from './_forms/create-invoice'
 import CreateOperation from './_forms/create-operation'
 import BulkStock from './_forms/bulk-stock'
 import CreateTransfer from './_forms/create-transfer'
+import ResponsiveDialog from './_forms/responsive-dialog'
 import DatagridTemplate from '@/components/templates/datagrid'
 import { useFetchPaginated } from '@/hooks/use-fetch-paginated'
 import { useFetchData } from '@/hooks/use-fetch'
@@ -729,27 +730,65 @@ const Main = () => {
   const transferCols = useMemo(
     () => [
       { field: 'id', headerName: 'Transfer #', width: 110 },
-      { field: 'fromProductName', headerName: 'Product', flex: 1, minWidth: 130, valueGetter: (p: any) => p.data?.fromProduct?.name ?? p.data?.productName ?? '—' },
-      { field: 'fromWarehouse', headerName: 'From', width: 140, valueGetter: (p: any) => p.data?.fromStock?.warehouseName ?? p.data?.fromWarehouseName ?? '—' },
-      { field: 'toWarehouse', headerName: 'To', width: 140, valueGetter: (p: any) => p.data?.toStock?.warehouseName ?? p.data?.toWarehouseName ?? '—' },
+      {
+        field: 'fromProductName',
+        headerName: 'Product',
+        flex: 1,
+        minWidth: 130,
+        valueGetter: (p: any) => p.data?.fromProduct?.name ?? p.data?.productName ?? '—',
+      },
+      {
+        field: 'fromWarehouse',
+        headerName: 'From',
+        width: 140,
+        valueGetter: (p: any) => p.data?.fromStock?.warehouseName ?? p.data?.fromWarehouseName ?? '—',
+      },
+      {
+        field: 'toWarehouse',
+        headerName: 'To',
+        width: 140,
+        valueGetter: (p: any) => p.data?.toStock?.warehouseName ?? p.data?.toWarehouseName ?? '—',
+      },
       { field: 'quantity', headerName: 'Qty', width: 80 },
       {
         field: 'status',
         headerName: 'Status',
         width: 110,
         cellRenderer: ({ value }: any) => {
-          const map: Record<string, string> = { pending: 'bg-amber-100 text-amber-700', confirmed: 'bg-green-100 text-green-700', cancelled: 'bg-red-100 text-red-600' }
+          const map: Record<string, string> = {
+            pending: 'bg-amber-100 text-amber-700',
+            confirmed: 'bg-green-100 text-green-700',
+            cancelled: 'bg-red-100 text-red-600',
+          }
           return (
-            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium capitalize ${map[value] ?? 'bg-gray-100 text-gray-500'}`}>
+            <span
+              className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium capitalize ${map[value] ?? 'bg-gray-100 text-gray-500'}`}
+            >
               {value ?? '—'}
             </span>
           )
         },
       },
       { field: 'note', headerName: 'Note', flex: 1, valueFormatter: (p: any) => p.value ?? '—' },
-      { field: 'createdAt', headerName: 'Initiated', width: 140, valueFormatter: (p: any) => (p.value ? new Date(p.value).toLocaleString() : '—') },
-      { field: 'confirmedAt', headerName: 'Confirmed At', width: 140, valueFormatter: (p: any) => (p.value ? new Date(p.value).toLocaleString() : '—') },
-      { field: 'confirmedByName', headerName: 'Confirmed By', width: 130, valueGetter: (p: any) => p.data?.confirmedByUser?.name ?? p.data?.confirmedByName ?? (p.data?.confirmedBy ? `#${p.data.confirmedBy}` : '—') },
+      {
+        field: 'createdAt',
+        headerName: 'Initiated',
+        width: 140,
+        valueFormatter: (p: any) => (p.value ? new Date(p.value).toLocaleString() : '—'),
+      },
+      {
+        field: 'confirmedAt',
+        headerName: 'Confirmed At',
+        width: 140,
+        valueFormatter: (p: any) => (p.value ? new Date(p.value).toLocaleString() : '—'),
+      },
+      {
+        field: 'confirmedByName',
+        headerName: 'Confirmed By',
+        width: 130,
+        valueGetter: (p: any) =>
+          p.data?.confirmedByUser?.name ?? p.data?.confirmedByName ?? (p.data?.confirmedBy ? `#${p.data.confirmedBy}` : '—'),
+      },
       {
         field: 'actions',
         headerName: '',
@@ -872,43 +911,37 @@ const Main = () => {
         }
       />
 
-      {/* ── Transfer sheet ── */}
-      <SheetTemplate
+      {/* ── Transfer dialog ── */}
+      <ResponsiveDialog
         open={transferModal}
-        handleOpen={() => setTransferModal(true)}
-        handleClose={() => setTransferModal(false)}
+        onClose={() => setTransferModal(false)}
         title="Initiate Transfer"
-        contentBodyClassName="flex flex-col"
-        contentClassName="md:min-w-[36rem]"
-        content={
-          <CreateTransfer
-            stockRows={stockRows}
-            onSuccess={() => {
-              refetchTransfers()
-              setTransferModal(false)
-            }}
-          />
-        }
-      />
+        maxWidthClassName="sm:max-w-[480px]"
+      >
+        <CreateTransfer
+          stockRows={stockRows}
+          onSuccess={() => {
+            refetchTransfers()
+            setTransferModal(false)
+          }}
+        />
+      </ResponsiveDialog>
 
-      {/* ── Bulk stock sheet ── */}
-      <SheetTemplate
+      {/* ── Bulk stock dialog ── */}
+      <ResponsiveDialog
         open={bulkStockModal}
-        handleOpen={() => setBulkStockModal(true)}
-        handleClose={() => setBulkStockModal(false)}
+        onClose={() => setBulkStockModal(false)}
         title="Add Product to Multiple Warehouses"
-        contentBodyClassName="flex flex-col"
-        contentClassName="md:min-w-[36rem]"
-        content={
-          <BulkStock
-            onSuccess={() => {
-              refetch()
-              refetchAllStock()
-              setBulkStockModal(false)
-            }}
-          />
-        }
-      />
+        maxWidthClassName="sm:max-w-[520px]"
+      >
+        <BulkStock
+          onSuccess={() => {
+            refetch()
+            refetchAllStock()
+            setBulkStockModal(false)
+          }}
+        />
+      </ResponsiveDialog>
 
       {/* ── Sale detail modal ── */}
       {viewSale && (

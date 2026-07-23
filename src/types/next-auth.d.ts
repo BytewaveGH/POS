@@ -19,6 +19,9 @@ export interface ExtendedUser extends DefaultSession['user'], EmployeePermission
   phone: string
   email: string
   tenant: string
+  // Which vertical this tenant runs (retail | eatery | amusement | ...). Optional —
+  // falls back to 'retail' for accounts with no tenant association.
+  appType?: string
   accessToken: string
   refreshToken: string
   accessTokenExpiry: number
@@ -35,6 +38,7 @@ declare module 'next-auth' {
     phone: string
     email: string
     tenant: string
+    appType?: string
     accessToken: string
     refreshToken: string
     accessTokenExpiry: number
@@ -54,6 +58,7 @@ declare module 'next-auth/jwt' {
     phone: string
     email: string
     tenant: string
+    appType?: string
     accessToken: string
     refreshToken: string
     accessTokenExpiry: number

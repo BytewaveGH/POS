@@ -3,6 +3,7 @@ import Credentials from 'next-auth/providers/credentials'
 import type { ExtendedUser } from './types/next-auth'
 import { SignInFormSchema } from './types/schemas/schema'
 import { IAuth } from './types/interfaces'
+import { classifyHost } from './lib/tenant'
 import * as z from 'zod'
 
 const EmployeeSignInSchema = z.object({
@@ -25,14 +26,8 @@ const ADMIN_PERMS = {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const whichTenant = (req: Request): string => {
-  const host = req.headers.get('host')
-  switch (host) {
-    case 'localhost:3000':
-    case '127.0.0.1:3000':
-      return 'admin'
-    default:
-      return 'admin'
-  }
+  const { slug } = classifyHost(req.headers.get('host'))
+  return slug ?? 'admin'
 }
 
 async function adminLoginRequest(
@@ -144,6 +139,7 @@ export default {
           phone: res.user.phone,
           email: res.user.email,
           tenant: res.tenant,
+          appType: (res.user as any)?.appType ?? 'retail',
           accessToken: res.accessToken,
           refreshToken: res.refreshToken,
           accessTokenExpiry: res.accessTokenExpiry,
@@ -189,6 +185,8 @@ export default {
             phone: emp.phone ?? '',
             email: emp.email ?? parsed.data.email,
             tenant: res.tenant ?? tenant,
+            // Not sent by the backend yet — defaults every tenant to the retail/POS experience.
+            appType: emp.appType ?? res.appType ?? 'retail',
             accessToken: res.accessToken ?? res.token ?? '',
             refreshToken: res.refreshToken ?? '',
             accessTokenExpiry: toAbsoluteExpiry(res.expireAt ?? res.accessTokenExpiry ?? res.expiresIn),
@@ -208,6 +206,49 @@ export default {
         }
       },
     }),
+
+    // Platform operator login — manages tenants, not scoped to any tenant.
+    // No external backend call: this is a bootstrap-only mechanism (env-var
+    // credentials) until there's a real operator-account store.
+    Credentials({
+      id: 'super-admin-credentials',
+      credentials: {
+        email: { label: 'Email', type: 'email' },
+        password: { label: 'Password', type: 'password' },
+      },
+      async authorize(credentials) {
+        const parsed = EmployeeSignInSchema.safeParse(credentials)
+        if (!parsed.success) return null
+
+        const envEmail = process.env.SUPER_ADMIN_EMAIL
+        const envPassword = process.env.SUPER_ADMIN_PASSWORD
+        if (!envEmail || !envPassword) return null
+        if (parsed.data.email !== envEmail || parsed.data.password !== envPassword) return null
+
+        // No real access/refresh token for this account. The jwt callback below
+        // skips refresh logic entirely for accountType 'super-admin', so this expiry
+        // only feeds the client-side refetch-interval calculation (RefreshTokenHandler)
+        // — keep it well under 24.8 days, or it overflows setInterval's 32-bit delay
+        // and fires immediately in a tight loop instead of "never".
+        const oneDayOut = Math.floor(Date.now() / 1000) + 60 * 60 * 24
+        return {
+          id: 'super-admin',
+          userId: 0,
+          username: 'Super Admin',
+          accountType: 'super-admin',
+          avatar: '',
+          phone: '',
+          email: envEmail,
+          tenant: 'platform',
+          appType: 'platform',
+          accessToken: '',
+          refreshToken: '',
+          accessTokenExpiry: oneDayOut,
+          refreshTokenExpiry: oneDayOut,
+          ...ADMIN_PERMS,
+        }
+      },
+    }),
   ],
 
   callbacks: {
@@ -222,6 +263,7 @@ export default {
         token.phone = u.phone
         token.email = u.email
         token.tenant = u.tenant
+        token.appType = u.appType
         token.accessToken = u.accessToken
         token.refreshToken = u.refreshToken
         token.accessTokenExpiry = toAbsoluteExpiry(u.accessTokenExpiry)
@@ -239,6 +281,9 @@ export default {
         return token
       }
 
+      // Super admin has no real backend session to refresh — never attempt it.
+      if (token.accountType === 'super-admin') return token
+
       const shouldRefreshTime = (token.accessTokenExpiry as number) - 5 * 60 - Math.floor(Date.now() / 1000)
       if (shouldRefreshTime > 0) return token
 
@@ -253,6 +298,7 @@ export default {
       session.user.phone = token.phone as string
       session.user.email = token.email as string
       session.user.tenant = token.tenant as string
+      session.user.appType = token.appType as string
       session.user.accessToken = token.accessToken as string
       session.user.refreshToken = token.refreshToken as string
       session.user.accessTokenExpiry = token.accessTokenExpiry as number

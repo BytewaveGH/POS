@@ -427,7 +427,9 @@ const Main = () => {
   // ── Per-product profit maps (top-products table + client-side fallback) ──────
   const purchasePriceMap = useMemo(() => {
     const map: Record<number, number> = {}
-    allProducts.forEach((p: any) => { map[p.id] = p.purchasePrice ?? 0 })
+    allProducts.forEach((p: any) => {
+      map[p.id] = p.purchasePrice ?? 0
+    })
     return map
   }, [allProducts])
 
@@ -436,7 +438,10 @@ const Main = () => {
     allProducts.forEach((p: any) => {
       const units: any[] = p.units ?? []
       const halfBox = units.find((u: any) => u.pricingRule === 'half-box' && u.boxRetailPrice > 0)
-      if (halfBox) { map[p.id] = halfBox.boxRetailPrice; return }
+      if (halfBox) {
+        map[p.id] = halfBox.boxRetailPrice
+        return
+      }
       const prices = units.map((u: any) => u.retailPrice ?? 0).filter(Boolean)
       if (prices.length) map[p.id] = Math.max(...prices)
     })
