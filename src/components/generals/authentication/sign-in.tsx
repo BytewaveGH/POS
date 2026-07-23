@@ -32,13 +32,7 @@ export default function SignIn({ appType = 'retail' }: SignInProps) {
               </div>
             ) : (
               <div className="h-full w-full relative mx-4">
-                <Image
-                  src={loginImg}
-                  layout="fill"
-                  // objectFit="cover"
-                  alt="Login Image"
-                  className="rounded-xl"
-                />
+                <Image src={loginImg} fill sizes="50vw" alt="Login Image" className="rounded-xl object-cover" priority />
               </div>
             )}
           </div>
