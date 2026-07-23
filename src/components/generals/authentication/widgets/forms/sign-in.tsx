@@ -6,12 +6,13 @@ import Link from 'next/link'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useRouter, useParams } from 'next/navigation'
-import { signIn } from 'next-auth/react'
+import { signIn, getSession } from 'next-auth/react'
 
 import { Form } from '@/components/ui/form'
 import { Button } from '@/components/ui/button'
 import { useTranslations } from 'next-intl'
 import { UpdateStates } from '@/lib/functions/update-states'
+import { redirectPathForAppType } from '@/lib/tenant'
 import ToastTemplate from '@/components/templates/toast'
 import InputsTemplate from '@/components/templates/inputs'
 import { CheckboxTemplate } from '@/components/templates/checkbox'
@@ -57,7 +58,8 @@ export default function SignInForm() {
       if (result?.error) {
         setError('Invalid email or password')
       } else {
-        router.push(`/${locale}/stores/overview`)
+        const session = await getSession()
+        router.push(redirectPathForAppType(session?.user?.appType, locale))
       }
 
       console.log({ result })
