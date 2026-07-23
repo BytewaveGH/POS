@@ -11,6 +11,7 @@ Until these exist, the frontend has a **self-contained, local-only placeholder**
 ## 1. Tenant management (new)
 
 A tenant record needs at least:
+
 ```
 {
   id: string
@@ -34,11 +35,12 @@ Needed endpoints (platform-scoped — see auth section below for how these shoul
   Should validate `slug` is unique (409 if taken), hash the password, and make the resulting account immediately usable via the existing `/auth/admin-login` endpoint scoped to `X-Tenant-Domain: slug`.
 - `PATCH /platform/tenants/:id` — update `name` / `slug` / `appType` / `status`. Setting `status: "suspended"` must cause that tenant's `/auth/admin-login` (and ideally all API calls scoped to it) to be rejected — suspension needs real teeth, not just a cosmetic flag.
 - `DELETE /platform/tenants/:id` — remove a tenant. Confirm with product/legal whether this should cascade-delete tenant data or just deactivate; the frontend currently treats it as a hard delete.
-- `GET /platform/tenants/lookup?slug=acme-diner` — lightweight, used by the public "find your business" picker page *before* any login exists. Should return just enough to confirm existence (e.g. `{ exists: true }`), not full tenant details — this one is effectively public-facing (called from an unauthenticated page), so don't leak sensitive info through it.
+- `GET /platform/tenants/lookup?slug=acme-diner` — lightweight, used by the public "find your business" picker page _before_ any login exists. Should return just enough to confirm existence (e.g. `{ exists: true }`), not full tenant details — this one is effectively public-facing (called from an unauthenticated page), so don't leak sensitive info through it.
 
 ## 2. `appType` on existing login/refresh responses
 
 `POST /auth/admin-login`, `POST /employees/login`, and `POST /auth/refresh` currently return a user object without an `appType` field. Please add it (sourced from the tenant record's `appType`) so the frontend can route a logged-in user to the correct vertical's UI (`/stores/...` for retail, `/eatery`, `/amusement`, etc.) instead of defaulting everyone to retail. Everything else about these response shapes can stay as-is:
+
 ```
 {
   data: {
@@ -71,7 +73,7 @@ Right now the super admin's per-tenant "View" panel shows fabricated numbers (em
   { employeeCount, productCount, salesVolume, lastActivityAt }
   ```
 - `GET /platform/tenants/:id/employees` — list of that tenant's employee accounts (name, email, role/permissions, active/suspended)
-- `PATCH /platform/tenants/:id/employees/:employeeId` — at minimum, ability to suspend/reactivate one employee from the platform level (this was explicitly requested; scope was intentionally limited to *view + suspend*, not full employee CRUD, from the platform view)
+- `PATCH /platform/tenants/:id/employees/:employeeId` — at minimum, ability to suspend/reactivate one employee from the platform level (this was explicitly requested; scope was intentionally limited to _view + suspend_, not full employee CRUD, from the platform view)
 
 These need to work **without** the caller having a normal per-tenant admin/employee bearer token — see below.
 

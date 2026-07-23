@@ -102,7 +102,10 @@ export default function RegisterApp({ mode, initialData, onSuccess }: RegisterAp
           className="border border-gray-200 rounded-lg px-3 py-2 bytewave-paragraph text-sm focus:outline-none focus:ring-1 focus:ring-endeavour"
         />
         <p className="text-[11px] text-gray-400 pl-1">
-          Will be reachable at: <span className="font-semibold text-stone-600">{slug || 'yourbusiness'}.{ROOT_DOMAIN || 'yourdomain.com'}</span>
+          Will be reachable at:{' '}
+          <span className="font-semibold text-stone-600">
+            {slug || 'yourbusiness'}.{ROOT_DOMAIN || 'yourdomain.com'}
+          </span>
         </p>
       </div>
 
@@ -168,7 +171,11 @@ export default function RegisterApp({ mode, initialData, onSuccess }: RegisterAp
                 type="button"
                 onClick={() => setStatus(s)}
                 className={`flex-1 py-1.5 bytewave-paragraph text-xs font-medium capitalize transition-colors ${
-                  status === s ? (s === 'active' ? 'bg-green-600 text-white' : 'bg-red-500 text-white') : 'bg-white text-gray-500 hover:bg-gray-50'
+                  status === s
+                    ? s === 'active'
+                      ? 'bg-green-600 text-white'
+                      : 'bg-red-500 text-white'
+                    : 'bg-white text-gray-500 hover:bg-gray-50'
                 }`}
               >
                 {s}
