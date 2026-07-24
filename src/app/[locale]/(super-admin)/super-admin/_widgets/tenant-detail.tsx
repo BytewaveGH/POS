@@ -39,7 +39,7 @@ export default function TenantDetail({ tenant }: TenantDetailProps) {
   const refetchEmployees = useCallback(async () => {
     setEmployeesLoading(true)
     try {
-      const res = await fetch(`/platform/tenants/${tenant.id}/employees`)
+      const res = await fetch(`/api/platform/tenants/${tenant.id}/employees`)
       const body = await res.json()
       if (!res.ok) throw new Error(body?.message ?? 'Failed to load staff')
       setEmployees(body.data ?? [])
@@ -55,7 +55,7 @@ export default function TenantDetail({ tenant }: TenantDetailProps) {
     let cancelled = false
     ;(async () => {
       try {
-        const res = await fetch(`/platform/tenants/${tenant.id}/stats`)
+        const res = await fetch(`/api/platform/tenants/${tenant.id}/stats`)
         const body = await res.json()
         if (!res.ok) throw new Error(body?.message ?? 'Failed to load stats')
         if (!cancelled) setStats(body.data)
@@ -75,7 +75,7 @@ export default function TenantDetail({ tenant }: TenantDetailProps) {
   const toggleEmployeeStatus = async (employee: Employee) => {
     setUpdatingId(employee.id)
     try {
-      await fetch(`/platform/tenants/${tenant.id}/employees/${employee.id}`, {
+      await fetch(`/api/platform/tenants/${tenant.id}/employees/${employee.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: employee.status === 'active' ? 'suspended' : 'active' }),
