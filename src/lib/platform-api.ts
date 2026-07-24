@@ -1,4 +1,4 @@
-// Server-only. Talks to the real backend's /api/platform/tenants* endpoints using the
+// Server-only. Talks to the real backend's /api/api/platform/tenants* endpoints using the
 // service-to-service PLATFORM_KEY secret — never import this from a client component,
 // and never forward that key to the browser.
 import { auth } from '@/auth'

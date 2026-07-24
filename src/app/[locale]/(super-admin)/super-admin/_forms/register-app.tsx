@@ -61,7 +61,7 @@ export default function RegisterApp({ mode, initialData, onSuccess }: RegisterAp
     setError('')
     setLoading(true)
     try {
-      const res = await fetch(mode === 'create' ? '/api/platform/tenants' : `/api/platform/tenants/${initialData?.id}`, {
+      const res = await fetch(mode === 'create' ? '/api/api/platform/tenants' : `/api/api/platform/tenants/${initialData?.id}`, {
         method: mode === 'create' ? 'POST' : 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(

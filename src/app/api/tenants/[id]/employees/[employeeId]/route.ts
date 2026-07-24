@@ -5,7 +5,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string; em
   if (!(await requireSuperAdminSession())) return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json()
-  const res = await platformFetch(`/api/platform/tenants/${params.id}/employees/${params.employeeId}`, {
+  const res = await platformFetch(`/api/api/platform/tenants/${params.id}/employees/${params.employeeId}`, {
     method: 'PATCH',
     body: JSON.stringify(body),
   })
