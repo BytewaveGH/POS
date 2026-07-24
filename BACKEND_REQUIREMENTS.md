@@ -27,15 +27,15 @@ A tenant record needs at least:
 
 Needed endpoints (platform-scoped — see auth section below for how these should be protected):
 
-- `GET /platform/tenants` — list all tenants
-- `POST /platform/tenants` — create a tenant AND its first owner/admin account in one call:
+- `GET /api/api/platform/tenants` — list all tenants
+- `POST /api/api/platform/tenants` — create a tenant AND its first owner/admin account in one call:
   ```
   { name, slug, appType, ownerName, ownerEmail, password }
   ```
   Should validate `slug` is unique (409 if taken), hash the password, and make the resulting account immediately usable via the existing `/auth/admin-login` endpoint scoped to `X-Tenant-Domain: slug`.
-- `PATCH /platform/tenants/:id` — update `name` / `slug` / `appType` / `status`. Setting `status: "suspended"` must cause that tenant's `/auth/admin-login` (and ideally all API calls scoped to it) to be rejected — suspension needs real teeth, not just a cosmetic flag.
-- `DELETE /platform/tenants/:id` — remove a tenant. Confirm with product/legal whether this should cascade-delete tenant data or just deactivate; the frontend currently treats it as a hard delete.
-- `GET /platform/tenants/lookup?slug=acme-diner` — lightweight, used by the public "find your business" picker page _before_ any login exists. Should return just enough to confirm existence (e.g. `{ exists: true }`), not full tenant details — this one is effectively public-facing (called from an unauthenticated page), so don't leak sensitive info through it.
+- `PATCH /api/api/platform/tenants/:id` — update `name` / `slug` / `appType` / `status`. Setting `status: "suspended"` must cause that tenant's `/auth/admin-login` (and ideally all API calls scoped to it) to be rejected — suspension needs real teeth, not just a cosmetic flag.
+- `DELETE /api/api/platform/tenants/:id` — remove a tenant. Confirm with product/legal whether this should cascade-delete tenant data or just deactivate; the frontend currently treats it as a hard delete.
+- `GET /api/api/platform/tenants/lookup?slug=acme-diner` — lightweight, used by the public "find your business" picker page _before_ any login exists. Should return just enough to confirm existence (e.g. `{ exists: true }`), not full tenant details — this one is effectively public-facing (called from an unauthenticated page), so don't leak sensitive info through it.
 
 ## 2. `appType` on existing login/refresh responses
 
@@ -68,12 +68,12 @@ Needed endpoints (platform-scoped — see auth section below for how these shoul
 
 Right now the super admin's per-tenant "View" panel shows fabricated numbers (employee count, product count, sales volume, last activity) and a fake staff list, clearly labeled as mock data pending this work. To make it real:
 
-- `GET /platform/tenants/:id/stats` — something like:
+- `GET /api/api/platform/tenants/:id/stats` — something like:
   ```
   { employeeCount, productCount, salesVolume, lastActivityAt }
   ```
-- `GET /platform/tenants/:id/employees` — list of that tenant's employee accounts (name, email, role/permissions, active/suspended)
-- `PATCH /platform/tenants/:id/employees/:employeeId` — at minimum, ability to suspend/reactivate one employee from the platform level (this was explicitly requested; scope was intentionally limited to _view + suspend_, not full employee CRUD, from the platform view)
+- `GET /api/api/platform/tenants/:id/employees` — list of that tenant's employee accounts (name, email, role/permissions, active/suspended)
+- `PATCH /api/api/platform/tenants/:id/employees/:employeeId` — at minimum, ability to suspend/reactivate one employee from the platform level (this was explicitly requested; scope was intentionally limited to _view + suspend_, not full employee CRUD, from the platform view)
 
 These need to work **without** the caller having a normal per-tenant admin/employee bearer token — see below.
 
