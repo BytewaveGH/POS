@@ -19,7 +19,7 @@ export default function SuperAdminOverview() {
     ;(async () => {
       setIsLoading(true)
       try {
-        const res = await fetch('/api/api/platform/tenants')
+        const res = await fetch('/api/platform/tenants')
         const body = await res.json()
         if (!res.ok) throw new Error(body?.message ?? 'Failed to load apps')
         if (!cancelled) {
