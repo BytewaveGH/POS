@@ -23,7 +23,7 @@ export default function SuperAdminApps() {
   const refetch = useCallback(async () => {
     setIsLoading(true)
     try {
-      const res = await fetch('/api/tenants')
+      const res = await fetch('/platform/tenants')
       const body = await res.json()
       if (!res.ok) throw new Error(body?.message ?? 'Failed to load apps')
       setTenants(body.data ?? [])
@@ -41,12 +41,12 @@ export default function SuperAdminApps() {
 
   const handleDelete = async (tenant: TenantRecord) => {
     if (!window.confirm(`Delete "${tenant.name}"? This cannot be undone.`)) return
-    await fetch(`/api/tenants/${tenant.id}`, { method: 'DELETE' })
+    await fetch(`/platform/tenants/${tenant.id}`, { method: 'DELETE' })
     refetch()
   }
 
   const toggleStatus = async (tenant: TenantRecord) => {
-    await fetch(`/api/tenants/${tenant.id}`, {
+    await fetch(`/platform/tenants/${tenant.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: tenant.status === 'active' ? 'suspended' : 'active' }),
