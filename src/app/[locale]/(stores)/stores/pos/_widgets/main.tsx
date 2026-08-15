@@ -793,8 +793,8 @@ const Main = () => {
               </button>
             )}
           </div>
-          <CartControls />
-          <CartBody />
+          {CartControls()}
+          {CartBody()}
         </div>
       </div>
 
@@ -869,8 +869,8 @@ const Main = () => {
                 </button>
               </div>
             </div>
-            <CartControls />
-            <CartBody />
+            {CartControls()}
+            {CartBody()}
           </div>
         </div>
       )}
