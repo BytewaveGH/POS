@@ -57,7 +57,7 @@ async function employeeLoginRequest(body: { email: string; password: string }, t
   try {
     const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/employees/login`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Tenant-Domain': tenant || 'admin' },
       body: JSON.stringify(body),
     })
     if (!response.ok) {
