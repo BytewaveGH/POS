@@ -98,6 +98,190 @@ const fuzzyScore = (name: string, query: string): number => {
   return score
 }
 
+// ── Unit picker list ─────────────────────────────────────────────────────
+// Hoisted to module scope (not defined inside Main) so its identity stays
+// stable across renders — otherwise every cart change would remount it.
+type UnitListProps = {
+  product: Product
+  cart: CartItem[]
+  customerType: 'retail' | 'wholesale'
+  onAddToCart: (product: Product, unit: SellingUnit) => void
+}
+
+const UnitList = ({ product, cart, customerType, onAddToCart }: UnitListProps) => (
+  <div className="flex flex-col gap-2.5">
+    {product.units.map((unit: SellingUnit) => {
+      const price = unit.pricingRule === 'flat' ? (customerType === 'retail' ? unit.retailPrice : unit.wholesalePrice) : unit.retailPrice
+      const unitInCart = cart.find((i) => i.cartId === `${product.id}_${unit.unit}`)
+      let hint: string | null = null
+      if (unit.pricingRule === 'half-box' && unit.boxSize && unit.boxRetailPrice)
+        hint = `₵${(unit.boxRetailPrice / 2).toFixed(2)} flat at ${unit.boxSize / 2}+`
+      else if (unit.pricingRule === 'bulk-wholesale') hint = `₵${unit.wholesalePrice.toFixed(2)} at ${unit.bulkThreshold ?? 5}+`
+      return (
+        <button
+          key={unit.unit}
+          onClick={() => onAddToCart(product, unit)}
+          className={cn(
+            'flex items-center justify-between w-full px-4 py-3.5 rounded-2xl border transition-all text-left active:scale-[0.98]',
+            unitInCart ? 'border-endeavour bg-endeavour/5' : 'border-gray-200 hover:border-endeavour/60'
+          )}
+        >
+          <div>
+            <span className="text-sm font-semibold text-stone-700">
+              {unit.label}
+              {unitInCart && (
+                <span className="ml-2 bg-endeavour text-white text-[10px] rounded-full px-2 py-0.5">{unitInCart.quantity} in cart</span>
+              )}
+            </span>
+            {hint && <p className="text-xs text-gray-400 mt-0.5">{hint}</p>}
+          </div>
+          <span className="text-sm font-bold text-endeavour ml-4 flex-shrink-0">₵{price.toFixed(2)}</span>
+        </button>
+      )
+    })}
+  </div>
+)
+
+// ── Single product card (shared by grid and letter sections) ─────────────
+// Also hoisted to module scope for the same reason as UnitList above.
+type ProductCardProps = {
+  product: Product
+  cart: CartItem[]
+  customerType: 'retail' | 'wholesale'
+  openPopover: string | null
+  onOpenPopoverChange: (open: boolean, productId: string) => void
+  onAddToCart: (product: Product, unit: SellingUnit) => void
+  onOpenUnitPicker: (product: Product) => void
+}
+
+const ProductCard = ({
+  product,
+  cart,
+  customerType,
+  openPopover,
+  onOpenPopoverChange,
+  onAddToCart,
+  onOpenUnitPicker,
+}: ProductCardProps) => {
+  const inCartUnits = cart.filter((i) => i.productId === product.id)
+  const totalInCart = inCartUnits.reduce((s, i) => s + i.quantity, 0)
+  const isMultiUnit = product.units.length > 1
+  const primaryUnit = product.units[0]
+  const displayPrice =
+    primaryUnit?.pricingRule === 'flat'
+      ? customerType === 'retail'
+        ? primaryUnit.retailPrice
+        : primaryUnit.wholesalePrice
+      : (primaryUnit?.retailPrice ?? 0)
+
+  const cardClass = cn(
+    'relative flex flex-col justify-between p-3 rounded-2xl border text-left transition-all cursor-pointer select-none',
+    'bg-white active:scale-[0.96]',
+    totalInCart > 0 ? 'border-endeavour shadow-sm shadow-endeavour/10' : 'border-gray-200 hover:border-endeavour/50 hover:shadow-sm'
+  )
+
+  const inner = (
+    <>
+      {totalInCart > 0 && (
+        <span className="absolute top-2 right-2 bg-endeavour text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center z-10">
+          {totalInCart}
+        </span>
+      )}
+      {isMultiUnit && (
+        <span className="absolute top-2 left-2 bg-gray-100 text-gray-500 text-[9px] rounded-md px-1.5 py-0.5 font-medium">
+          {product.units.length} units
+        </span>
+      )}
+      <div className="w-full aspect-square rounded-xl bg-gray-50 mb-2.5 flex items-center justify-center text-2xl">🛒</div>
+      <div>
+        <p className="text-stone-700 font-semibold leading-tight line-clamp-2 text-xs">{product.name}</p>
+        <p className="text-endeavour font-bold mt-1 text-sm">
+          ₵{displayPrice.toFixed(2)}
+          {isMultiUnit && primaryUnit && <span className="text-gray-400 font-normal text-[10px] ml-1">/ {primaryUnit.label}</span>}
+        </p>
+      </div>
+    </>
+  )
+
+  return (
+    <>
+      {/* Mobile: bottom sheet for multi-unit */}
+      <div
+        className={cn(cardClass, 'md:hidden')}
+        onClick={() => (isMultiUnit ? onOpenUnitPicker(product) : onAddToCart(product, primaryUnit))}
+      >
+        {inner}
+      </div>
+      {/* Desktop: popover for multi-unit */}
+      {isMultiUnit ? (
+        <PopoverTemplate
+          open={openPopover === product.id}
+          onOpenChange={(open) => onOpenPopoverChange(open, product.id)}
+          contentClassName="w-64 p-3"
+          trigger={<div className={cn(cardClass, 'hidden md:flex flex-col')}>{inner}</div>}
+          content={
+            <div className="flex flex-col gap-2">
+              <p className="text-stone-600 font-semibold text-sm">{product.name}</p>
+              <p className="text-gray-400 text-xs -mt-1">Choose how to sell:</p>
+              <UnitList product={product} cart={cart} customerType={customerType} onAddToCart={onAddToCart} />
+            </div>
+          }
+        />
+      ) : (
+        <div className={cn(cardClass, 'hidden md:flex flex-col')} onClick={() => onAddToCart(product, primaryUnit)}>
+          {inner}
+        </div>
+      )}
+    </>
+  )
+}
+
+// ── Quick Access strip ────────────────────────────────────────────────────
+// Also hoisted to module scope for the same reason as UnitList/ProductCard above.
+type QuickAccessStripProps = {
+  quickAccess: Product[]
+  cart: CartItem[]
+  customerType: 'retail' | 'wholesale'
+  onAddToCart: (product: Product, unit: SellingUnit) => void
+  onOpenUnitPicker: (product: Product) => void
+}
+
+const QuickAccessStrip = ({ quickAccess, cart, customerType, onAddToCart, onOpenUnitPicker }: QuickAccessStripProps) => {
+  if (quickAccess.length === 0) return null
+  return (
+    <div className="mb-3 flex-shrink-0">
+      <div className="flex items-center gap-1.5 mb-2">
+        <Zap className="h-3 w-3 text-amber-500" />
+        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Quick Access</p>
+      </div>
+      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide -mx-0.5 px-0.5">
+        {quickAccess.map((product) => {
+          const pu = product.units[0]
+          const price =
+            pu?.pricingRule === 'flat' ? (customerType === 'retail' ? pu.retailPrice : pu.wholesalePrice) : (pu?.retailPrice ?? 0)
+          const inCart = cart.filter((i) => i.productId === product.id).reduce((s, i) => s + i.quantity, 0)
+          return (
+            <button
+              key={product.id}
+              onClick={() => (product.units.length > 1 ? onOpenUnitPicker(product) : onAddToCart(product, pu))}
+              className={cn(
+                'flex-shrink-0 flex flex-col items-start px-3 py-2.5 rounded-2xl border transition-all active:scale-95 min-w-[76px] max-w-[110px]',
+                inCart > 0 ? 'border-endeavour bg-endeavour/5' : 'border-gray-200 bg-white hover:border-endeavour/50'
+              )}
+            >
+              <span className="text-[11px] font-semibold text-stone-700 truncate w-full leading-tight">{product.name}</span>
+              <div className="flex items-center gap-1 mt-1">
+                <span className="text-[11px] font-bold text-endeavour">₵{price.toFixed(2)}</span>
+                {inCart > 0 && <span className="text-[9px] bg-endeavour text-white rounded-full px-1.5 font-bold">{inCart}</span>}
+              </div>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ── Component ───────────────────────────────────────────────────────────────
 
 const Main = () => {
@@ -324,8 +508,6 @@ const Main = () => {
   const hasOverStock = cart.some((i) => isOverStock(i.productId, i.quantity))
   const canCharge = cart.length > 0 && !!warehouseId && !isSubmitting && !hasOverStock
 
-  const cartUnitsForProduct = (productId: string) => cart.filter((i) => i.productId === productId)
-
   const handleCharge = async (paymentType: 'momo' | 'cash') => {
     if (!canCharge) return
     setIsSubmitting(true)
@@ -345,41 +527,6 @@ const Main = () => {
       setIsSubmitting(false)
     }
   }
-
-  // ── Unit picker list ─────────────────────────────────────────────────────
-  const UnitList = ({ product }: { product: Product }) => (
-    <div className="flex flex-col gap-2.5">
-      {product.units.map((unit: SellingUnit) => {
-        const price = unit.pricingRule === 'flat' ? (customerType === 'retail' ? unit.retailPrice : unit.wholesalePrice) : unit.retailPrice
-        const unitInCart = cart.find((i) => i.cartId === `${product.id}_${unit.unit}`)
-        let hint: string | null = null
-        if (unit.pricingRule === 'half-box' && unit.boxSize && unit.boxRetailPrice)
-          hint = `₵${(unit.boxRetailPrice / 2).toFixed(2)} flat at ${unit.boxSize / 2}+`
-        else if (unit.pricingRule === 'bulk-wholesale') hint = `₵${unit.wholesalePrice.toFixed(2)} at ${unit.bulkThreshold ?? 5}+`
-        return (
-          <button
-            key={unit.unit}
-            onClick={() => addToCart(product, unit)}
-            className={cn(
-              'flex items-center justify-between w-full px-4 py-3.5 rounded-2xl border transition-all text-left active:scale-[0.98]',
-              unitInCart ? 'border-endeavour bg-endeavour/5' : 'border-gray-200 hover:border-endeavour/60'
-            )}
-          >
-            <div>
-              <span className="text-sm font-semibold text-stone-700">
-                {unit.label}
-                {unitInCart && (
-                  <span className="ml-2 bg-endeavour text-white text-[10px] rounded-full px-2 py-0.5">{unitInCart.quantity} in cart</span>
-                )}
-              </span>
-              {hint && <p className="text-xs text-gray-400 mt-0.5">{hint}</p>}
-            </div>
-            <span className="text-sm font-bold text-endeavour ml-4 flex-shrink-0">₵{price.toFixed(2)}</span>
-          </button>
-        )
-      })}
-    </div>
-  )
 
   // ── Cart warehouse + customer type controls ──────────────────────────────
   const CartControls = () => (
@@ -527,118 +674,6 @@ const Main = () => {
     </>
   )
 
-  // ── Quick Access strip ────────────────────────────────────────────────────
-  const QuickAccessStrip = () => {
-    if (quickAccess.length === 0) return null
-    return (
-      <div className="mb-3 flex-shrink-0">
-        <div className="flex items-center gap-1.5 mb-2">
-          <Zap className="h-3 w-3 text-amber-500" />
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Quick Access</p>
-        </div>
-        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide -mx-0.5 px-0.5">
-          {quickAccess.map((product) => {
-            const pu = product.units[0]
-            const price =
-              pu?.pricingRule === 'flat' ? (customerType === 'retail' ? pu.retailPrice : pu.wholesalePrice) : (pu?.retailPrice ?? 0)
-            const inCart = cartUnitsForProduct(product.id).reduce((s, i) => s + i.quantity, 0)
-            return (
-              <button
-                key={product.id}
-                onClick={() => (product.units.length > 1 ? setUnitPickerProduct(product) : addToCart(product, pu))}
-                className={cn(
-                  'flex-shrink-0 flex flex-col items-start px-3 py-2.5 rounded-2xl border transition-all active:scale-95 min-w-[76px] max-w-[110px]',
-                  inCart > 0 ? 'border-endeavour bg-endeavour/5' : 'border-gray-200 bg-white hover:border-endeavour/50'
-                )}
-              >
-                <span className="text-[11px] font-semibold text-stone-700 truncate w-full leading-tight">{product.name}</span>
-                <div className="flex items-center gap-1 mt-1">
-                  <span className="text-[11px] font-bold text-endeavour">₵{price.toFixed(2)}</span>
-                  {inCart > 0 && <span className="text-[9px] bg-endeavour text-white rounded-full px-1.5 font-bold">{inCart}</span>}
-                </div>
-              </button>
-            )
-          })}
-        </div>
-      </div>
-    )
-  }
-
-  // ── Single product card (shared by grid and letter sections) ─────────────
-  const ProductCard = ({ product }: { product: Product }) => {
-    const inCartUnits = cartUnitsForProduct(product.id)
-    const totalInCart = inCartUnits.reduce((s, i) => s + i.quantity, 0)
-    const isMultiUnit = product.units.length > 1
-    const primaryUnit = product.units[0]
-    const displayPrice =
-      primaryUnit?.pricingRule === 'flat'
-        ? customerType === 'retail'
-          ? primaryUnit.retailPrice
-          : primaryUnit.wholesalePrice
-        : (primaryUnit?.retailPrice ?? 0)
-
-    const cardClass = cn(
-      'relative flex flex-col justify-between p-3 rounded-2xl border text-left transition-all cursor-pointer select-none',
-      'bg-white active:scale-[0.96]',
-      totalInCart > 0 ? 'border-endeavour shadow-sm shadow-endeavour/10' : 'border-gray-200 hover:border-endeavour/50 hover:shadow-sm'
-    )
-
-    const inner = (
-      <>
-        {totalInCart > 0 && (
-          <span className="absolute top-2 right-2 bg-endeavour text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center z-10">
-            {totalInCart}
-          </span>
-        )}
-        {isMultiUnit && (
-          <span className="absolute top-2 left-2 bg-gray-100 text-gray-500 text-[9px] rounded-md px-1.5 py-0.5 font-medium">
-            {product.units.length} units
-          </span>
-        )}
-        <div className="w-full aspect-square rounded-xl bg-gray-50 mb-2.5 flex items-center justify-center text-2xl">🛒</div>
-        <div>
-          <p className="text-stone-700 font-semibold leading-tight line-clamp-2 text-xs">{product.name}</p>
-          <p className="text-endeavour font-bold mt-1 text-sm">
-            ₵{displayPrice.toFixed(2)}
-            {isMultiUnit && primaryUnit && <span className="text-gray-400 font-normal text-[10px] ml-1">/ {primaryUnit.label}</span>}
-          </p>
-        </div>
-      </>
-    )
-
-    return (
-      <>
-        {/* Mobile: bottom sheet for multi-unit */}
-        <div
-          className={cn(cardClass, 'md:hidden')}
-          onClick={() => (isMultiUnit ? setUnitPickerProduct(product) : addToCart(product, primaryUnit))}
-        >
-          {inner}
-        </div>
-        {/* Desktop: popover for multi-unit */}
-        {isMultiUnit ? (
-          <PopoverTemplate
-            open={openPopover === product.id}
-            onOpenChange={(open) => setOpenPopover(open ? product.id : null)}
-            contentClassName="w-64 p-3"
-            trigger={<div className={cn(cardClass, 'hidden md:flex flex-col')}>{inner}</div>}
-            content={
-              <div className="flex flex-col gap-2">
-                <p className="text-stone-600 font-semibold text-sm">{product.name}</p>
-                <p className="text-gray-400 text-xs -mt-1">Choose how to sell:</p>
-                <UnitList product={product} />
-              </div>
-            }
-          />
-        ) : (
-          <div className={cn(cardClass, 'hidden md:flex flex-col')} onClick={() => addToCart(product, primaryUnit)}>
-            {inner}
-          </div>
-        )}
-      </>
-    )
-  }
-
   const showSidebar = !search.trim() && letterGroups.length > 0
   const showBrowseMode = !search.trim()
 
@@ -713,7 +748,16 @@ const Main = () => {
                     </p>
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 pb-4">
                       {searchResults.map((p) => (
-                        <ProductCard key={p.id} product={p} />
+                        <ProductCard
+                          key={p.id}
+                          product={p}
+                          cart={cart}
+                          customerType={customerType}
+                          openPopover={openPopover}
+                          onOpenPopoverChange={(open, id) => setOpenPopover(open ? id : null)}
+                          onAddToCart={addToCart}
+                          onOpenUnitPicker={setUnitPickerProduct}
+                        />
                       ))}
                     </div>
                   </>
@@ -721,7 +765,13 @@ const Main = () => {
               ) : (
                 /* ── Browse mode: quick access + alphabetical sections ── */
                 <>
-                  <QuickAccessStrip />
+                  <QuickAccessStrip
+                    quickAccess={quickAccess}
+                    cart={cart}
+                    customerType={customerType}
+                    onAddToCart={addToCart}
+                    onOpenUnitPicker={setUnitPickerProduct}
+                  />
 
                   {letterGroups.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-40 gap-2 text-gray-400">
@@ -745,7 +795,16 @@ const Main = () => {
                         </div>
                         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                           {prods.map((p) => (
-                            <ProductCard key={p.id} product={p} />
+                            <ProductCard
+                              key={p.id}
+                              product={p}
+                              cart={cart}
+                              customerType={customerType}
+                              openPopover={openPopover}
+                              onOpenPopoverChange={(open, id) => setOpenPopover(open ? id : null)}
+                              onAddToCart={addToCart}
+                              onOpenUnitPicker={setUnitPickerProduct}
+                            />
                           ))}
                         </div>
                       </div>
@@ -806,7 +865,11 @@ const Main = () => {
             cartCount > 0 ? 'bg-endeavour text-white active:bg-veniceBlue' : 'bg-gray-100 text-gray-400 cursor-default'
           )}
           onClick={() => {
-            if (cartCount > 0) setCartSheetOpen(true)
+            if (cartCount > 0) {
+              setCartSheetOpen(true)
+              setCartHeight(95)
+              liveH.current = 95
+            }
           }}
         >
           <div className="flex items-center gap-3">
@@ -897,7 +960,11 @@ const Main = () => {
               </button>
             </SheetClose>
           </div>
-          <div className="px-4 pb-8">{unitPickerProduct && <UnitList product={unitPickerProduct} />}</div>
+          <div className="px-4 pb-8">
+            {unitPickerProduct && (
+              <UnitList product={unitPickerProduct} cart={cart} customerType={customerType} onAddToCart={addToCart} />
+            )}
+          </div>
         </SheetContent>
       </Sheet>
     </div>
