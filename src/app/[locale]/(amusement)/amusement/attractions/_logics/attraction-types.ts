@@ -50,3 +50,21 @@ export const attractionTypeColor = (type: string | null | undefined) =>
 
 export const attractionTypeIcon = (type: string | null | undefined): LucideIcon =>
   ATTRACTION_TYPES.find((t) => t.value === type)?.icon ?? Sparkles
+
+// What "score" means per attraction type, for the leaderboard — some are timed
+// (lower is better), most are counted (higher is better).
+export const ATTRACTION_METRICS: Record<AttractionType, { label: string; unit: string; higherIsBetter: boolean }> = {
+  skating: { label: 'Best Time', unit: 'sec', higherIsBetter: false },
+  'go-karting': { label: 'Fastest Lap', unit: 'sec', higherIsBetter: false },
+  arcade: { label: 'High Score', unit: 'pts', higherIsBetter: true },
+  trampoline: { label: 'Trick Score', unit: 'pts', higherIsBetter: true },
+  paintball: { label: 'Eliminations', unit: '', higherIsBetter: true },
+  'bubble-soccer': { label: 'Goals', unit: '', higherIsBetter: true },
+  'foot-dart': { label: 'Bullseyes', unit: '', higherIsBetter: true },
+  'sumo-wrestling': { label: 'Wins', unit: '', higherIsBetter: true },
+  'human-foosball': { label: 'Goals', unit: '', higherIsBetter: true },
+  other: { label: 'Score', unit: 'pts', higherIsBetter: true },
+}
+
+export const attractionMetric = (type: string | null | undefined) =>
+  ATTRACTION_METRICS[(type as AttractionType) ?? 'other'] ?? ATTRACTION_METRICS.other

@@ -10,6 +10,9 @@ const intlMiddleware = createMiddleware(routing)
 const SELECT_APP_RE = /^\/(en|fr)\/select-app\/?$/
 const SUPER_ADMIN_LOGIN_RE = /^\/(en|fr)\/super-admin\/login\/?$/
 const SUPER_ADMIN_AREA_RE = /^\/(en|fr)\/super-admin(\/.*)?$/
+// Public leaderboard display — no login required (meant for a lobby screen or a
+// shared link); see src/app/[locale]/(amusement-public)/amusement/board.
+const AMUSEMENT_BOARD_RE = /^\/(en|fr)\/amusement\/board\/?$/
 
 // Ordered list used to find the first route an employee can access.
 // More specific paths must come before their parents (e.g. /products/inventory before /products).
@@ -67,9 +70,13 @@ export default auth((req: NextAuthRequest) => {
     return intlMiddleware(req as unknown as NextRequest)
   }
 
-  // Locale root + staff login + super-admin login are public
+  // Locale root + staff login + super-admin login + the public leaderboard board are public
   const isAuthPage =
-    /^\/(en|fr)\/?$/.test(pathname) || /^\/(en|fr)\/staff\/?$/.test(pathname) || SUPER_ADMIN_LOGIN_RE.test(pathname) || pathname === '/'
+    /^\/(en|fr)\/?$/.test(pathname) ||
+    /^\/(en|fr)\/staff\/?$/.test(pathname) ||
+    SUPER_ADMIN_LOGIN_RE.test(pathname) ||
+    AMUSEMENT_BOARD_RE.test(pathname) ||
+    pathname === '/'
 
   if (!isLoggedIn && !isAuthPage) {
     return Response.redirect(new URL('/en', req.url))

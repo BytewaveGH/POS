@@ -15,6 +15,7 @@ import {
   Ticket,
   Compass,
   CalendarCheck,
+  Trophy,
 } from 'lucide-react'
 import { ITopNavItems } from './interface'
 
@@ -80,6 +81,10 @@ const amusementSidebarItems = [
   {
     title: 'Reservations',
     items: [{ label: 'Bookings', href: '/en/amusement/bookings', icon: CalendarCheck, requiredPermission: 'canManageSales' }],
+  },
+  {
+    title: 'Leaderboard',
+    items: [{ label: 'Leaderboard', href: '/en/amusement/leaderboard', icon: Trophy, requiredPermission: 'canManageSales' }],
   },
   {
     title: 'Users',

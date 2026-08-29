@@ -124,11 +124,25 @@ The amusement-park frontend (`/amusement/attractions`, `/amusement/tickets`, `/a
 - `PUT /bookings/:id` — update (also used for status changes — confirm/cancel)
 - `DELETE /bookings/:id`
 
+**Leaderboard** — recorded scores/times per attraction, so parks can run a "top scores" board. What counts as a good score is direction-dependent per attraction type on the frontend (e.g. go-karting is fastest-lap/lower-is-better, arcade is high-score/higher-is-better) — the backend doesn't need to know this, it just stores and returns raw entries:
+```
+{ id, attractionId, participantName, teamName: string | null, score: number, achievedAt: string }
+```
+- `GET /leaderboard/` — list, normal tenant-scoped auth (bearer token + `X-Tenant-Domain`) — used by the staff management page where entries get recorded
+- `POST /leaderboard/` — create
+- `PUT /leaderboard/:id` — update
+- `DELETE /leaderboard/:id`
+- `GET /leaderboard/public` — **genuinely public, no bearer token at all** — scoped **only** by `X-Tenant-Domain` (same precedent as the existing public `GET /platform/tenants/lookup`). This powers a no-login display board (`/amusement/board`, meant for a lobby screen or a shared link) — the frontend resolves the tenant from the subdomain itself since there's no session to read it from. Response should include the attraction's name and type **denormalized onto each entry** so the frontend doesn't need a second public endpoint just to label rows:
+  ```
+  { data: [ { id, attractionId, attractionName, attractionType, participantName, teamName, score, achievedAt }, ... ] }
+  ```
+  Please double-check this route is excluded from whatever auth middleware normally requires a bearer token — it's the one endpoint in this doc that's intentionally callable by a completely anonymous visitor.
+
 ## Priority
 
 1. Tenant CRUD + owner-account creation (§1) — unblocks the whole "register a new business" flow for real, replaces the local JSON-file placeholder entirely.
 2. `appType` on login responses (§2) — small addition, unblocks correct per-vertical routing for every real tenant (currently everyone defaults to "retail").
 3. Platform-level stats/employees (§3) — lower priority, purely additive to the super admin dashboard; the mock data is clearly labeled as such and isn't blocking anything else.
-4. Attractions/tickets/bookings (§4) — needed as soon as any amusement-park tenant tries to use those pages for real; right now every request there 404s.
+4. Attractions/tickets/bookings/leaderboard (§4) — needed as soon as any amusement-park tenant tries to use those pages for real; right now every request there 404s. The public `GET /leaderboard/public` route is worth flagging separately since it's the one endpoint in this whole doc that must work with **no** bearer token.
 
 Happy to hop on a call to go through response shapes/edge cases once you've had a look.
