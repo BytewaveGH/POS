@@ -1,16 +1,4 @@
-import {
-  Snowflake,
-  Car,
-  Gamepad2,
-  Zap,
-  Target,
-  Goal,
-  Crosshair,
-  Swords,
-  Group,
-  Sparkles,
-  type LucideIcon,
-} from 'lucide-react'
+import { Snowflake, Car, Gamepad2, Zap, Target, Goal, Crosshair, Swords, Group, Sparkles, type LucideIcon } from 'lucide-react'
 
 export type AttractionType =
   | 'skating'
@@ -42,8 +30,7 @@ export const ATTRACTION_TYPES: { value: AttractionType; label: string; color: st
   { value: 'other', label: 'Other', color: 'bg-gray-100 text-gray-500', icon: Sparkles },
 ]
 
-export const attractionTypeLabel = (type: string | null | undefined) =>
-  ATTRACTION_TYPES.find((t) => t.value === type)?.label ?? 'Other'
+export const attractionTypeLabel = (type: string | null | undefined) => ATTRACTION_TYPES.find((t) => t.value === type)?.label ?? 'Other'
 
 export const attractionTypeColor = (type: string | null | undefined) =>
   ATTRACTION_TYPES.find((t) => t.value === type)?.color ?? 'bg-gray-100 text-gray-500'

@@ -77,7 +77,9 @@ const Main = () => {
         headerName: 'Status',
         width: 130,
         cellRenderer: ({ value }: any) => (
-          <span className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${STATUS_STYLES[value] ?? 'bg-amber-100 text-amber-700'}`}>
+          <span
+            className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${STATUS_STYLES[value] ?? 'bg-amber-100 text-amber-700'}`}
+          >
             {value ?? 'pending'}
           </span>
         ),

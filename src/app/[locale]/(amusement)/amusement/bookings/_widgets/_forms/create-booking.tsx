@@ -106,14 +106,7 @@ const CreateBooking = ({ mode = 'create', bookingId, initialData, onSuccess }: C
               </FormItem>
             )}
           />
-          <InputsTemplate
-            control={form.control}
-            name="notes"
-            label="Notes"
-            placeholder="Any special requests"
-            isTextarea
-            rowsHeight={2}
-          />
+          <InputsTemplate control={form.control} name="notes" label="Notes" placeholder="Any special requests" isTextarea rowsHeight={2} />
         </div>
         <div className="mt-auto border-t border-gray-200 pt-4 pb-2 flex flex-col gap-2">
           {submitError && <p className="text-sm text-red-500">{submitError}</p>}
