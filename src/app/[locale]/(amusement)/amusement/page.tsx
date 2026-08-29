@@ -5,7 +5,13 @@ import Link from 'next/link'
 import { Ticket, Compass, CalendarCheck, Trophy } from 'lucide-react'
 
 const AMUSEMENT_MODULES = [
-  { title: 'Tickets', description: 'Sell and validate entry and ride tickets', icon: Ticket, color: 'bg-endeavour', href: '/en/amusement/tickets' },
+  {
+    title: 'Tickets',
+    description: 'Sell and validate entry and ride tickets',
+    icon: Ticket,
+    color: 'bg-endeavour',
+    href: '/en/amusement/tickets',
+  },
   {
     title: 'Attractions',
     description: 'Manage rides, attractions, and capacity',

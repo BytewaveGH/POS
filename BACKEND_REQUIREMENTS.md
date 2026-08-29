@@ -87,11 +87,12 @@ This is the one open design question. Everything above needs to be callable by a
 
 Whichever you pick, let us know the exact header/token mechanism and we'll wire the frontend's existing super-admin login (currently a bootstrap-only env-var credential, `SUPER_ADMIN_EMAIL`/`SUPER_ADMIN_PASSWORD`) to call it.
 
-## 4. Amusement park vertical (new)
+## 4. Amusement park vertical (new) — ✅ DONE, live on the backend
 
-The amusement-park frontend (`/amusement/attractions`, `/amusement/tickets`, `/amusement/bookings`) is now built and wired up to call these endpoints — none of them exist on the backend yet, so every request there currently fails. Same request-shape conventions as the rest of the API (trailing-slash collection routes, `X-Tenant-Domain`-scoped, `{ data: ... }` envelope).
+All four endpoint groups below (Attractions, Tickets, Bookings, Leaderboard, including the public `GET /leaderboard/public`) are implemented and deployed. The frontend (`/amusement/attractions`, `/amusement/tickets`, `/amusement/bookings`, `/amusement/board`) has been checked against the real contract field-by-field and matches exactly — no frontend changes were needed. Kept below for reference. Same request-shape conventions as the rest of the API (trailing-slash collection routes, `X-Tenant-Domain`-scoped, `{ data: ... }` envelope).
 
 **Attractions** — rides/attractions with capacity and ticket pricing. This park's attractions are arena-style venues (skating rink, go-karting track, arcade room, trampoline arena) plus activities matching Bambo's Adventure Park's (Accra) lineup (paintball, bubble soccer, foot dart, sumo wrestling, human foosball), so `type` is a fixed category rather than free text:
+
 ```
 {
   id, name,
@@ -101,33 +102,40 @@ The amusement-park frontend (`/amusement/attractions`, `/amusement/tickets`, `/a
   status: "active" | "maintenance" | "closed"
 }
 ```
+
 - `GET /attractions/` — list
 - `POST /attractions/` — create, body `{ name, type, capacity, ticketPrice, status }`
 - `PUT /attractions/:id` — update, same body
 - `DELETE /attractions/:id`
 
 **Tickets** — entry/ride ticket sales, optionally tied to an attraction (`attractionId: null` = general admission):
+
 ```
 { id, attractionId: number | null, buyerName: string | null, quantity, status: "valid" | "redeemed", createdAt }
 ```
+
 - `GET /tickets/` — list
 - `POST /tickets/` — create, body `{ attractionId, buyerName, quantity }`
 - `PATCH /tickets/:id/redeem` — mark a ticket redeemed
 - `DELETE /tickets/:id` — void a ticket
 
 **Bookings** — group bookings/reservations, optionally tied to an attraction:
+
 ```
 { id, customerName, phone, date, partySize, attractionId: number | null, status: "pending" | "confirmed" | "cancelled", notes }
 ```
+
 - `GET /bookings/` — list
 - `POST /bookings/` — create
 - `PUT /bookings/:id` — update (also used for status changes — confirm/cancel)
 - `DELETE /bookings/:id`
 
 **Leaderboard** — recorded scores/times per attraction, so parks can run a "top scores" board. What counts as a good score is direction-dependent per attraction type on the frontend (e.g. go-karting is fastest-lap/lower-is-better, arcade is high-score/higher-is-better) — the backend doesn't need to know this, it just stores and returns raw entries:
+
 ```
 { id, attractionId, participantName, teamName: string | null, score: number, achievedAt: string }
 ```
+
 - `GET /leaderboard/` — list, normal tenant-scoped auth (bearer token + `X-Tenant-Domain`) — used by the staff management page where entries get recorded
 - `POST /leaderboard/` — create
 - `PUT /leaderboard/:id` — update
@@ -143,6 +151,6 @@ The amusement-park frontend (`/amusement/attractions`, `/amusement/tickets`, `/a
 1. Tenant CRUD + owner-account creation (§1) — unblocks the whole "register a new business" flow for real, replaces the local JSON-file placeholder entirely.
 2. `appType` on login responses (§2) — small addition, unblocks correct per-vertical routing for every real tenant (currently everyone defaults to "retail").
 3. Platform-level stats/employees (§3) — lower priority, purely additive to the super admin dashboard; the mock data is clearly labeled as such and isn't blocking anything else.
-4. Attractions/tickets/bookings/leaderboard (§4) — needed as soon as any amusement-park tenant tries to use those pages for real; right now every request there 404s. The public `GET /leaderboard/public` route is worth flagging separately since it's the one endpoint in this whole doc that must work with **no** bearer token.
+4. ~~Attractions/tickets/bookings/leaderboard (§4)~~ — ✅ done, confirmed live and matching the frontend's contract exactly (2026-08-29).
 
 Happy to hop on a call to go through response shapes/edge cases once you've had a look.

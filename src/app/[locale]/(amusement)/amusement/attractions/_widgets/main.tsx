@@ -26,11 +26,7 @@ const Main = () => {
     selectedAttraction: null,
   })
 
-  const {
-    data: attractions,
-    isLoading,
-    refetch,
-  } = useFetchData('attractions', AttractionServices.FetchAll() as unknown as IGeneric)
+  const { data: attractions, isLoading, refetch } = useFetchData('attractions', AttractionServices.FetchAll() as unknown as IGeneric)
 
   const handleDelete = async (id: number) => {
     try {
@@ -83,7 +79,9 @@ const Main = () => {
         headerName: 'Status',
         width: 140,
         cellRenderer: ({ value }: any) => (
-          <span className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${STATUS_STYLES[value] ?? 'bg-gray-100 text-gray-500'}`}>
+          <span
+            className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${STATUS_STYLES[value] ?? 'bg-gray-100 text-gray-500'}`}
+          >
             {value ?? 'active'}
           </span>
         ),

@@ -155,14 +155,7 @@ const CreateAttraction = ({ mode = 'create', attractionId, initialData, onSucces
               </FormItem>
             )}
           />
-          <InputsTemplate
-            control={form.control}
-            name="capacity"
-            label="Capacity"
-            placeholder="e.g. 24"
-            inputType="number"
-            isRequired
-          />
+          <InputsTemplate control={form.control} name="capacity" label="Capacity" placeholder="e.g. 24" inputType="number" isRequired />
           <InputsTemplate
             control={form.control}
             name="ticketPrice"
