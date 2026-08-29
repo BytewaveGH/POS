@@ -4,13 +4,14 @@ import React from 'react'
 import { AppSidebar } from './widgets/sidebar'
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar'
 import TopNav from './widgets/top-nav'
-import { sidebarItems } from './logics/data'
+import { getSidebarItems } from './logics/data'
 import { useSession } from 'next-auth/react'
 
 const ILayout = ({ children }: { children: React.ReactNode }) => {
   const { data: session } = useSession()
   const user = session?.user as any
   const isEmployee = user?.accountType === 'employee'
+  const sidebarItems = getSidebarItems(user?.appType)
 
   const visibleItems = isEmployee
     ? sidebarItems
