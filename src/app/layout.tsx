@@ -1,6 +1,8 @@
 import { Providers } from '@/components/generals/providers'
 import type { Metadata } from 'next'
 import { Mulish } from 'next/font/google'
+import { headers } from 'next/headers'
+import { classifyHost } from '@/lib/tenant'
 import './globals.css'
 // import { Providers } from '@/components/providers'
 
@@ -11,9 +13,13 @@ const mulish = Mulish({
   display: 'swap',
 })
 
-export const metadata: Metadata = {
-  title: 'bytewave IG',
-  description: 'bytewave IG',
+export async function generateMetadata(): Promise<Metadata> {
+  const { slug } = classifyHost(headers().get('host'))
+  return {
+    title: slug ?? 'sellix',
+    description:
+      'Bytewave POS — multi-tenant point-of-sale and business management platform, powering retail, eatery, and amusement park operations from one dashboard.',
+  }
 }
 
 export default function RootLayout({
