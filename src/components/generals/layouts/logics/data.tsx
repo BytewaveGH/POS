@@ -12,12 +12,15 @@ import {
   Settings,
   CreditCard,
   ScanLine,
+  Ticket,
+  Compass,
+  CalendarCheck,
 } from 'lucide-react'
 import { ITopNavItems } from './interface'
 
 export const topNavItems: ITopNavItems[] = [{ id: 1, label: '', content: '' }]
 
-export const sidebarItems = [
+const retailSidebarItems = [
   {
     title: 'Point of Sale',
     items: [{ label: 'POS', href: '/en/stores/pos', icon: ScanLine, requiredPermission: 'canManageSales' }],
@@ -60,3 +63,51 @@ export const sidebarItems = [
     ],
   },
 ]
+
+const amusementSidebarItems = [
+  {
+    title: 'Dashboard',
+    items: [{ label: 'Overview', href: '/en/amusement', icon: LayoutDashboard, requiredPermission: 'canViewReports' }],
+  },
+  {
+    title: 'Ticketing',
+    items: [{ label: 'Tickets', href: '/en/amusement/tickets', icon: Ticket, requiredPermission: 'canManageSales' }],
+  },
+  {
+    title: 'Park',
+    items: [{ label: 'Attractions', href: '/en/amusement/attractions', icon: Compass, requiredPermission: 'canManageProducts' }],
+  },
+  {
+    title: 'Reservations',
+    items: [{ label: 'Bookings', href: '/en/amusement/bookings', icon: CalendarCheck, requiredPermission: 'canManageSales' }],
+  },
+  {
+    title: 'Users',
+    items: [{ label: 'Employees', href: '/en/stores/users', icon: UserCog, requiredPermission: 'canManageEmployees' }],
+  },
+]
+
+// Eatery has no dedicated modules built yet (see the amusement park build for the
+// pattern to follow) — keep it to what already exists so it doesn't dead-end on
+// retail-only routes.
+const eaterySidebarItems = [
+  {
+    title: 'Dashboard',
+    items: [{ label: 'Overview', href: '/en/eatery', icon: LayoutDashboard, requiredPermission: 'canViewReports' }],
+  },
+  {
+    title: 'Users',
+    items: [{ label: 'Employees', href: '/en/stores/users', icon: UserCog, requiredPermission: 'canManageEmployees' }],
+  },
+]
+
+const sidebarItemsByAppType: Record<string, typeof retailSidebarItems> = {
+  retail: retailSidebarItems,
+  amusement: amusementSidebarItems,
+  eatery: eaterySidebarItems,
+}
+
+export const getSidebarItems = (appType: string | undefined | null) => sidebarItemsByAppType[appType ?? 'retail'] ?? retailSidebarItems
+
+// Retail is still the default vertical — keep this export for anything importing the flat list directly.
+export const sidebarItems = retailSidebarItems

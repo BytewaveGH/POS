@@ -18,22 +18,27 @@ const TopNav = ({ trigger }: TopNavProps) => {
   const username = session?.user?.username ?? ''
   const email = session?.user?.email ?? ''
   const initial = username[0]?.toUpperCase() ?? 'U'
+  const appType = (session?.user as any)?.appType ?? 'retail'
 
   const navItems = [
-    {
-      id: 5,
-      label: 'Access POS',
-      comp: (
-        <button
-          onClick={() => {
-            router.push('/en/stores/pos')
-          }}
-          className="px-3 py-1.5 md:px-4 md:py-2 bg-endeavour text-white rounded-md text-xs md:text-sm"
-        >
-          {'Access POS'}
-        </button>
-      ),
-    },
+    ...(appType === 'retail'
+      ? [
+          {
+            id: 5,
+            label: 'Access POS',
+            comp: (
+              <button
+                onClick={() => {
+                  router.push('/en/stores/pos')
+                }}
+                className="px-3 py-1.5 md:px-4 md:py-2 bg-endeavour text-white rounded-md text-xs md:text-sm"
+              >
+                {'Access POS'}
+              </button>
+            ),
+          },
+        ]
+      : []),
     {
       id: 6,
       label: '',

@@ -961,9 +961,7 @@ const Main = () => {
             </SheetClose>
           </div>
           <div className="px-4 pb-8">
-            {unitPickerProduct && (
-              <UnitList product={unitPickerProduct} cart={cart} customerType={customerType} onAddToCart={addToCart} />
-            )}
+            {unitPickerProduct && <UnitList product={unitPickerProduct} cart={cart} customerType={customerType} onAddToCart={addToCart} />}
           </div>
         </SheetContent>
       </Sheet>

@@ -87,10 +87,48 @@ This is the one open design question. Everything above needs to be callable by a
 
 Whichever you pick, let us know the exact header/token mechanism and we'll wire the frontend's existing super-admin login (currently a bootstrap-only env-var credential, `SUPER_ADMIN_EMAIL`/`SUPER_ADMIN_PASSWORD`) to call it.
 
+## 4. Amusement park vertical (new)
+
+The amusement-park frontend (`/amusement/attractions`, `/amusement/tickets`, `/amusement/bookings`) is now built and wired up to call these endpoints — none of them exist on the backend yet, so every request there currently fails. Same request-shape conventions as the rest of the API (trailing-slash collection routes, `X-Tenant-Domain`-scoped, `{ data: ... }` envelope).
+
+**Attractions** — rides/attractions with capacity and ticket pricing. This park's attractions are arena-style venues (skating rink, go-karting track, arcade room, trampoline arena) plus activities matching Bambo's Adventure Park's (Accra) lineup (paintball, bubble soccer, foot dart, sumo wrestling, human foosball), so `type` is a fixed category rather than free text:
+```
+{
+  id, name,
+  type: "skating" | "go-karting" | "arcade" | "trampoline"
+      | "paintball" | "bubble-soccer" | "foot-dart" | "sumo-wrestling" | "human-foosball" | "other",
+  capacity, ticketPrice,
+  status: "active" | "maintenance" | "closed"
+}
+```
+- `GET /attractions/` — list
+- `POST /attractions/` — create, body `{ name, type, capacity, ticketPrice, status }`
+- `PUT /attractions/:id` — update, same body
+- `DELETE /attractions/:id`
+
+**Tickets** — entry/ride ticket sales, optionally tied to an attraction (`attractionId: null` = general admission):
+```
+{ id, attractionId: number | null, buyerName: string | null, quantity, status: "valid" | "redeemed", createdAt }
+```
+- `GET /tickets/` — list
+- `POST /tickets/` — create, body `{ attractionId, buyerName, quantity }`
+- `PATCH /tickets/:id/redeem` — mark a ticket redeemed
+- `DELETE /tickets/:id` — void a ticket
+
+**Bookings** — group bookings/reservations, optionally tied to an attraction:
+```
+{ id, customerName, phone, date, partySize, attractionId: number | null, status: "pending" | "confirmed" | "cancelled", notes }
+```
+- `GET /bookings/` — list
+- `POST /bookings/` — create
+- `PUT /bookings/:id` — update (also used for status changes — confirm/cancel)
+- `DELETE /bookings/:id`
+
 ## Priority
 
 1. Tenant CRUD + owner-account creation (§1) — unblocks the whole "register a new business" flow for real, replaces the local JSON-file placeholder entirely.
 2. `appType` on login responses (§2) — small addition, unblocks correct per-vertical routing for every real tenant (currently everyone defaults to "retail").
 3. Platform-level stats/employees (§3) — lower priority, purely additive to the super admin dashboard; the mock data is clearly labeled as such and isn't blocking anything else.
+4. Attractions/tickets/bookings (§4) — needed as soon as any amusement-park tenant tries to use those pages for real; right now every request there 404s.
 
 Happy to hop on a call to go through response shapes/edge cases once you've had a look.
