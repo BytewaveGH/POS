@@ -2,7 +2,7 @@
 
 import React from 'react'
 import Link from 'next/link'
-import { Ticket, Compass, CalendarCheck } from 'lucide-react'
+import { Ticket, Compass, CalendarCheck, Trophy } from 'lucide-react'
 
 const AMUSEMENT_MODULES = [
   { title: 'Tickets', description: 'Sell and validate entry and ride tickets', icon: Ticket, color: 'bg-endeavour', href: '/en/amusement/tickets' },
@@ -20,6 +20,13 @@ const AMUSEMENT_MODULES = [
     color: 'bg-amber-500',
     href: '/en/amusement/bookings',
   },
+  {
+    title: 'Leaderboard',
+    description: 'Record top scores/times — public board at /amusement/board',
+    icon: Trophy,
+    color: 'bg-rose-500',
+    href: '/en/amusement/leaderboard',
+  },
 ]
 
 export default function Amusement() {
@@ -27,10 +34,10 @@ export default function Amusement() {
     <div className="w-full h-full">
       <div className="mb-5">
         <h1 className="bytewave-heading">Amusement Park</h1>
-        <p className="bytewave-paragraph">Tickets, attractions, and bookings for your park</p>
+        <p className="bytewave-paragraph">Tickets, attractions, bookings, and the leaderboard for your park</p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {AMUSEMENT_MODULES.map(({ title, description, icon: Icon, color, href }) => (
           <Link
             key={title}
