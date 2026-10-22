@@ -22,6 +22,9 @@ export namespace IAuth {
         email: string
         createdAt: string
         updatedAt: string
+        // Tenant slug the token is bound to (admin-login / refresh).
+        tenant?: string
+        appType?: string
       }
     }
     status: boolean

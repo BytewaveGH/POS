@@ -14,6 +14,18 @@ import { ProductServices } from '../../_logics/services'
 import { useFetchData } from '@/hooks/use-fetch'
 import { UnitServices, WarehouseServices } from '../../../categories/_logics/services'
 import { IGeneric } from '@/types/interfaces'
+import TagInput from './tag-input'
+import ProductRecognition from './product-recognition'
+import {
+  buildCreateProductPayload,
+  buildUnitPayload,
+  buildUpdateProductPayload,
+  isDuplicateSkuError,
+  productSaveErrorMessage,
+  SKU_IN_USE,
+} from '../../_logics/product-payload'
+
+const isValidBarcode = (code: string) => (/^[\x21-\x7E]{1,64}$/.test(code) ? null : '1–64 printable characters, no spaces')
 
 const productSchema = z.object({
   name: z.string().min(1, 'Product name is required'),
@@ -21,6 +33,10 @@ const productSchema = z.object({
   category: z.string().min(1, 'Category is required'),
   purchasePrice: z.coerce.number().min(0, 'Required'),
   minQuantity: z.coerce.number().int().optional(),
+  brand: z.string().trim().max(120).optional(),
+  sku: z.string().trim().max(64).optional(),
+  imageUrl: z.union([z.literal(''), z.string().trim().url('Enter a valid URL (https://…)')]).optional(),
+  aliases: z.array(z.string().trim().min(1).max(120)).optional(),
   units: z
     .array(
       z.object({
@@ -28,6 +44,8 @@ const productSchema = z.object({
         retailPrice: z.coerce.number().min(0, 'Required'),
         wholesalePrice: z.coerce.number().min(0, 'Required'),
         pricingRule: z.enum(['flat', 'half-box', 'bulk-wholesale']).default('flat'),
+        baseQuantity: z.coerce.number().int('Whole number').min(1, 'At least 1').default(1),
+        barcodes: z.array(z.string()).optional(),
         boxSize: z.coerce.number().int().optional(),
         boxRetailPrice: z.coerce.number().optional(),
         bulkThreshold: z.coerce.number().int().optional(),
@@ -80,9 +98,10 @@ interface UnitRowProps {
   onRemove: () => void
   pieceUnitId: string
   onAddPieceUnit: (pieceUnitId: string, piecePrice: number, boxSizeNum: number, boxRetailPrice: number) => void
+  mode: 'create' | 'update'
 }
 
-const UnitRow = ({ index, fieldId, control, unitOptions, showLabels, canRemove, onRemove, pieceUnitId, onAddPieceUnit }: UnitRowProps) => {
+const UnitRow = ({ index, fieldId, control, unitOptions, showLabels, canRemove, onRemove, mode }: UnitRowProps) => {
   const rule = useWatch({ control, name: `units.${index}.pricingRule` })
 
   return (
@@ -166,6 +185,25 @@ const UnitRow = ({ index, fieldId, control, unitOptions, showLabels, canRemove, 
           <p className="bytewave-paragraph text-xs text-gray-400">At this qty, price switches to wholesale</p>
         </div>
       )}
+
+      {/* Stock is counted in base units; a Box of 12 consumes 12 */}
+      <div className="flex items-center gap-2">
+        <label className="bytewave-paragraph text-xs text-gray-500 whitespace-nowrap">Base quantity</label>
+        <div className="w-24">
+          <InputsTemplate control={control} name={`units.${index}.baseQuantity`} placeholder="1" inputType="number" />
+        </div>
+        <p className="bytewave-paragraph text-xs text-gray-400">How many base units this unit contains, e.g. Box = 12</p>
+      </div>
+
+      {mode === 'create' && (
+        <TagInput
+          control={control}
+          name={`units.${index}.barcodes`}
+          placeholder="Barcodes printed on this unit (Enter to add)"
+          validate={isValidBarcode}
+          mono
+        />
+      )}
     </div>
   )
 }
@@ -202,16 +240,22 @@ const CreateProduct = ({ mode = 'create', productId, initialData, onSuccess }: C
       category: initialData?.category ?? '',
       purchasePrice: initialData?.purchasePrice ?? 0,
       minQuantity: initialData?.minQuantity ?? undefined,
+      brand: initialData?.brand ?? '',
+      sku: initialData?.sku ?? '',
+      imageUrl: initialData?.imageUrl ?? '',
+      aliases: [],
       // Map API units (which have id, unitId, unitName, ...) to form units
       units: (initialData?.units as any[] | undefined)?.map((u: any) => ({
         unitId: u.unitId ?? u.unit_id ?? 0,
         retailPrice: u.retailPrice ?? 0,
         wholesalePrice: u.wholesalePrice ?? 0,
         pricingRule: u.pricingRule ?? 'flat',
+        baseQuantity: u.baseQuantity ?? 1,
         boxSize: u.boxSize ?? undefined,
         boxRetailPrice: u.boxRetailPrice ?? undefined,
         bulkThreshold: u.bulkThreshold ?? undefined,
-      })) ?? [{ unitId: 0, retailPrice: 0, wholesalePrice: 0, pricingRule: 'flat' }],
+        barcodes: [],
+      })) ?? [{ unitId: 0, retailPrice: 0, wholesalePrice: 0, pricingRule: 'flat', baseQuantity: 1, barcodes: [] }],
       stock: initialData?.stock ?? [{ warehouseId: 0, quantity: 0 }],
     },
   })
@@ -226,196 +270,208 @@ const CreateProduct = ({ mode = 'create', productId, initialData, onSuccess }: C
       retailPrice: piecePrice,
       wholesalePrice: piecePrice,
       pricingRule: 'half-box',
+      baseQuantity: 1,
       boxSize: boxSizeNum,
       boxRetailPrice,
       // pieces never have a wholesale threshold — half-box rule only
     })
   }
 
-  const resolveRule = (u: ProductForm['units'][number]) =>
-    u.pricingRule !== 'flat' ? u.pricingRule : u.bulkThreshold && u.bulkThreshold > 0 ? ('bulk-wholesale' as const) : ('flat' as const)
-
   const onSubmit = async (data: ProductForm) => {
     setSubmitError('')
     setIsSubmitting(true)
     try {
       if (mode === 'update' && productId) {
-        // 1. Update product fields only (UpdateProductRequest — no units/stock)
-        await request(
-          ProductServices.Update(productId, {
-            name: data.name,
-            description: data.description,
-            category: data.category,
-            purchasePrice: data.purchasePrice,
-            minQuantity: data.minQuantity,
-          })
-        )
+        // 1. Product fields (no units/stock). Unchanged brand/sku/imageUrl are omitted; "" clears the SKU.
+        await request(ProductServices.Update(productId, buildUpdateProductPayload(data, initialData ?? {})))
 
-        // 2. Update each existing unit's pricing
+        // 2. Each unit: update existing, create new ones added during edit.
         for (let i = 0; i < data.units.length; i++) {
-          const u = data.units[i]
           const recordId = unitRecordIds.current[i]
-          const unitPayload = {
-            unitId: u.unitId,
-            retailPrice: u.retailPrice,
-            wholesalePrice: u.wholesalePrice,
-            pricingRule: resolveRule(u),
-            boxSize: u.boxSize,
-            boxRetailPrice: u.boxRetailPrice,
-            bulkThreshold: u.bulkThreshold,
-          }
-          if (recordId) {
-            // Existing unit — update
-            await request(ProductServices.UpdateUnit(productId, recordId, unitPayload))
-          } else {
-            // New unit added during edit — create
-            await request(ProductServices.AddUnit(productId, unitPayload))
-          }
+          const unitPayload = buildUnitPayload(data.units[i])
+          if (recordId) await request(ProductServices.UpdateUnit(productId, recordId, unitPayload))
+          else await request(ProductServices.AddUnit(productId, unitPayload))
         }
       } else {
-        // Create — send full payload including units and stock
-        const processed = {
-          ...data,
-          units: data.units.map((u) => ({ ...u, pricingRule: resolveRule(u) })),
-        }
-        await request(ProductServices.Create(processed))
+        // Create — full payload including units, stock, aliases and barcodes.
+        await request(ProductServices.Create(buildCreateProductPayload(data)))
       }
       form.reset()
       onSuccess?.()
     } catch (err: any) {
-      setSubmitError(err?.response?.data?.error ?? 'Something went wrong')
+      // The form keeps its values on any error; a duplicate SKU is shown on the field.
+      if (isDuplicateSkuError(err)) form.setError('sku', { type: 'server', message: SKU_IN_USE }, { shouldFocus: true })
+      else setSubmitError(productSaveErrorMessage(err))
     } finally {
       setIsSubmitting(false)
     }
   }
 
+  const imageUrl = form.watch('imageUrl')
+
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col h-full">
-        <div className="flex flex-col gap-4 py-2 flex-1">
-          {/* ── Product details ── */}
-          <InputsTemplate control={form.control} name="name" label="Product Name" placeholder="e.g. Coca-Cola 330ml" isRequired />
-          <InputsTemplate
-            control={form.control}
-            name="description"
-            label="Description"
-            placeholder="Brief description..."
-            isTextarea
-            rowsHeight={2}
-          />
-          <div className="grid grid-cols-3 gap-4">
-            <SelectTemplate
-              control={form.control}
-              name="category"
-              label="Category"
-              placeholder="Select category"
-              content={categoryOptions}
-            />
+    <div className="flex flex-col gap-2">
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col h-full">
+          <div className="flex flex-col gap-4 py-2 flex-1">
+            {/* ── Product details ── */}
+            <InputsTemplate control={form.control} name="name" label="Product Name" placeholder="e.g. Coca-Cola 330ml" isRequired />
             <InputsTemplate
               control={form.control}
-              name="purchasePrice"
-              label="Purchase Price (Cost per piece)"
-              placeholder="0.00"
-              inputType="number"
-              isRequired
+              name="description"
+              label="Description"
+              placeholder="Brief description..."
+              isTextarea
+              rowsHeight={2}
             />
-            <InputsTemplate
-              control={form.control}
-              name="minQuantity"
-              label="Min Qty (stock alert)"
-              placeholder="e.g. 10"
-              inputType="number"
-            />
-          </div>
-
-          {/* ── Selling units ── */}
-          <div className="flex flex-col gap-2">
-            <p className="bytewave-paragraph text-endeavour font-mulish-regular">Selling Units</p>
-
-            {unitFields.map((field, index) => (
-              <UnitRow
-                key={field.id}
-                fieldId={field.id}
-                index={index}
+            <div className="grid grid-cols-3 gap-4">
+              <SelectTemplate
                 control={form.control}
-                unitOptions={unitOptions}
-                showLabels={index === 0}
-                canRemove={unitFields.length > 1}
-                onRemove={() => removeUnit(index)}
-                pieceUnitId={pieceUnitId}
-                onAddPieceUnit={handleAddPieceUnit}
+                name="category"
+                label="Category"
+                placeholder="Select category"
+                content={categoryOptions}
               />
-            ))}
+              <InputsTemplate
+                control={form.control}
+                name="purchasePrice"
+                label="Purchase Price (Cost per piece)"
+                placeholder="0.00"
+                inputType="number"
+                isRequired
+              />
+              <InputsTemplate
+                control={form.control}
+                name="minQuantity"
+                label="Min Qty (stock alert)"
+                placeholder="e.g. 10"
+                inputType="number"
+              />
+            </div>
 
-            <button
-              type="button"
-              onClick={() => appendUnit({ unitId: 0, retailPrice: 0, wholesalePrice: 0, pricingRule: 'flat' })}
-              className="flex items-center gap-1.5 text-sm text-endeavour bytewave-paragraph hover:underline w-fit mt-1"
-            >
-              <Plus className="h-4 w-4" />
-              Add selling unit
-            </button>
-          </div>
+            <div className="grid grid-cols-2 gap-4">
+              <InputsTemplate control={form.control} name="brand" label="Brand" placeholder="e.g. Kasapreko" />
+              <InputsTemplate control={form.control} name="sku" label="SKU" placeholder="e.g. ALOMO-200" />
+            </div>
+            <div className="flex items-end gap-3">
+              <div className="flex-1">
+                <InputsTemplate control={form.control} name="imageUrl" label="Image URL" placeholder="https://…" />
+              </div>
+              {imageUrl && /^https?:\/\//.test(imageUrl) && (
+                // eslint-disable-next-line @next/next/no-img-element -- arbitrary tenant image URL
+                <img src={imageUrl} alt="" className="w-10 h-10 rounded-md object-cover border border-gray-200 mb-0.5" />
+              )}
+            </div>
+            {mode === 'create' && (
+              <TagInput
+                control={form.control}
+                name="aliases"
+                label="Also known as"
+                placeholder="e.g. HappyMan, H-Man (Enter to add)"
+                help="Alternate names help the camera recognise this product."
+              />
+            )}
 
-          {/* ── Stock locations — only on create; managed via Stocks tab on edit ── */}
-          {mode === 'create' && (
+            {/* ── Selling units ── */}
             <div className="flex flex-col gap-2">
-              <p className="bytewave-paragraph text-endeavour font-mulish-regular">Stock Locations</p>
-              {stockFields.map((field, index) => (
-                <div key={field.id} className="flex items-end gap-2">
-                  <div className="flex-1">
-                    <SelectTemplate
-                      control={form.control}
-                      name={`stock.${index}.warehouseId`}
-                      label={index === 0 ? 'Warehouse' : undefined}
-                      placeholder="Select warehouse"
-                      content={warehouseOptions}
-                    />
-                  </div>
-                  <div className="w-28">
-                    <InputsTemplate
-                      control={form.control}
-                      name={`stock.${index}.quantity`}
-                      label={index === 0 ? 'Quantity' : undefined}
-                      placeholder="0"
-                      inputType="number"
-                      isRequired
-                    />
-                  </div>
-                  {stockFields.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removeStock(index)}
-                      className="mb-2 p-1.5 rounded-md border border-gray-200 text-gray-400 hover:text-red-500 hover:border-red-300 transition-colors"
-                    >
-                      <Minus className="h-4 w-4" />
-                    </button>
-                  )}
-                </div>
+              <p className="bytewave-paragraph text-endeavour font-mulish-regular">Selling Units</p>
+
+              {unitFields.map((field, index) => (
+                <UnitRow
+                  key={field.id}
+                  fieldId={field.id}
+                  index={index}
+                  control={form.control}
+                  unitOptions={unitOptions}
+                  showLabels={index === 0}
+                  canRemove={unitFields.length > 1}
+                  onRemove={() => removeUnit(index)}
+                  pieceUnitId={pieceUnitId}
+                  onAddPieceUnit={handleAddPieceUnit}
+                  mode={mode}
+                />
               ))}
+
               <button
                 type="button"
-                onClick={() => appendStock({ warehouseId: 0, quantity: 0 })}
+                onClick={() =>
+                  appendUnit({ unitId: 0, retailPrice: 0, wholesalePrice: 0, pricingRule: 'flat', baseQuantity: 1, barcodes: [] })
+                }
                 className="flex items-center gap-1.5 text-sm text-endeavour bytewave-paragraph hover:underline w-fit mt-1"
               >
                 <Plus className="h-4 w-4" />
-                Add location
+                Add selling unit
               </button>
             </div>
-          )}
-        </div>
 
-        <div className="mt-auto border-t border-gray-200 pt-4 pb-2 flex flex-col gap-2">
-          {submitError && <p className="text-sm text-red-500">{submitError}</p>}
-          <ButtonTemplate
-            isText
-            text={isSubmitting ? 'Saving...' : mode === 'update' ? 'Update Product' : 'Save Product'}
-            type="submit"
-            isDisabled={isSubmitting}
-          />
-        </div>
-      </form>
-    </Form>
+            {/* ── Stock locations — only on create; managed via Stocks tab on edit ── */}
+            {mode === 'create' && (
+              <div className="flex flex-col gap-2">
+                <p className="bytewave-paragraph text-endeavour font-mulish-regular">Stock Locations</p>
+                {stockFields.map((field, index) => (
+                  <div key={field.id} className="flex items-end gap-2">
+                    <div className="flex-1">
+                      <SelectTemplate
+                        control={form.control}
+                        name={`stock.${index}.warehouseId`}
+                        label={index === 0 ? 'Warehouse' : undefined}
+                        placeholder="Select warehouse"
+                        content={warehouseOptions}
+                      />
+                    </div>
+                    <div className="w-28">
+                      <InputsTemplate
+                        control={form.control}
+                        name={`stock.${index}.quantity`}
+                        label={index === 0 ? 'Quantity' : undefined}
+                        placeholder="0"
+                        inputType="number"
+                        isRequired
+                      />
+                    </div>
+                    {stockFields.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeStock(index)}
+                        className="mb-2 p-1.5 rounded-md border border-gray-200 text-gray-400 hover:text-red-500 hover:border-red-300 transition-colors"
+                      >
+                        <Minus className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => appendStock({ warehouseId: 0, quantity: 0 })}
+                  className="flex items-center gap-1.5 text-sm text-endeavour bytewave-paragraph hover:underline w-fit mt-1"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add location
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="mt-auto border-t border-gray-200 pt-4 pb-2 flex flex-col gap-2">
+            {submitError && <p className="text-sm text-red-500">{submitError}</p>}
+            <ButtonTemplate
+              isText
+              text={isSubmitting ? 'Saving...' : mode === 'update' ? 'Update Product' : 'Save Product'}
+              type="submit"
+              isDisabled={isSubmitting}
+            />
+          </div>
+        </form>
+      </Form>
+      {mode === 'update' && productId && (
+        <ProductRecognition
+          productId={productId}
+          units={((initialData?.units as any[] | undefined) ?? [])
+            .filter((u: any) => u.id)
+            .map((u: any) => ({ id: Number(u.id), name: u.unitName ?? `Unit ${u.id}` }))}
+        />
+      )}
+    </div>
   )
 }
 

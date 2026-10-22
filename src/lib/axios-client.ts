@@ -1,6 +1,8 @@
 'use client'
 import axios, { AxiosRequestConfig } from 'axios'
 import { getSession } from 'next-auth/react'
+import { isSessionRebindError } from './api-error'
+import { forceLogout } from './force-logout'
 
 let isRefreshing = false
 let refreshQueue: Array<(token: string) => void> = []
@@ -22,6 +24,12 @@ apiClient.interceptors.request.use(async (config) => {
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
+    // Old (pre tenant-binding) token or tenant mismatch — refreshing can't help.
+    if (isSessionRebindError(error)) {
+      void forceLogout('rebind')
+      return Promise.reject(error)
+    }
+
     const original = error.config as AxiosRequestConfig & { _retry?: boolean }
     if (error.response?.status !== 401 || original._retry) {
       return Promise.reject(error)
@@ -61,6 +69,9 @@ apiClient.interceptors.response.use(
       return apiClient(original)
     } catch {
       refreshQueue = []
+      // No refresh token (employees) or refresh rejected (e.g. suspended
+      // employee): the session is dead, so log out instead of failing silently.
+      void forceLogout('expired')
       return Promise.reject(error)
     } finally {
       isRefreshing = false

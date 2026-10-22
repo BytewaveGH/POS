@@ -199,3 +199,26 @@ export const OperationsServices = {
     url: `/operations/${id}`,
   }),
 }
+
+/**
+ * Recognition data management — aliases ("also known as" / search terms),
+ * alias suggestions from the cashier learning loop, and barcodes.
+ * Admin or employees with canManageProducts; tenant comes from the token.
+ */
+export const RecognitionAdminServices = {
+  FetchAliases: (productId: number) => ({ method: 'GET', url: `/products/${productId}/aliases` }),
+  CreateAlias: (productId: number, payload: { alias: string; productUnitId?: number; source?: 'manual' | 'recognition' }) => ({
+    method: 'POST',
+    url: `/products/${productId}/aliases`,
+    data: payload,
+  }),
+  DeleteAlias: (productId: number, aliasId: number) => ({ method: 'DELETE', url: `/products/${productId}/aliases/${aliasId}` }),
+  FetchAliasSuggestions: (productId: number) => ({ method: 'GET', url: `/products/${productId}/alias-suggestions` }),
+  FetchBarcodes: (productId: number) => ({ method: 'GET', url: `/products/${productId}/barcodes` }),
+  CreateBarcode: (productId: number, payload: { code: string; productUnitId?: number }) => ({
+    method: 'POST',
+    url: `/products/${productId}/barcodes`,
+    data: payload,
+  }),
+  DeleteBarcode: (productId: number, barcodeId: number) => ({ method: 'DELETE', url: `/products/${productId}/barcodes/${barcodeId}` }),
+}

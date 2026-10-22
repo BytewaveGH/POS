@@ -146,11 +146,25 @@ All four endpoint groups below (Attractions, Tickets, Bookings, Leaderboard, inc
   ```
   Please double-check this route is excluded from whatever auth middleware normally requires a bearer token — it's the one endpoint in this doc that's intentionally callable by a completely anonymous visitor.
 
+## 5. Camera product recognition, tenant-bound tokens, base quantities — ✅ DONE, live on the backend
+
+Implemented per `sellixtracker/sellix-api.yaml` (tag **Recognition**, updated **Products**/**Sales**) and wired into the frontend: POS scanner (`POST /pos/products/recognize`, `GET /pos/products/barcode/:code`, `POST /pos/products/recognitions/:id/confirm`), product aliases / alias suggestions / barcodes management, `baseQuantity` on units, server-priced checkout with 409/422 handling, and logout on tenant-unbound (401) / tenant-mismatch (403) tokens. `recognize/batch` is not used yet.
+
+Open points from the integration — resolved:
+
+- **`pricingRule`** — the server's enum is `flat | half-box | bulk-wholesale` (the YAML's `standard | box | bulk` was a doc error, now fixed). The frontend uses only those three values, including on recognition units.
+- **Product/unit request fields** — now documented in the YAML and matching what the frontend sends. `PUT /products/:id` sends `brand`/`sku`/`imageUrl` only when changed; `sku: ""` clears it.
+- **Duplicate SKU** — frontend shows "SKU already in use" on the SKU field for a **409** (planned) and, until that ships, for a **500** whose message mentions the SKU/unique constraint. *Backend: tell us when the 409 is live so the 500 branch can be removed.*
+- **Embedded `aliases`/`barcodes` on `GET /products/:id`** — not used; the dedicated endpoints are the source.
+- **`employeeId` on `POST /sales`** — the server doesn't derive it from the token, so the POS now sends the signed-in employee's id (admins send none). Interim; built in one place (`saleAttribution` in `pos/_logics/checkout.ts`) so it's easy to drop if the backend moves to token-based attribution.
+- **`appType`** — admins are routed by `user.appType` from admin-login/refresh (fallback `retail` + warning); employees by the tenant lookup's `appType`, since `/employees/login` doesn't return it.
+
 ## Priority
 
 1. Tenant CRUD + owner-account creation (§1) — unblocks the whole "register a new business" flow for real, replaces the local JSON-file placeholder entirely.
 2. `appType` on login responses (§2) — small addition, unblocks correct per-vertical routing for every real tenant (currently everyone defaults to "retail").
 3. Platform-level stats/employees (§3) — lower priority, purely additive to the super admin dashboard; the mock data is clearly labeled as such and isn't blocking anything else.
-4. ~~Attractions/tickets/bookings/leaderboard (§4)~~ — ✅ done, confirmed live and matching the frontend's contract exactly (2026-08-29).
+4. ~~Camera product recognition (§5)~~ — ✅ done; open points resolved, one pending backend change (SKU 409).
+5. ~~Attractions/tickets/bookings/leaderboard (§4)~~ — ✅ done, confirmed live and matching the frontend's contract exactly (2026-08-29).
 
 Happy to hop on a call to go through response shapes/edge cases once you've had a look.

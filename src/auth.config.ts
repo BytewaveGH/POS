@@ -4,6 +4,7 @@ import type { ExtendedUser } from './types/next-auth'
 import { SignInFormSchema } from './types/schemas/schema'
 import { IAuth } from './types/interfaces'
 import { classifyHost } from './lib/tenant'
+import { lookupTenantAppType, normalizeAppType } from './lib/app-type'
 import * as z from 'zod'
 
 const EmployeeSignInSchema = z.object({
@@ -102,6 +103,9 @@ async function refreshAccessToken(tokenObject: any) {
       avatar: data.data.user.avatar,
       phone: data.data.user.phone,
       email: data.data.user.email,
+      // Tokens are bound to a tenant; keep the header in sync with it.
+      tenant: data.data.user.tenant ?? tokenObject.tenant,
+      appType: data.data.user.appType ? normalizeAppType(data.data.user.appType, '/auth/refresh') : tokenObject.appType,
       accessToken: data.data.accessToken,
       refreshToken: data.data.refreshToken,
       accessTokenExpiry: toAbsoluteExpiry(data.data.accessTokenExpiry),
@@ -138,8 +142,10 @@ export default {
           avatar: res.user.avatar,
           phone: res.user.phone,
           email: res.user.email,
-          tenant: res.tenant,
-          appType: (res.user as any)?.appType ?? 'retail',
+          // The server's tenant is authoritative: /pos/* routes reject an
+          // X-Tenant-Domain that differs from the token's tenant.
+          tenant: res.user.tenant || res.tenant,
+          appType: normalizeAppType(res.user.appType, '/auth/admin-login'),
           accessToken: res.accessToken,
           refreshToken: res.refreshToken,
           accessTokenExpiry: res.accessTokenExpiry,
@@ -176,17 +182,21 @@ export default {
 
           // Permissions sit directly on emp
           const perms = emp.permissions ?? emp
+          // /employees/login doesn't return appType — take it from the tenant lookup.
+          const employeeTenant: string = res.tenant ?? tenant
+          const appType = await lookupTenantAppType(employeeTenant)
+
           return {
             id: String(emp.id),
+            // data.employee.id — sent as employeeId on POST /sales (see pos/_logics/checkout.ts).
             userId: emp.id,
             username: emp.username ?? emp.name ?? '',
             accountType: 'employee' as const,
             avatar: emp.avatar ?? emp.profilePicture ?? '',
             phone: emp.phone ?? '',
             email: emp.email ?? parsed.data.email,
-            tenant: res.tenant ?? tenant,
-            // Not sent by the backend yet — defaults every tenant to the retail/POS experience.
-            appType: emp.appType ?? res.appType ?? 'retail',
+            tenant: employeeTenant,
+            appType,
             accessToken: res.accessToken ?? res.token ?? '',
             refreshToken: res.refreshToken ?? '',
             accessTokenExpiry: toAbsoluteExpiry(res.expireAt ?? res.accessTokenExpiry ?? res.expiresIn),
