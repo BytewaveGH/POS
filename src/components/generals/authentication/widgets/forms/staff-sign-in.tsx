@@ -1,15 +1,17 @@
 'use client'
 
 import * as z from 'zod'
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useRouter, useParams } from 'next/navigation'
-import { signIn } from 'next-auth/react'
+import { getSession, signIn } from 'next-auth/react'
 import { Form } from '@/components/ui/form'
 import { Button } from '@/components/ui/button'
 import InputsTemplate from '@/components/templates/inputs'
+import { logoutReasonFromSearch } from '@/lib/force-logout'
+import { redirectPathForAppType } from '@/lib/tenant'
 
 const formSchema = z.object({
   email: z.string().min(1, 'Email is required'),
@@ -24,6 +26,10 @@ export default function StaffSignInForm() {
   const locale = (params?.locale as string) || 'en'
 
   const [error, setError] = useState('')
+  // Why the user was signed out (e.g. tenant-bound tokens after an update).
+  // Read from window instead of useSearchParams to keep the page statically renderable.
+  const [notice, setNotice] = useState<string | null>(null)
+  useEffect(() => setNotice(logoutReasonFromSearch(window.location.search)), [])
   const [isLoading, setIsLoading] = useState(false)
 
   const form = useForm<FormType>({
@@ -43,8 +49,11 @@ export default function StaffSignInForm() {
       if (result?.error) {
         setError('Invalid email or password')
       } else {
-        // Middleware redirects to first allowed route if /pos is blocked
-        router.push(`/${locale}/stores/pos`)
+        // appType comes from the tenant lookup at login. Retail staff start at
+        // the POS (middleware redirects to the first allowed route if blocked).
+        const session = await getSession()
+        const appType = session?.user?.appType ?? 'retail'
+        router.push(appType === 'retail' ? `/${locale}/stores/pos` : redirectPathForAppType(appType, locale))
       }
     } catch {
       setError('Something went wrong. Please try again.')
@@ -64,6 +73,11 @@ export default function StaffSignInForm() {
             <div className="bytewave-heading font-mulish-regular text-gray-700 mb-1">Staff Login</div>
             <p className="bytewave-paragraph text-gray-400 mb-4">Sign in with your staff credentials</p>
 
+            {notice && !error && (
+              <p className="text-center bytewave-paragraph text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 mb-2">
+                {notice}
+              </p>
+            )}
             {error && <p className="text-center bytewave-sub-heading text-red-500 font-mulish-regular italic mb-2">{error}</p>}
 
             <Form {...form}>

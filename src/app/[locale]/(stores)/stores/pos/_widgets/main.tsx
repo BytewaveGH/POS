@@ -1,53 +1,28 @@
 'use client'
 
 import React, { useState, useMemo, useEffect, useRef } from 'react'
-import { Search, Plus, Minus, Trash2, ShoppingCart, Package, X, Zap } from 'lucide-react'
+import { Search, Plus, Minus, Trash2, ShoppingCart, Package, X, Zap, ScanLine, Barcode, CheckCircle2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { PopoverTemplate } from '@/components/templates/popover'
 import { Sheet, SheetContent, SheetClose } from '@/components/ui/sheet'
 import { useFetchData } from '@/hooks/use-fetch'
 import { useAxios } from '@/hooks/use-axios'
+import { useSession } from 'next-auth/react'
 import { ProductServices } from '../../products/inventory/_logics/services'
-import { SalesServices } from '../_logics/services'
 import { WarehouseServices } from '../../products/categories/_logics/services'
 import { IGeneric } from '@/types/interfaces'
-
-// ── Types ──────────────────────────────────────────────────────────────────
-
-type PricingRule = 'flat' | 'half-box' | 'bulk-wholesale'
-
-type SellingUnit = {
-  unit: string
-  label: string
-  retailPrice: number
-  wholesalePrice: number
-  pricingRule: PricingRule
-  boxSize?: number
-  boxRetailPrice?: number
-  bulkThreshold?: number
-}
-
-type Product = {
-  id: string
-  name: string
-  category: string
-  units: SellingUnit[]
-}
-
-type CartItem = {
-  cartId: string
-  productId: string
-  name: string
-  unitLabel: string
-  selectedUnit: string
-  retailPrice: number
-  wholesalePrice: number
-  pricingRule: PricingRule
-  boxSize?: number
-  boxRetailPrice?: number
-  bulkThreshold?: number
-  quantity: number
-}
+import ToastTemplate from '@/components/templates/toast'
+import { toast } from 'sonner'
+import { type CartItem, type Product, type SellingUnit, mapApiProduct, piecesHint } from '../_logics/types'
+import { addLine, changeQty, normalizeStoredCart, removeLine, sanitizeQty, setQty, stockIssues } from '../_logics/cart'
+import { buildSalePayload, submitSale, type SaleReceipt } from '../_logics/checkout'
+import { looksLikeBarcode, scoreProduct } from '../_logics/scanner/text-match'
+import { primeFeedback } from '../_logics/scanner/feedback'
+import { RECOGNITION_CONFIG } from '../_logics/scanner/config'
+import { RecognitionError } from '../_logics/scanner/recognition'
+import { useRecognitionRequests } from '../_logics/scanner/use-recognition-requests'
+import ProductScanner from './scanner/product-scanner'
+import { useRecognitionFlow } from './scanner/use-recognition-flow'
 
 // ── Pricing helpers ─────────────────────────────────────────────────────────
 
@@ -192,7 +167,14 @@ const ProductCard = ({
           {product.units.length} units
         </span>
       )}
-      <div className="w-full aspect-square rounded-xl bg-gray-50 mb-2.5 flex items-center justify-center text-2xl">🛒</div>
+      <div className="w-full aspect-square rounded-xl bg-gray-50 mb-2.5 flex items-center justify-center text-2xl overflow-hidden">
+        {product.imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element -- tenant-hosted catalog images
+          <img src={product.imageUrl} alt={product.name} loading="lazy" className="w-full h-full object-cover" />
+        ) : (
+          '🛒'
+        )}
+      </div>
       <div>
         <p className="text-stone-700 font-semibold leading-tight line-clamp-2 text-xs">{product.name}</p>
         <p className="text-endeavour font-bold mt-1 text-sm">
@@ -286,11 +268,12 @@ const QuickAccessStrip = ({ quickAccess, cart, customerType, onAddToCart, onOpen
 
 const Main = () => {
   const request = useAxios()
+  const { data: session } = useSession()
 
   const [cart, setCart] = useState<CartItem[]>(() => {
     try {
       const saved = localStorage.getItem('bytewave-pos-cart')
-      return saved ? JSON.parse(saved) : []
+      return saved ? normalizeStoredCart(JSON.parse(saved)) : []
     } catch {
       return []
     }
@@ -319,6 +302,10 @@ const Main = () => {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [cartSheetOpen, setCartSheetOpen] = useState(false)
   const [unitPickerProduct, setUnitPickerProduct] = useState<Product | null>(null)
+  const [scannerOpen, setScannerOpen] = useState(false)
+  // Checkout feedback: server error (cart kept) or the server's receipt.
+  const [checkoutError, setCheckoutError] = useState<{ message: string; productId?: string } | null>(null)
+  const [receipt, setReceipt] = useState<SaleReceipt | null>(null)
 
   // Refs for alphabetic scroll
   const gridScrollRef = useRef<HTMLDivElement>(null)
@@ -369,28 +356,7 @@ const Main = () => {
 
   const { data: rawProducts, isLoading } = useFetchData('pos-products', ProductServices.FetchAll({ limit: 1000, offset: 0 }))
 
-  const products: Product[] = useMemo(() => {
-    const list = (rawProducts as any[] | undefined) ?? []
-    return list.map(
-      (p: any): Product => ({
-        id: String(p.id),
-        name: p.name,
-        category: p.category ?? 'Other',
-        units: (p.units ?? []).map(
-          (u: any): SellingUnit => ({
-            unit: String(u.id),
-            label: u.unitName ?? '—',
-            retailPrice: u.retailPrice ?? 0,
-            wholesalePrice: u.wholesalePrice ?? 0,
-            pricingRule: u.pricingRule ?? 'flat',
-            boxSize: u.boxSize ?? undefined,
-            boxRetailPrice: u.boxRetailPrice ?? undefined,
-            bulkThreshold: u.bulkThreshold ?? undefined,
-          })
-        ),
-      })
-    )
-  }, [rawProducts])
+  const products: Product[] = useMemo(() => ((rawProducts as any[] | undefined) ?? []).map(mapApiProduct), [rawProducts])
 
   const stockMap = useMemo(() => {
     const map: Record<string, number> = {}
@@ -400,8 +366,9 @@ const Main = () => {
     return map
   }, [rawProducts])
 
-  const getAvailableStock = (productId: string) => stockMap[productId] ?? Infinity
-  const isOverStock = (productId: string, qty: number) => qty > getAvailableStock(productId)
+  // Advisory stock check in base units (quantity × baseQuantity, summed per
+  // product across Box/Bottle lines). The server is the authority (409).
+  const overStock = useMemo(() => stockIssues(cart, stockMap), [cart, stockMap])
 
   const categories = useMemo(() => ['All', ...Array.from(new Set(products.map((p) => p.category)))], [products])
 
@@ -415,13 +382,15 @@ const Main = () => {
   }, [products, freqMap, search, activeCategory])
 
   // ── Fuzzy search results (used when search is active) ────────────────────
+  // scoreProduct covers name/brand/SKU/barcode/category and tolerates typos;
+  // fuzzyScore keeps the in-order-letters shorthand ("hpm" → "Happy Man").
   const searchResults = useMemo(() => {
     if (!search.trim()) return []
     const base = activeCategory === 'All' ? products : products.filter((p) => p.category === activeCategory)
     return base
-      .map((p) => ({ p, score: fuzzyScore(p.name, search) }))
-      .filter((x) => x.score > 0)
-      .sort((a, b) => b.score - a.score)
+      .map((p) => ({ p, score: scoreProduct(p, search), seq: fuzzyScore(p.name, search) }))
+      .filter((x) => x.score >= 0.55 || x.seq > 0)
+      .sort((a, b) => b.score - a.score || b.seq - a.seq)
       .map((x) => x.p)
   }, [products, search, activeCategory])
 
@@ -454,28 +423,8 @@ const Main = () => {
   }
 
   const addToCart = (product: Product, unit: SellingUnit) => {
-    const cartId = `${product.id}_${unit.unit}`
-    setCart((prev) => {
-      const existing = prev.find((i) => i.cartId === cartId)
-      if (existing) return prev.map((i) => (i.cartId === cartId ? { ...i, quantity: i.quantity + 1 } : i))
-      return [
-        ...prev,
-        {
-          cartId,
-          productId: product.id,
-          name: product.name,
-          unitLabel: unit.label,
-          selectedUnit: unit.unit,
-          retailPrice: unit.retailPrice,
-          wholesalePrice: unit.wholesalePrice,
-          pricingRule: unit.pricingRule,
-          boxSize: unit.boxSize,
-          boxRetailPrice: unit.boxRetailPrice,
-          bulkThreshold: unit.bulkThreshold,
-          quantity: 1,
-        },
-      ]
-    })
+    setCart((prev) => addLine(prev, product, unit))
+    setCheckoutError(null)
     // Bump frequency counter
     setFreqMap((prev) => {
       const next = { ...prev, [product.id]: (prev[product.id] ?? 0) + 1 }
@@ -488,11 +437,9 @@ const Main = () => {
     setUnitPickerProduct(null)
   }
 
-  const updateQty = (cartId: string, delta: number) => {
-    setCart((prev) => prev.map((i) => (i.cartId === cartId ? { ...i, quantity: i.quantity + delta } : i)).filter((i) => i.quantity > 0))
-  }
-
-  const removeFromCart = (cartId: string) => setCart((prev) => prev.filter((i) => i.cartId !== cartId))
+  const updateQty = (cartId: string, delta: number) => setCart((prev) => changeQty(prev, cartId, delta))
+  const setLineQty = (cartId: string, qty: number) => setCart((prev) => setQty(prev, cartId, qty))
+  const removeFromCart = (cartId: string) => setCart((prev) => removeLine(prev, cartId))
 
   const clearCart = () => {
     setCart([])
@@ -505,26 +452,39 @@ const Main = () => {
   const subtotal = cart.reduce((sum, i) => sum + getLineTotal(i), 0)
   const total = subtotal
   const cartCount = cart.reduce((s, i) => s + i.quantity, 0)
-  const hasOverStock = cart.some((i) => isOverStock(i.productId, i.quantity))
-  const canCharge = cart.length > 0 && !!warehouseId && !isSubmitting && !hasOverStock
+  const hasOverStock = Object.keys(overStock).length > 0
+  // Stock warnings are advisory — the server re-checks atomically and answers 409.
+  const canCharge = cart.length > 0 && !!warehouseId && !isSubmitting
 
   const handleCharge = async (paymentType: 'momo' | 'cash') => {
     if (!canCharge) return
     setIsSubmitting(true)
-    try {
-      await request(
-        SalesServices.Create({
-          paymentType,
-          warehouseId,
-          items: cart.map((i) => ({ productUnitId: Number(i.selectedUnit), quantity: i.quantity })),
-        })
-      )
+    setCheckoutError(null)
+    // No prices are sent: the server prices the sale from the database.
+    const result = await submitSale(request, buildSalePayload(cart, { paymentType, warehouseId, customerType, user: session?.user }))
+    setIsSubmitting(false)
+    if (result.ok) {
       clearCart()
       setCartSheetOpen(false)
-    } catch (err: any) {
-      console.error('Sale failed:', err)
-    } finally {
-      setIsSubmitting(false)
+      setReceipt(result.receipt)
+    } else {
+      // 409 / 422 / network: keep the cart so the cashier can adjust.
+      setCheckoutError({ message: result.message, productId: result.kind === 'stock' ? result.productId : undefined })
+    }
+  }
+
+  // ── Keyboard-wedge / typed barcode → exact barcode lookup ────────────────
+  const barcodeRequests = useRecognitionRequests(RECOGNITION_CONFIG)
+  const barcodeFlow = useRecognitionFlow({ products, customerType, onAdd: addToCart, onUndo: (cartId) => updateQty(cartId, -1) })
+  const lookupTypedBarcode = async (code: string) => {
+    try {
+      const result = await barcodeRequests.lookup(code)
+      if (result) {
+        setSearch('')
+        barcodeFlow.handleResult(result)
+      }
+    } catch (err) {
+      toast.error(err instanceof RecognitionError ? err.message : 'Barcode lookup failed.')
     }
   }
 
@@ -578,14 +538,25 @@ const Main = () => {
               const lineTotal = getLineTotal(item)
               const atHalfBox = isPieceAtHalfBox(item)
               const atBulkWholesale = isPieceAtBulkWholesale(item)
-              const available = getAvailableStock(item.productId)
-              const overStock = isOverStock(item.productId, item.quantity)
+              const issue = overStock[item.productId]
+              const conflict = checkoutError?.productId === item.productId
+              const pcs = piecesHint(item.baseQuantity)
               return (
-                <div key={item.cartId} className={cn('flex items-center gap-2.5 py-3', overStock && 'bg-red-50 -mx-2 px-2 rounded-xl')}>
+                <div
+                  key={item.cartId}
+                  className={cn(
+                    'flex items-center gap-2.5 py-3',
+                    (issue || conflict) && 'bg-red-50 -mx-2 px-2 rounded-xl',
+                    conflict && 'ring-1 ring-red-300'
+                  )}
+                >
                   <div className="flex-1 min-w-0">
                     <p className="text-stone-700 text-sm font-semibold truncate">{item.name}</p>
                     <div className="flex items-center gap-1 mt-0.5 flex-wrap">
-                      <p className="text-gray-400 text-xs">{item.unitLabel}</p>
+                      <p className="text-gray-400 text-xs">
+                        {item.unitLabel}
+                        {pcs ? ` (${pcs})` : ''}
+                      </p>
                       {atHalfBox && (
                         <span className="text-[9px] bg-blue-100 text-blue-600 rounded-md px-1.5 py-0.5 font-medium whitespace-nowrap">
                           ½ box
@@ -595,9 +566,9 @@ const Main = () => {
                       {(atBulkWholesale || (item.pricingRule === 'flat' && customerType === 'wholesale')) && (
                         <span className="text-[9px] bg-amber-100 text-amber-600 rounded-md px-1.5 py-0.5 font-medium">wholesale</span>
                       )}
-                      {overStock && (
+                      {issue && (
                         <span className="text-[9px] bg-red-100 text-red-600 rounded-md px-1.5 py-0.5 font-medium whitespace-nowrap">
-                          ⚠ only {available} left
+                          ⚠ needs {issue.need} pcs, {issue.have} in stock
                         </span>
                       )}
                     </div>
@@ -609,7 +580,21 @@ const Main = () => {
                     >
                       <Minus className="h-3 w-3" />
                     </button>
-                    <span className="text-stone-700 w-6 text-center text-sm font-bold">{item.quantity}</span>
+                    <input
+                      // Remount on external changes (+/−, scanner) so the field shows the new value.
+                      key={item.quantity}
+                      defaultValue={item.quantity}
+                      inputMode="numeric"
+                      aria-label={`Quantity of ${item.name} ${item.unitLabel}`}
+                      onFocus={(e) => e.currentTarget.select()}
+                      onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+                      onBlur={(e) => {
+                        const qty = sanitizeQty(e.currentTarget.value)
+                        if (qty === null) e.currentTarget.value = String(item.quantity)
+                        else if (qty !== item.quantity) setLineQty(item.cartId, qty)
+                      }}
+                      className="text-stone-700 w-9 h-7 text-center text-base md:text-sm font-bold rounded-md border border-transparent hover:border-gray-200 focus:border-endeavour focus:outline-none bg-transparent"
+                    />
                     <button
                       onClick={() => updateQty(item.cartId, +1)}
                       className="w-7 h-7 rounded-full border border-gray-200 flex items-center justify-center text-gray-400 hover:border-endeavour hover:text-endeavour active:scale-90 transition-all"
@@ -632,10 +617,16 @@ const Main = () => {
       </div>
 
       <div className="border-t border-gray-100 px-4 py-4 flex flex-col gap-2 flex-shrink-0">
-        {hasOverStock && (
-          <div className="flex items-start gap-1.5 px-3 py-2 rounded-xl bg-red-50 border border-red-200 mb-1">
+        {checkoutError && (
+          <div role="alert" className="flex items-start gap-1.5 px-3 py-2 rounded-xl bg-red-50 border border-red-200 mb-1">
             <span className="text-red-500 text-xs">⚠</span>
-            <p className="text-xs text-red-600">Some items exceed available stock. Adjust quantities before charging.</p>
+            <p className="text-xs text-red-600">{checkoutError.message}</p>
+          </div>
+        )}
+        {hasOverStock && !checkoutError && (
+          <div className="flex items-start gap-1.5 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 mb-1">
+            <span className="text-amber-500 text-xs">⚠</span>
+            <p className="text-xs text-amber-700">Some items may exceed available stock. The sale will be checked when you charge.</p>
           </div>
         )}
         <div className="flex justify-between text-sm text-gray-500">
@@ -643,7 +634,9 @@ const Main = () => {
           <span>₵{subtotal.toFixed(2)}</span>
         </div>
         <div className="flex justify-between font-bold text-stone-700 text-base border-t border-gray-100 pt-2">
-          <span>Total</span>
+          <span>
+            Total <span className="text-[10px] font-normal text-gray-400">(estimate)</span>
+          </span>
           <span>₵{total.toFixed(2)}</span>
         </div>
         <div className="flex gap-2 mt-1">
@@ -686,22 +679,42 @@ const Main = () => {
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
           {/* Search + category tabs */}
           <div className="flex-shrink-0 pb-3 space-y-2.5">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search products…"
-                className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-base md:text-sm text-stone-600 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-endeavour bg-white"
-              />
-              {search && (
-                <button
-                  onClick={() => setSearch('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              )}
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  // Hardware (keyboard-wedge) scanners type the code and press Enter.
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && looksLikeBarcode(search)) {
+                      e.preventDefault()
+                      void lookupTypedBarcode(search.trim())
+                    }
+                  }}
+                  placeholder="Search name, brand, SKU or scan a barcode…"
+                  className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-base md:text-sm text-stone-600 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-endeavour bg-white"
+                />
+                {search && (
+                  <button
+                    onClick={() => setSearch('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+              <button
+                onClick={() => {
+                  primeFeedback()
+                  setScannerOpen(true)
+                }}
+                className="flex-shrink-0 flex items-center gap-2 px-4 rounded-xl bg-endeavour text-white text-sm font-semibold hover:bg-veniceBlue active:scale-[0.97] transition-all"
+                aria-label="Scan products with camera"
+              >
+                <ScanLine className="h-4 w-4" />
+                <span>Scan</span>
+              </button>
             </div>
             <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
               {categories.map((cat: string) => (
@@ -965,6 +978,83 @@ const Main = () => {
           </div>
         </SheetContent>
       </Sheet>
+
+      <ToastTemplate position="top-center" className="z-[70]" />
+
+      {/* ── Barcode typed/scanned into the search box: prompts ── */}
+      {(barcodeFlow.prompt || barcodeRequests.busy) && (
+        <div className="fixed inset-0 z-50">
+          <div className="absolute inset-0 bg-black/40" onClick={barcodeFlow.closePrompt} />
+          {barcodeRequests.busy && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="flex items-center gap-2 bg-white rounded-full px-4 py-2 shadow-lg text-sm text-stone-700">
+                <Barcode className="h-4 w-4 animate-pulse" /> Looking up barcode…
+              </div>
+            </div>
+          )}
+          <div className="absolute inset-0 md:left-1/2 md:-translate-x-1/2 md:w-[480px] pointer-events-none [&>*]:pointer-events-auto">
+            {barcodeFlow.prompts}
+          </div>
+        </div>
+      )}
+
+      {/* ── Receipt: the server's prices and total are final ── */}
+      {receipt && (
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setReceipt(null)} />
+          <div
+            role="dialog"
+            aria-label="Sale receipt"
+            className="relative bg-white w-full md:w-[420px] rounded-t-3xl md:rounded-3xl p-5 max-h-[85dvh] flex flex-col"
+          >
+            <div className="flex items-center gap-2 mb-3">
+              <CheckCircle2 className="h-5 w-5 text-green-600" />
+              <p className="font-bold text-stone-800">Sale recorded</p>
+              <span className="ml-auto text-xs text-gray-400 capitalize">{receipt.paymentType}</span>
+            </div>
+            <div className="flex-1 overflow-y-auto divide-y divide-gray-50">
+              {receipt.items.map((i) => (
+                <div key={i.productUnitId} className="flex items-center gap-2 py-2 text-sm">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-stone-700 truncate">{i.productName}</p>
+                    <p className="text-xs text-gray-400">
+                      {i.unitName} · {i.quantity} × ₵{i.unitPrice.toFixed(2)}
+                    </p>
+                  </div>
+                  <p className="font-bold text-stone-700">₵{i.subtotal.toFixed(2)}</p>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-between font-bold text-stone-800 text-lg border-t border-gray-100 pt-3 mt-2">
+              <span>Total</span>
+              <span>₵{receipt.totalAmount.toFixed(2)}</span>
+            </div>
+            <button onClick={() => setReceipt(null)} className="mt-4 h-12 rounded-2xl bg-endeavour text-white font-semibold">
+              New sale
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Camera product scanner ── */}
+      <ProductScanner
+        open={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        products={products}
+        cart={cart}
+        customerType={customerType}
+        cartTotal={total}
+        onAdd={addToCart}
+        onUpdateQty={updateQty}
+        onReviewCart={() => {
+          setScannerOpen(false)
+          if (!window.matchMedia('(min-width: 768px)').matches && cart.length > 0) {
+            setCartSheetOpen(true)
+            setCartHeight(95)
+            liveH.current = 95
+          }
+        }}
+      />
     </div>
   )
 }

@@ -1,0 +1,110 @@
+// Request bodies for the product form. Kept pure so the field mapping
+// (brand/sku/imageUrl/aliases, per-unit baseQuantity/barcodes) is testable.
+
+import { apiErrorMessage, apiStatus } from '@/lib/api-error'
+import type { PricingRule } from '../../../pos/_logics/types'
+
+// The server's enum (flat | half-box | bulk-wholesale) — one definition, shared with the POS.
+export type PricingRuleValue = PricingRule
+
+export type UnitFormValues = {
+  unitId: number
+  retailPrice: number
+  wholesalePrice: number
+  pricingRule: PricingRuleValue
+  baseQuantity?: number
+  boxSize?: number
+  boxRetailPrice?: number
+  bulkThreshold?: number
+  barcodes?: string[]
+}
+
+export type ProductFormValues = {
+  name: string
+  description?: string
+  category: string
+  purchasePrice: number
+  minQuantity?: number
+  brand?: string
+  sku?: string
+  imageUrl?: string
+  aliases?: string[]
+  units: UnitFormValues[]
+  stock: { warehouseId: number; quantity: number }[]
+}
+
+export const resolveRule = (u: UnitFormValues): PricingRuleValue =>
+  u.pricingRule !== 'flat' ? u.pricingRule : u.bulkThreshold && u.bulkThreshold > 0 ? 'bulk-wholesale' : 'flat'
+
+const clean = (v: string | undefined) => v?.trim() || undefined
+const cleanList = (list: string[] | undefined) => Array.from(new Set((list ?? []).map((x) => x.trim()).filter(Boolean)))
+const baseQty = (v: number | undefined) => (v && Number.isInteger(v) && v >= 1 ? v : 1)
+
+export const buildUnitPayload = (u: UnitFormValues) => ({
+  unitId: u.unitId,
+  retailPrice: u.retailPrice,
+  wholesalePrice: u.wholesalePrice,
+  pricingRule: resolveRule(u),
+  baseQuantity: baseQty(u.baseQuantity),
+  boxSize: u.boxSize,
+  boxRetailPrice: u.boxRetailPrice,
+  bulkThreshold: u.bulkThreshold,
+})
+
+// POST /products — aliases and per-unit barcodes are only accepted on create.
+export const buildCreateProductPayload = (data: ProductFormValues) => {
+  const aliases = cleanList(data.aliases)
+  return {
+    name: data.name,
+    description: data.description,
+    category: data.category,
+    purchasePrice: data.purchasePrice,
+    minQuantity: data.minQuantity,
+    brand: clean(data.brand),
+    sku: clean(data.sku),
+    imageUrl: clean(data.imageUrl),
+    ...(aliases.length > 0 ? { aliases } : {}),
+    units: data.units.map((u) => {
+      const barcodes = cleanList(u.barcodes)
+      return { ...buildUnitPayload(u), ...(barcodes.length > 0 ? { barcodes } : {}) }
+    }),
+    stock: data.stock,
+  }
+}
+
+// PUT /products/:id — brand/sku/imageUrl are sent only when changed (omitted =
+// unchanged on the server); clearing the SKU sends "". Aliases and barcodes
+// are never sent here — they have their own endpoints.
+type EditableText = Pick<ProductFormValues, 'brand' | 'sku' | 'imageUrl'>
+
+export const buildUpdateProductPayload = (data: ProductFormValues, initial: Partial<EditableText> = {}) => {
+  const changed: Partial<Record<keyof EditableText, string>> = {}
+  for (const key of ['brand', 'sku', 'imageUrl'] as const) {
+    const next = data[key]?.trim() ?? ''
+    if (next !== (initial[key]?.trim() ?? '')) changed[key] = next
+  }
+  return {
+    name: data.name,
+    description: data.description,
+    category: data.category,
+    purchasePrice: data.purchasePrice,
+    minQuantity: data.minQuantity,
+    ...changed,
+  }
+}
+
+export const SKU_IN_USE = 'SKU already in use'
+
+// 409 is the planned response. Until it ships the server answers 500 with a
+// raw unique-constraint error — remove the 500 branch once 409 is live.
+export const isDuplicateSkuError = (err: any): boolean => {
+  const status = apiStatus(err)
+  if (status === 409) return true
+  if (status === 500) {
+    const msg = apiErrorMessage(err, '')
+    return /sku/i.test(msg) || (/unique|duplicate/i.test(msg) && /constraint|key/i.test(msg))
+  }
+  return false
+}
+
+export const productSaveErrorMessage = (err: any) => (isDuplicateSkuError(err) ? SKU_IN_USE : apiErrorMessage(err, 'Something went wrong'))

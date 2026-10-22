@@ -1,7 +1,7 @@
 'use client'
 
 import * as z from 'zod'
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -16,6 +16,7 @@ import { redirectPathForAppType } from '@/lib/tenant'
 import ToastTemplate from '@/components/templates/toast'
 import InputsTemplate from '@/components/templates/inputs'
 import { CheckboxTemplate } from '@/components/templates/checkbox'
+import { logoutReasonFromSearch } from '@/lib/force-logout'
 
 interface PassStateTypes {
   showPassword: 'text' | 'password'
@@ -36,6 +37,10 @@ export default function SignInForm() {
   const locale = (params?.locale as string) || 'en'
 
   const [error, setError] = useState('')
+  // Why the user was signed out (e.g. tenant-bound tokens after an update).
+  // Read from window instead of useSearchParams to keep the page statically renderable.
+  const [notice, setNotice] = useState<string | null>(null)
+  useEffect(() => setNotice(logoutReasonFromSearch(window.location.search)), [])
   const [states, setStates] = useState<PassStateTypes>({
     showPassword: 'password',
     isLoading: false,
@@ -81,6 +86,11 @@ export default function SignInForm() {
         <div className="w-full flex justify-center">
           <div className="grid items-center gap-1.5 mt-40 ml-6 w-[500px]">
             <div className="bytewave-heading font-mulish-regular text-gray-700 mb-4">{signInText('logIn')}</div>
+            {notice && !error && (
+              <p className="text-center bytewave-paragraph text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 mb-2">
+                {notice}
+              </p>
+            )}
             {error && <p className="text-center bytewave-sub-heading text-red-500 font-mulish-regular italic">{error}</p>}
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)}>

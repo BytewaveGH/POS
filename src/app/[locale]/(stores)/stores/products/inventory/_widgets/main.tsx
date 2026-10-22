@@ -23,6 +23,19 @@ import { SalesServices } from '../../../pos/_logics/services'
 import { AlertTriangle, Package, FileText, ShoppingCart, Boxes, ArrowLeftRight } from 'lucide-react'
 import { useSession } from 'next-auth/react'
 
+// Stock is stored in base units. For display, also express it in the
+// product's largest multi-piece unit: 27 → "≈ 2 Box".
+const largestPack = (units: any[] | undefined) =>
+  (units ?? []).reduce<{ name: string; size: number } | null>((best, u) => {
+    const size = Number(u?.baseQuantity) || 1
+    return size > 1 && size > (best?.size ?? 1) ? { name: u.unitName ?? 'pack', size } : best
+  }, null)
+
+const packHint = (qty: number, units: any[] | undefined) => {
+  const pack = largestPack(units)
+  return pack ? `≈ ${Math.floor(qty / pack.size)} ${pack.name}` : ''
+}
+
 // ── Custom pagination controls ──────────────────────────────────────────────
 const Pagination = ({
   page,
@@ -267,6 +280,7 @@ const Main = () => {
         category: p.category,
         minQuantity: p.minQuantity,
         isShortage: p.isShortage,
+        units: p.units,
       }))
     )
   }, [allProductsForStock])
@@ -350,6 +364,7 @@ const Main = () => {
         ...p,
         _unitId: u.id,
         unitName: u.unitName,
+        baseQuantity: u.baseQuantity ?? 1,
         retailPrice: u.retailPrice,
         wholesalePrice: u.wholesalePrice,
         pricingRule: u.pricingRule,
@@ -359,7 +374,21 @@ const Main = () => {
 
   const productCols = useMemo(
     () => [
-      { field: 'name', headerName: 'Product Name', flex: 1, minWidth: 140 },
+      {
+        field: 'name',
+        headerName: 'Product Name',
+        flex: 1,
+        minWidth: 160,
+        cellRenderer: ({ data: row, value }: any) => (
+          <div className="flex items-center gap-2 h-full">
+            {row?.imageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element -- tenant-hosted catalog image
+              <img src={row.imageUrl} alt="" loading="lazy" className="w-7 h-7 rounded object-cover flex-shrink-0" />
+            ) : null}
+            <span className="truncate">{value}</span>
+          </div>
+        ),
+      },
       { field: 'category', headerName: 'Category', width: 120 },
       {
         field: 'purchasePrice',
@@ -367,7 +396,12 @@ const Main = () => {
         width: 110,
         valueFormatter: (p: any) => fmt(p.value),
       },
-      { field: 'unitName', headerName: 'Unit', width: 130 },
+      {
+        field: 'unitName',
+        headerName: 'Unit',
+        width: 130,
+        valueFormatter: (p: any) => (p.data?.baseQuantity > 1 ? `${p.value} (${p.data.baseQuantity} pcs)` : p.value),
+      },
       {
         field: 'retailPrice',
         headerName: 'Retail Price',
@@ -389,7 +423,14 @@ const Main = () => {
         filter: false,
         cellRenderer: (p: any) => {
           const stock: any[] = p.data?.stock ?? []
-          return stock.map((s: any) => `${s.warehouseName}: ${Number(s.quantity).toLocaleString()}`).join(' · ') || '—'
+          return (
+            stock
+              .map((s: any) => {
+                const hint = packHint(Number(s.quantity), p.data?.units)
+                return `${s.warehouseName}: ${Number(s.quantity).toLocaleString()} pcs${hint ? ` (${hint})` : ''}`
+              })
+              .join(' · ') || '—'
+          )
         },
       },
       {
@@ -590,8 +631,12 @@ const Main = () => {
       { field: 'warehouseName', headerName: 'Warehouse', width: 130 },
       {
         field: 'quantity',
-        headerName: 'Qty',
-        width: 80,
+        headerName: 'Qty (base units)',
+        width: 150,
+        valueFormatter: (p: any) => {
+          const hint = packHint(Number(p.value), p.data?.units)
+          return `${Number(p.value).toLocaleString()}${hint ? ` (${hint})` : ''}`
+        },
         cellStyle: (p: any) => ({
           color: p.value === 0 ? '#dc2626' : p.data?.isShortage ? '#d97706' : '#16a34a',
           fontWeight: 600,
