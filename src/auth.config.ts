@@ -1,10 +1,11 @@
-import type { NextAuthConfig } from 'next-auth'
+import { CredentialsSignin, type NextAuthConfig } from 'next-auth'
 import Credentials from 'next-auth/providers/credentials'
 import type { ExtendedUser } from './types/next-auth'
 import { SignInFormSchema } from './types/schemas/schema'
 import { IAuth } from './types/interfaces'
 import { classifyHost } from './lib/tenant'
 import { lookupTenantAppType, normalizeAppType } from './lib/app-type'
+import { LOGIN_CODES, encodeBusinessChoice, type OwnerBusiness } from './lib/owner-login'
 import * as z from 'zod'
 
 const EmployeeSignInSchema = z.object({
@@ -31,26 +32,41 @@ const whichTenant = (req: Request): string => {
   return slug ?? 'admin'
 }
 
+// Errors surfaced to signIn() as `code` (see src/lib/owner-login.ts).
+class OwnerLoginError extends CredentialsSignin {
+  constructor(code: string) {
+    super()
+    this.code = code
+  }
+}
+
+type AdminLoginResult =
+  | { ok: true; data: IAuth.Response['data'] & { tenant: string } }
+  | { ok: false; status: number; businesses?: OwnerBusiness[] }
+
+// POST /auth/admin-login. `tenant` (a business slug) is sent only once the
+// owner has picked a business after a 409; it also becomes the tenant header so
+// the two never disagree.
 async function adminLoginRequest(
-  body: { email: string; password: string },
-  tenant: string
-): Promise<(IAuth.Response['data'] & { tenant: string }) | null> {
+  body: { email: string; password: string; tenant?: string },
+  hostTenant: string
+): Promise<AdminLoginResult> {
   try {
     const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/admin-login`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Tenant-Domain': tenant || 'admin' },
+      headers: { 'Content-Type': 'application/json', 'X-Tenant-Domain': body.tenant || hostTenant || 'admin' },
       body: JSON.stringify(body),
     })
+    const json = await response.json().catch(() => null)
     if (!response.ok) {
-      const text = await response.text()
-      console.error('[auth] admin login error', response.status, text)
-      return null
+      if (response.status !== 401) console.error('[auth] admin login error', response.status, json?.error ?? '')
+      const businesses = Array.isArray(json?.data?.businesses) ? (json.data.businesses as OwnerBusiness[]) : undefined
+      return { ok: false, status: response.status, businesses }
     }
-    const data: IAuth.Response = await response.json()
-    return { ...data.data, tenant }
+    return { ok: true, data: { ...(json as IAuth.Response).data, tenant: body.tenant || hostTenant } }
   } catch (err) {
     console.error('[auth] adminLoginRequest failed:', err)
-    return null
+    return { ok: false, status: 0 }
   }
 }
 
@@ -127,13 +143,21 @@ export default {
       credentials: {
         email: { label: 'Email', type: 'email' },
         password: { label: 'Password', type: 'password' },
+        // Business slug — only after the owner picked one from a 409.
+        tenant: { label: 'Business', type: 'text' },
       },
       async authorize(credentials, req) {
         const parsed = SignInFormSchema.safeParse(credentials)
         if (!parsed.success) return null
-        const tenant = whichTenant(req as Request)
-        const res = await adminLoginRequest(parsed.data, tenant)
-        if (!res) return null
+        const chosen = typeof credentials?.tenant === 'string' && credentials.tenant.trim() ? credentials.tenant.trim() : undefined
+        const result = await adminLoginRequest({ ...parsed.data, ...(chosen ? { tenant: chosen } : {}) }, whichTenant(req as Request))
+        if (!result.ok) {
+          if (result.status === 409 && result.businesses?.length) throw new OwnerLoginError(encodeBusinessChoice(result.businesses))
+          if (result.status === 401) throw new OwnerLoginError(LOGIN_CODES.invalid)
+          if (result.status === 403) throw new OwnerLoginError(LOGIN_CODES.suspended)
+          throw new OwnerLoginError(LOGIN_CODES.unavailable)
+        }
+        const res = result.data
         return {
           id: String(res.user.id),
           userId: res.user.id,

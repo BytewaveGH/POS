@@ -5,7 +5,7 @@
 // - Employees: /employees/login doesn't return it, so it comes from the tenant
 //   lookup (GET /platform/tenants/lookup) — never inferred from anything else.
 
-export const APP_TYPES = ['retail', 'eatery', 'amusement'] as const
+export const APP_TYPES = ['retail', 'eatery', 'amusement', 'real-estate'] as const
 export type AppType = (typeof APP_TYPES)[number]
 
 const isAppType = (v: unknown): v is AppType => APP_TYPES.includes(v as AppType)

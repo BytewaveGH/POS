@@ -1,14 +1,17 @@
 import { Providers } from '@/components/generals/providers'
 import type { Metadata } from 'next'
-import { Mulish } from 'next/font/google'
+import localFont from 'next/font/local'
 import { headers } from 'next/headers'
 import { classifyHost } from '@/lib/tenant'
 import './globals.css'
 // import { Providers } from '@/components/providers'
 
-const mulish = Mulish({
-  subsets: ['latin'],
-  weight: ['200', '300', '400', '600', '700', '800', '900'],
+// Self-hosted (variable font, weights 200–900, Latin; from @fontsource-variable/mulish,
+// SIL OFL 1.1) so builds don't depend on reaching Google Fonts.
+const mulish = localFont({
+  src: './fonts/MulishVariable.woff2',
+  weight: '200 900',
+  style: 'normal',
   variable: '--font-mulish',
   display: 'swap',
 })

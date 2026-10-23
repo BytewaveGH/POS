@@ -159,12 +159,129 @@ Open points from the integration — resolved:
 - **`employeeId` on `POST /sales`** — the server doesn't derive it from the token, so the POS now sends the signed-in employee's id (admins send none). Interim; built in one place (`saleAttribution` in `pos/_logics/checkout.ts`) so it's easy to drop if the backend moves to token-based attribution.
 - **`appType`** — admins are routed by `user.appType` from admin-login/refresh (fallback `retail` + warning); employees by the tenant lookup's `appType`, since `/employees/login` doesn't return it.
 
+## 6. Real estate vertical (new) — frontend built, backend needed
+
+A new `appType: "real-estate"` for landlords and property managers: compound houses (rooms around a shared yard), apartment blocks, single-family homes, commercial units, and short-stay / Airbnb units. The frontend lives under `/real-estate` and is fully built. Until these endpoints exist it runs on browser-only storage (`NEXT_PUBLIC_REAL_ESTATE_DATA_SOURCE=local`); switching that to `api` points every screen at the contract below with no other changes.
+
+Conventions match the rest of the API: tenant-scoped (bearer + `X-Tenant-Domain`, tenant taken from the token like `/pos/*`), trailing-slash collection routes, `{ status, data }` envelope, numeric ids, dates as `YYYY-MM-DD` strings, money as numbers in GHS.
+
+### 6.1 `appType`
+
+Add `real-estate` to the `appType` enum everywhere it appears: tenant records, `POST/PATCH /platform/tenants`, `GET /platform/tenants/lookup`, and `user.appType` on admin-login / refresh. The super-admin "register app" form already offers it.
+
+### 6.2 Endpoints
+
+Eight resources, each with the same four routes:
+
+| Resource | Base path |
+|---|---|
+| Room types | `/real-estate/unit-types/` |
+| Properties | `/real-estate/properties/` |
+| Units | `/real-estate/units/` |
+| Tenants (renters, not SaaS tenants) | `/real-estate/tenants/` |
+| Leases | `/real-estate/leases/` |
+| Rent payments | `/real-estate/payments/` |
+| Short-stay bookings | `/real-estate/bookings/` |
+| Maintenance requests | `/real-estate/maintenance/` |
+
+- `GET <base>` → all records for the tenant (`data: [...]`). Portfolios are small; no pagination needed for v1.
+- `POST <base>` → create; body = the object without `id`; returns the created object.
+- `PUT <base>:id` → partial update (omitted fields unchanged); returns the updated object.
+- `DELETE <base>:id`.
+
+### 6.3 Objects
+
+```
+Property    { id, name, type, address, city, region?, description?, coverImageUrl?, createdAt? }
+            type: "compound-house" | "apartment-building" | "short-stay" | "single-family" | "commercial" | "mixed-use"
+
+UnitType    { id, name, description?, bedrooms, livingRooms, facilities, amenities,
+              rentalMode, defaultMonthlyRent, defaultNightlyRate, maxGuests }
+            Owner-defined room types, shared by all the tenant's properties — e.g.
+            "Single room (shared facilities)", "Chamber & hall (self-contained)".
+            facilities: { bathroom, toilet, kitchen, electricity, water }
+                        each one of "private" | "shared" | "none"
+                        (electricity / water = own vs shared meter)
+            amenities: string[]  free-form extras ("Porch", "Wardrobe", "Ceiling fan"…)
+            livingRooms: halls / sitting rooms (chamber & hall = 1 bedroom + 1 livingRoom)
+            defaultMonthlyRent / defaultNightlyRate / maxGuests: pre-fill new units only
+
+Unit        { id, propertyId, unitTypeId, name, rentalMode, monthlyRent, nightlyRate,
+              maxGuests, availability, notes? }
+            unitTypeId: UnitType.id (nullable only if a type is ever force-removed)
+            monthlyRent / nightlyRate: this unit's own listed price (may differ from its type's default;
+                        a lease carries the agreed rent separately)
+            rentalMode: "long-term" | "short-stay"
+            availability: "available" | "maintenance" | "unlisted"
+            Layout and facilities come from the unit's type — not stored on the unit.
+
+Tenant      { id, fullName, phone, email?, idType?, idNumber?, occupation?,
+              emergencyContactName?, emergencyContactPhone?, notes? }
+            idType: "ghana-card" | "passport" | "voter-id" | "drivers-license" | "other"
+
+Lease       { id, unitId, tenantId, startDate, endDate?, monthlyRent, billingCycleMonths,
+              securityDeposit, terminatedOn?, notes? }
+            billingCycleMonths: months paid at a time — 1, 3, 6, 12 or 24 (Ghana: often 1–2 years advance)
+            terminatedOn: set on move-out
+
+RentPayment { id, leaseId, amount, paidOn, method, reference?, note? }
+            method: "cash" | "momo" | "bank"
+
+Booking     { id, unitId, guestName, guestPhone?, guests, checkIn, checkOut, nightlyRate,
+              cleaningFee, amountPaid, channel, status, notes? }
+            checkOut is the departure day (exclusive night)
+            channel: "direct" | "airbnb" | "booking-com" | "other"
+            status: "inquiry" | "confirmed" | "checked-in" | "checked-out" | "cancelled"
+
+MaintenanceRequest { id, propertyId, unitId?, title, description?, priority, status, cost,
+                     reportedOn, resolvedOn? }
+            priority: "low" | "medium" | "high" | "urgent"
+            status: "open" | "in-progress" | "resolved"
+```
+
+**Not stored, derived by the frontend:** occupancy (from leases and bookings, so it can never disagree with them), rent status / arrears / paid-through date (from the lease plus its payments), and booking totals (nights × rate + cleaning fee). Please don't add stored copies of these. If you later want them server-side, e.g. for SMS reminders, compute them the same way. The frontend's rules are in `src/app/[locale]/(real-estate)/real-estate/_logics/calc.ts`, with tests.
+
+### 6.4 Validation the server should enforce
+
+- **One live lease per unit:** creating or updating a lease that overlaps another non-terminated lease on the same unit → `409`.
+- **No double-booking:** a booking that overlaps another booking on the same unit whose status is not `cancelled` or `checked-out` → `409`. Back-to-back stays (one guest's `checkOut` = the next guest's `checkIn`) are allowed. The frontend checks this too, but the server is the authority.
+- **Room types:**
+  - `name` is unique per tenant, compared case-insensitively → `409`.
+  - Every key in `facilities` must be present, with one of the three values → `422` otherwise.
+  - Deleting a room type that units still use → `409`, with a message like "This room type is used by 7 units". Don't cascade: units must be moved to another type first. The frontend disables delete in that case and mirrors the 409 in local mode.
+  - Updating a type never changes its units' prices. The frontend sends separate unit updates when the owner opts in.
+- **Field rules:**
+  - Leases need `monthlyRent > 0` and `billingCycleMonths ≥ 1`.
+  - Bookings need `checkOut > checkIn`.
+  - All money values must be ≥ 0.
+  - Foreign keys (`propertyId`, `unitId`, `unitTypeId`, `tenantId`, `leaseId`) must belong to the same tenant → `422` otherwise.
+- **Deletes cascade:**
+  - property → its units and maintenance;
+  - unit → its leases and bookings;
+  - lease → its payments.
+
+  The local mode already behaves this way, and the frontend warns before deleting.
+
+### 6.5 Permissions (employees)
+
+Reuse the existing flags, matching the sidebar and the middleware:
+
+| Area | Flag |
+|---|---|
+| Portfolio dashboard | `canViewReports` |
+| Room types, properties and units (write) | `canManageProducts` |
+| Tenants, leases, payments, bookings | `canManageSales` |
+| Maintenance | `canManageOperations` |
+
+Admins have all of them.
+
 ## Priority
 
 1. Tenant CRUD + owner-account creation (§1) — unblocks the whole "register a new business" flow for real, replaces the local JSON-file placeholder entirely.
 2. `appType` on login responses (§2) — small addition, unblocks correct per-vertical routing for every real tenant (currently everyone defaults to "retail").
 3. Platform-level stats/employees (§3) — lower priority, purely additive to the super admin dashboard; the mock data is clearly labeled as such and isn't blocking anything else.
-4. ~~Camera product recognition (§5)~~ — ✅ done; open points resolved, one pending backend change (SKU 409).
-5. ~~Attractions/tickets/bookings/leaderboard (§4)~~ — ✅ done, confirmed live and matching the frontend's contract exactly (2026-08-29).
+4. Real estate vertical (§6) — frontend is live on browser-only storage; these endpoints make it multi-device and durable.
+5. ~~Camera product recognition (§5)~~ — ✅ done; open points resolved, one pending backend change (SKU 409).
+6. ~~Attractions/tickets/bookings/leaderboard (§4)~~ — ✅ done, confirmed live and matching the frontend's contract exactly (2026-08-29).
 
 Happy to hop on a call to go through response shapes/edge cases once you've had a look.

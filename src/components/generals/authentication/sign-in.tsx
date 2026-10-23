@@ -1,7 +1,7 @@
 'use client'
 
 import Image from 'next/image'
-import { UtensilsCrossed, FerrisWheel } from 'lucide-react'
+import { UtensilsCrossed, FerrisWheel, Building2 } from 'lucide-react'
 import SignInForm from './widgets/forms/sign-in'
 import loginImg from '@/assets/images/sel2.jpeg'
 
@@ -12,6 +12,7 @@ interface SignInProps {
 const THEMED_PANELS: Record<string, { gradient: string; icon: React.ElementType; label: string }> = {
   eatery: { gradient: 'from-amber-500 to-orange-600', icon: UtensilsCrossed, label: 'Eatery' },
   amusement: { gradient: 'from-purple-500 to-indigo-600', icon: FerrisWheel, label: 'Amusement Park' },
+  'real-estate': { gradient: 'from-endeavour to-veniceBlue', icon: Building2, label: 'Real Estate' },
 }
 
 export default function SignIn({ appType = 'retail' }: SignInProps) {

@@ -59,6 +59,8 @@ export function redirectPathForAppType(appType: string | undefined | null, local
       return `/${locale}/eatery`
     case 'amusement':
       return `/${locale}/amusement`
+    case 'real-estate':
+      return `/${locale}/real-estate`
     default:
       return `/${locale}/stores/overview`
   }

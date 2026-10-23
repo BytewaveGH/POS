@@ -28,11 +28,24 @@ const EMPLOYEE_ROUTE_PRIORITY = [
   { path: '/stores/users', perm: 'canManageEmployees' },
   { path: '/stores/settings', perm: 'canManageOperations' },
   { path: '/stores/payment-settings', perm: 'canManageOperations' },
+  // Real estate — same permission keys as its sidebar (src/components/generals/layouts/logics/data.tsx).
+  { path: '/real-estate/properties', perm: 'canManageProducts' },
+  { path: '/real-estate/room-types', perm: 'canManageProducts' },
+  { path: '/real-estate/tenants', perm: 'canManageSales' },
+  { path: '/real-estate/rent', perm: 'canManageSales' },
+  { path: '/real-estate/bookings', perm: 'canManageSales' },
+  { path: '/real-estate/maintenance', perm: 'canManageOperations' },
+  { path: '/real-estate', perm: 'canViewReports' },
 ]
 
+// Redirect targets stay inside the employee's own vertical. Retail (and the
+// verticals without their own routes yet) keep using the /stores list.
+const verticalRoot = (appType: unknown) => (appType === 'real-estate' ? '/real-estate' : '/stores')
+
 function firstAllowedPath(user: any, locale: string): string {
+  const root = verticalRoot(user.appType)
   for (const { path, perm } of EMPLOYEE_ROUTE_PRIORITY) {
-    if (user[perm]) return `/${locale}${path}`
+    if (path.startsWith(root) && user[perm]) return `/${locale}${path}`
   }
   // No permissions at all — send back to staff login
   return `/${locale}/staff`

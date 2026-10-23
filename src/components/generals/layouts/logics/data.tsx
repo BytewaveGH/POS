@@ -16,6 +16,11 @@ import {
   Compass,
   CalendarCheck,
   Trophy,
+  Building,
+  Wallet,
+  BedDouble,
+  Hammer,
+  Shapes,
 } from 'lucide-react'
 import { ITopNavItems } from './interface'
 
@@ -92,6 +97,34 @@ const amusementSidebarItems = [
   },
 ]
 
+const realEstateSidebarItems = [
+  {
+    title: 'Dashboard',
+    items: [{ label: 'Portfolio', href: '/en/real-estate', icon: LayoutDashboard, requiredPermission: 'canViewReports' }],
+  },
+  {
+    title: 'Properties',
+    items: [
+      { label: 'Properties', href: '/en/real-estate/properties', icon: Building, requiredPermission: 'canManageProducts' },
+      { label: 'Room types', href: '/en/real-estate/room-types', icon: Shapes, requiredPermission: 'canManageProducts' },
+      { label: 'Tenants', href: '/en/real-estate/tenants', icon: Users, requiredPermission: 'canManageSales' },
+      { label: 'Rent & payments', href: '/en/real-estate/rent', icon: Wallet, requiredPermission: 'canManageSales' },
+    ],
+  },
+  {
+    title: 'Short stays',
+    items: [{ label: 'Bookings', href: '/en/real-estate/bookings', icon: BedDouble, requiredPermission: 'canManageSales' }],
+  },
+  {
+    title: 'Upkeep',
+    items: [{ label: 'Repairs', href: '/en/real-estate/maintenance', icon: Hammer, requiredPermission: 'canManageOperations' }],
+  },
+  {
+    title: 'Users',
+    items: [{ label: 'Employees', href: '/en/stores/users', icon: UserCog, requiredPermission: 'canManageEmployees' }],
+  },
+]
+
 // Eatery has no dedicated modules built yet (see the amusement park build for the
 // pattern to follow) — keep it to what already exists so it doesn't dead-end on
 // retail-only routes.
@@ -110,6 +143,7 @@ const sidebarItemsByAppType: Record<string, typeof retailSidebarItems> = {
   retail: retailSidebarItems,
   amusement: amusementSidebarItems,
   eatery: eaterySidebarItems,
+  'real-estate': realEstateSidebarItems,
 }
 
 export const getSidebarItems = (appType: string | undefined | null) => sidebarItemsByAppType[appType ?? 'retail'] ?? retailSidebarItems
