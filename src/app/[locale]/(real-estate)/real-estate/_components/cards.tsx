@@ -4,15 +4,29 @@ import React from 'react'
 import Link from 'next/link'
 import { ChevronRight, MapPin, Phone } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { propertyTypeLabel } from '../_logics/constants'
+import { landSizeLabel, landStageLabel, propertyTypeLabel } from '../_logics/constants'
+import { propertyInvestment } from '../_logics/development'
+import { usePortfolio } from '../_logics/hooks'
 import { money, percent, plural, shortDate } from '../_logics/format'
 import type { PropertyStats, TenancyRow } from '../_logics/selectors'
 import type { Property } from '../_logics/types'
 import { Avatar, Badge, Card, OccupancyBar, PropertyCover, RENT } from './ui'
 import { useLocaleHref } from './module-frame'
 
+const TITLE_SHORT: Record<string, string> = {
+  none: 'None yet',
+  'allocation-note': 'Allocation',
+  indenture: 'Indenture',
+  'site-plan': 'Site plan',
+  registered: 'Registered',
+  'title-certificate': 'Titled',
+}
+
 export const PropertyCard = ({ property, stats }: { property: Property; stats: PropertyStats }) => {
   const href = useLocaleHref()
+  const p = usePortfolio()
+  const isLand = property.type === 'land'
+  const invested = isLand ? propertyInvestment(property, p.expenses, p.maintenance).total : 0
   return (
     <Link
       href={href(`/properties/${property.id}`)}
@@ -25,7 +39,7 @@ export const PropertyCard = ({ property, stats }: { property: Property; stats: P
             {propertyTypeLabel(property.type)}
           </span>
           <span className="absolute top-3 right-3 rounded-full bg-stone-900/70 backdrop-blur px-2.5 py-1 text-[11px] font-bold text-white tabular-nums">
-            {percent(stats.occupancy.rate)} occupied
+            {isLand ? (property.land ? landStageLabel(property.land.stage) : 'Land') : `${percent(stats.occupancy.rate)} occupied`}
           </span>
         </div>
         <div className="p-4">
@@ -39,12 +53,22 @@ export const PropertyCard = ({ property, stats }: { property: Property; stats: P
             </div>
             <ChevronRight className="h-4 w-4 text-stone-300 group-hover:text-endeavour transition-colors mt-1 flex-shrink-0" />
           </div>
-          <OccupancyBar counts={stats.occupancy.counts} className="mt-4" showLegend={false} />
-          <div className="grid grid-cols-3 gap-2 mt-4 text-center">
-            <Metric label="Units" value={String(stats.unitCount)} />
-            <Metric label="Rent / mo" value={money(stats.rentRoll, { compact: true })} />
-            <Metric label="Owed" value={stats.arrears > 0 ? money(stats.arrears, { compact: true }) : '—'} warn={stats.arrears > 0} />
-          </div>
+          {isLand ? (
+            <div className="grid grid-cols-3 gap-2 mt-4 text-center">
+              <Metric label="Size" value={property.land ? landSizeLabel(property.land.size, property.land.sizeUnit) : '—'} />
+              <Metric label="Papers" value={property.land ? TITLE_SHORT[property.land.titleStatus] : '—'} />
+              <Metric label="Invested" value={money(invested, { compact: true })} />
+            </div>
+          ) : (
+            <>
+              <OccupancyBar counts={stats.occupancy.counts} className="mt-4" showLegend={false} />
+              <div className="grid grid-cols-3 gap-2 mt-4 text-center">
+                <Metric label="Units" value={String(stats.unitCount)} />
+                <Metric label="Rent / mo" value={money(stats.rentRoll, { compact: true })} />
+                <Metric label="Owed" value={stats.arrears > 0 ? money(stats.arrears, { compact: true }) : '—'} warn={stats.arrears > 0} />
+              </div>
+            </>
+          )}
         </div>
       </Card>
     </Link>

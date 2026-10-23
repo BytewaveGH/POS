@@ -4,13 +4,13 @@ import React, { useEffect, useId, useMemo, useState } from 'react'
 import * as z from 'zod'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { BedDouble, Building, Building2, Home, LayoutGrid, Plus, Store, Trash2, type LucideIcon } from 'lucide-react'
+import { BedDouble, Building, Building2, Home, LandPlot, LayoutGrid, Plus, Store, Trash2, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { PROPERTY_TYPES } from '../../_logics/constants'
+import { LAND_SIZE_UNITS, LAND_STAGES, LAND_TITLE_STATUSES, PROPERTY_TYPES } from '../../_logics/constants'
 import { generateUnits, groupFromType, layoutLabel, type UnitGroupDraft } from '../../_logics/calc'
 import { money, plural } from '../../_logics/format'
 import { usePortfolio, useRealEstateActions } from '../../_logics/hooks'
-import type { Property, PropertyType, UnitType } from '../../_logics/types'
+import type { LandSizeUnit, LandStage, LandTitleStatus, Property, PropertyType, UnitType } from '../../_logics/types'
 import { Button } from '../ui'
 import { Drawer, Field, FormGrid, FormSection, Input, Segmented, Select, Textarea, toNum } from '../form'
 import { FacilitySummaryPill } from '../facilities'
@@ -26,6 +26,7 @@ const TYPE_ICONS: Record<PropertyType, LucideIcon> = {
   'single-family': Home,
   commercial: Store,
   'mixed-use': LayoutGrid,
+  land: LandPlot,
 }
 
 const schema = z.object({
@@ -36,6 +37,16 @@ const schema = z.object({
   region: z.string().optional(),
   coverImageUrl: z.union([z.literal(''), z.string().trim().url('Enter a full link (https://…)')]).optional(),
   description: z.string().optional(),
+  // Purchase (any property)
+  purchasePrice: z.coerce.number().min(0).optional(),
+  purchaseDate: z.string().optional(),
+  seller: z.string().optional(),
+  // Land
+  landSize: z.coerce.number().min(0).optional(),
+  landSizeUnit: z.string().optional(),
+  landStage: z.string().optional(),
+  landTitleStatus: z.string().optional(),
+  gpsAddress: z.string().optional(),
 })
 type Values = z.infer<typeof schema>
 
@@ -183,6 +194,14 @@ export const PropertyForm = ({
       region: property?.region ?? '',
       coverImageUrl: property?.coverImageUrl ?? '',
       description: property?.description ?? '',
+      purchasePrice: property?.purchasePrice ?? undefined,
+      purchaseDate: property?.purchaseDate ?? '',
+      seller: property?.seller ?? '',
+      landSize: property?.land?.size ?? undefined,
+      landSizeUnit: property?.land?.sizeUnit ?? 'plots',
+      landStage: property?.land?.stage ?? 'bare',
+      landTitleStatus: property?.land?.titleStatus ?? 'indenture',
+      gpsAddress: property?.land?.gpsAddress ?? '',
     })
     setGroups([defaultGroup(p.unitTypes, property?.type ?? 'compound-house')])
     setPrefix('Room')
@@ -210,19 +229,41 @@ export const PropertyForm = ({
     return { units, monthly }
   }, [groups])
 
+  const isLand = type === 'land'
+
   const submit = form.handleSubmit(async (v) => {
-    if (!editing && groups.some((g) => g.unitTypeId === null)) {
+    if (!editing && !isLand && groups.some((g) => g.unitTypeId === null)) {
       setShowGroupErrors(true)
       return
     }
     setSaving(true)
     try {
-      const body = { ...v, type: v.type as PropertyType, coverImageUrl: v.coverImageUrl || undefined }
+      const body = {
+        name: v.name,
+        type: v.type as PropertyType,
+        address: v.address,
+        city: v.city,
+        region: v.region || undefined,
+        description: v.description || undefined,
+        coverImageUrl: v.coverImageUrl || undefined,
+        purchasePrice: v.purchasePrice ? Number(v.purchasePrice) : undefined,
+        purchaseDate: v.purchaseDate || undefined,
+        seller: v.seller?.trim() || undefined,
+        land: isLand
+          ? {
+              size: Number(v.landSize) || 0,
+              sizeUnit: (v.landSizeUnit || 'plots') as LandSizeUnit,
+              stage: (v.landStage || 'bare') as LandStage,
+              titleStatus: (v.landTitleStatus || 'none') as LandTitleStatus,
+              gpsAddress: v.gpsAddress?.trim().toUpperCase() || undefined,
+            }
+          : undefined,
+      }
       if (editing) {
         await actions.update('properties', property!.id, body)
       } else {
         const created = await actions.create('properties', body)
-        await actions.createMany('units', generateUnits(groups, created.id, prefix.trim() || 'Room'))
+        if (!isLand) await actions.createMany('units', generateUnits(groups, created.id, prefix.trim() || 'Room'))
       }
       onOpenChange(false)
     } catch {
@@ -245,7 +286,13 @@ export const PropertyForm = ({
             Cancel
           </Button>
           <Button onClick={submit} loading={saving}>
-            {editing ? 'Save changes' : summary.units > 0 ? `Create property · ${plural(summary.units, 'unit')}` : 'Create property'}
+            {editing
+              ? 'Save changes'
+              : isLand
+                ? 'Add land'
+                : summary.units > 0
+                  ? `Create property · ${plural(summary.units, 'unit')}`
+                  : 'Create property'}
           </Button>
         </>
       }
@@ -323,7 +370,73 @@ export const PropertyForm = ({
           </Field>
         </FormSection>
 
-        {!editing && (
+        {isLand && (
+          <FormSection title="Land">
+            <FormGrid>
+              <Field label="Size" htmlFor="p-land-size">
+                <Input
+                  id="p-land-size"
+                  type="number"
+                  inputMode="decimal"
+                  step="any"
+                  min={0}
+                  placeholder="e.g. 2"
+                  {...form.register('landSize')}
+                />
+              </Field>
+              <Field label="Measured in" htmlFor="p-land-unit">
+                <Select id="p-land-unit" options={LAND_SIZE_UNITS} {...form.register('landSizeUnit')} />
+              </Field>
+            </FormGrid>
+            <Field label="Where it’s at">
+              <div role="radiogroup" aria-label="Land stage" className="grid grid-cols-2 gap-2">
+                {LAND_STAGES.map((st) => {
+                  const on = form.watch('landStage') === st.value
+                  return (
+                    <button
+                      key={st.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={on}
+                      onClick={() => form.setValue('landStage', st.value)}
+                      className={cn(
+                        'text-left rounded-2xl border p-3 transition-all',
+                        on ? 'border-endeavour bg-endeavour/[0.04] ring-2 ring-endeavour/15' : 'border-stone-200 hover:border-stone-300'
+                      )}
+                    >
+                      <p className="text-sm font-bold text-stone-900">{st.label}</p>
+                      <p className="text-[11px] text-stone-500">{st.hint}</p>
+                    </button>
+                  )
+                })}
+              </div>
+            </Field>
+            <FormGrid>
+              <Field label="Documents you have" htmlFor="p-land-title">
+                <Select id="p-land-title" options={LAND_TITLE_STATUSES} {...form.register('landTitleStatus')} />
+              </Field>
+              <Field label="GhanaPost GPS address" hint="Optional, e.g. AK-485-9323" htmlFor="p-land-gps">
+                <Input id="p-land-gps" placeholder="AK-485-9323" {...form.register('gpsAddress')} />
+              </Field>
+            </FormGrid>
+          </FormSection>
+        )}
+
+        <FormSection title={isLand ? 'Purchase' : 'Purchase (optional)'}>
+          <FormGrid cols={3}>
+            <Field label={isLand ? 'Price paid' : 'Purchase price'} htmlFor="p-price" hint="Counts towards total invested">
+              <Input id="p-price" prefix="₵" type="number" inputMode="decimal" step="any" min={0} {...form.register('purchasePrice')} />
+            </Field>
+            <Field label="Date bought" htmlFor="p-date">
+              <Input id="p-date" type="date" {...form.register('purchaseDate')} />
+            </Field>
+            <Field label={isLand ? 'Seller / family' : 'Seller'} htmlFor="p-seller">
+              <Input id="p-seller" placeholder={isLand ? 'e.g. Asante family' : ''} {...form.register('seller')} />
+            </Field>
+          </FormGrid>
+        </FormSection>
+
+        {!editing && !isLand && (
           <FormSection title="Rooms & units">
             <div className="flex items-center gap-3">
               <Field label="Name units as" className="w-40" htmlFor="p-prefix">

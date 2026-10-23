@@ -21,6 +21,7 @@ import {
   BedDouble,
   Hammer,
   Shapes,
+  FileText,
 } from 'lucide-react'
 import { ITopNavItems } from './interface'
 
@@ -109,6 +110,7 @@ const realEstateSidebarItems = [
       { label: 'Room types', href: '/en/real-estate/room-types', icon: Shapes, requiredPermission: 'canManageProducts' },
       { label: 'Tenants', href: '/en/real-estate/tenants', icon: Users, requiredPermission: 'canManageSales' },
       { label: 'Rent & payments', href: '/en/real-estate/rent', icon: Wallet, requiredPermission: 'canManageSales' },
+      { label: 'Documents', href: '/en/real-estate/documents', icon: FileText, requiredPermission: 'canManageProducts' },
     ],
   },
   {

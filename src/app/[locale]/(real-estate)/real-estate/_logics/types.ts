@@ -1,7 +1,22 @@
 // Real-estate domain. Field names match the API contract in
 // BACKEND_REQUIREMENTS.md §6 (ids are numbers, dates are YYYY-MM-DD strings).
 
-export type PropertyType = 'compound-house' | 'apartment-building' | 'short-stay' | 'single-family' | 'commercial' | 'mixed-use'
+export type PropertyType = 'compound-house' | 'apartment-building' | 'short-stay' | 'single-family' | 'commercial' | 'mixed-use' | 'land'
+
+export type LandSizeUnit = 'plots' | 'acres' | 'hectares' | 'sqm' | 'sqft'
+// Where a piece of land is in its life — drives what the owner sees next.
+export type LandStage = 'bare' | 'fenced' | 'under-construction' | 'completed'
+// Ghanaian land paperwork, from weakest to strongest.
+export type LandTitleStatus = 'none' | 'allocation-note' | 'indenture' | 'site-plan' | 'registered' | 'title-certificate'
+
+export interface LandDetails {
+  size: number
+  sizeUnit: LandSizeUnit
+  stage: LandStage
+  titleStatus: LandTitleStatus
+  // GhanaPost GPS digital address, e.g. "AK-485-9323"
+  gpsAddress?: string
+}
 
 // long-term = monthly rent with a lease; short-stay = nightly bookings (Airbnb style)
 export type RentalMode = 'long-term' | 'short-stay'
@@ -18,6 +33,12 @@ export interface Property {
   region?: string
   description?: string
   coverImageUrl?: string
+  // What it cost to acquire — the start of "total invested".
+  purchasePrice?: number
+  purchaseDate?: string
+  seller?: string
+  // Only for type 'land'.
+  land?: LandDetails
   createdAt?: string
 }
 
@@ -138,6 +159,87 @@ export interface MaintenanceRequest {
   resolvedOn?: string
 }
 
+// ── Development (building projects) ──────────────────────────────────────────
+
+export type ProjectStatus = 'planning' | 'in-progress' | 'on-hold' | 'completed'
+export type PhaseStatus = 'not-started' | 'in-progress' | 'done'
+export type ExpenseCategory = 'land' | 'materials' | 'labour' | 'equipment' | 'transport' | 'permits' | 'professional' | 'other'
+
+// A building/renovation project on a property, e.g. "4-bedroom house".
+export interface Project {
+  id: number
+  propertyId: number
+  name: string
+  description?: string
+  status: ProjectStatus
+  startDate?: string
+  targetEndDate?: string
+  budget: number
+}
+
+export interface ProjectPhase {
+  id: number
+  projectId: number
+  name: string
+  // Display order (1, 2, 3…)
+  position: number
+  status: PhaseStatus
+  startDate?: string
+  endDate?: string
+  budget: number
+  notes?: string
+}
+
+// Money spent on a property — optionally inside a project phase. For
+// materials, quantity × unitCost = amount (e.g. 200 bags of cement × ₵95).
+export interface Expense {
+  id: number
+  propertyId: number
+  projectId?: number | null
+  phaseId?: number | null
+  category: ExpenseCategory
+  description: string
+  quantity?: number
+  unit?: string
+  unitCost?: number
+  amount: number
+  date: string
+  supplier?: string
+  // Receipt / invoice in Documents
+  documentId?: number | null
+}
+
+// ── Documents ────────────────────────────────────────────────────────────────
+
+export type DocumentCategory =
+  | 'indenture'
+  | 'site-plan'
+  | 'land-title'
+  | 'building-permit'
+  | 'tenancy-agreement'
+  | 'receipt'
+  | 'id-document'
+  | 'photo'
+  | 'other'
+
+// Metadata; the file itself is stored separately (IndexedDB locally, object
+// storage on the server).
+export interface DocumentRecord {
+  id: number
+  title: string
+  category: DocumentCategory
+  fileName: string
+  mimeType: string
+  size: number
+  uploadedAt: string
+  propertyId?: number | null
+  unitId?: number | null
+  tenantId?: number | null
+  leaseId?: number | null
+  projectId?: number | null
+  notes?: string
+}
+
 export type ResourceMap = {
   unitTypes: UnitType
   properties: Property
@@ -147,6 +249,10 @@ export type ResourceMap = {
   payments: RentPayment
   bookings: Booking
   maintenance: MaintenanceRequest
+  projects: Project
+  phases: ProjectPhase
+  expenses: Expense
+  documents: DocumentRecord
 }
 
 export type ResourceName = keyof ResourceMap

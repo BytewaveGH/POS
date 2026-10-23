@@ -6,10 +6,23 @@ import { useSession } from 'next-auth/react'
 import { toast } from 'sonner'
 import { useAxios } from '@/hooks/use-axios'
 import { apiErrorMessage } from '@/lib/api-error'
-import { createApiSource, createLocalSource, DATA_SOURCE_KIND, type DataSource } from './data-source'
-import type { ResourceMap, ResourceName } from './types'
+import { createApiSource, createLocalSource, DATA_SOURCE_KIND, type DataSource, type DocumentDraft } from './data-source'
+import type { DocumentRecord, ResourceMap, ResourceName } from './types'
 
-const RESOURCES: ResourceName[] = ['unitTypes', 'properties', 'units', 'tenants', 'leases', 'payments', 'bookings', 'maintenance']
+const RESOURCES: ResourceName[] = [
+  'unitTypes',
+  'properties',
+  'units',
+  'tenants',
+  'leases',
+  'payments',
+  'bookings',
+  'maintenance',
+  'projects',
+  'phases',
+  'expenses',
+  'documents',
+]
 
 export const useDataSource = (): { source: DataSource; ready: boolean; scope: string } => {
   const request = useAxios()
@@ -92,5 +105,16 @@ export const useRealEstateActions = () => {
     update: <R extends ResourceName>(r: R, id: number, body: Partial<Omit<ResourceMap[R], 'id'>>) =>
       run(() => source.update(r, id, body), 'Couldn’t save changes.'),
     remove: (r: ResourceName, id: number) => run(() => source.remove(r, id), 'Couldn’t delete.'),
+    uploadDocument: (meta: DocumentDraft, file: File) => run(() => source.uploadDocument(meta, file), `Couldn’t upload ${file.name}.`),
+    // Reads don't refresh anything; failures still toast.
+    getFile: async (doc: DocumentRecord) => {
+      try {
+        return await source.getFile(doc)
+      } catch (err) {
+        toast.error(apiErrorMessage(err, 'Couldn’t open the file.'))
+        throw err
+      }
+    },
+    shareLink: (doc: DocumentRecord) => source.shareLink(doc).catch(() => null),
   }
 }

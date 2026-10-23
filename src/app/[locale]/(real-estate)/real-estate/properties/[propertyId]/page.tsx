@@ -3,12 +3,29 @@
 import React, { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
-import { ArrowLeft, CalendarPlus, Hammer, KeyRound, LayoutGrid, MapPin, Pencil, Plus, Receipt, Trash2, Users, Wallet } from 'lucide-react'
+import {
+  ArrowLeft,
+  CalendarPlus,
+  FileText,
+  Hammer,
+  HardHat,
+  KeyRound,
+  LayoutGrid,
+  MapPin,
+  Pencil,
+  Plus,
+  Receipt,
+  Trash2,
+  Upload,
+  Users,
+  Wallet,
+} from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { usePortfolio, useRealEstateActions } from '../../_logics/hooks'
 import { leaseState, todayISO } from '../../_logics/calc'
 import { byUrgency, propertyStats, tenancyRows, unitViews, type UnitView } from '../../_logics/selectors'
-import { paymentMethodLabel, propertyTypeLabel } from '../../_logics/constants'
+import { landSizeLabel, landStageLabel, landTitleLabel, paymentMethodLabel, propertyTypeLabel } from '../../_logics/constants'
+import { propertyInvestment } from '../../_logics/development'
 import { money, percent, plural, shortDate } from '../../_logics/format'
 import type { Lease, MaintenanceRequest } from '../../_logics/types'
 import {
@@ -32,6 +49,8 @@ import { PropertyForm } from '../../_components/forms/property-form'
 import { UnitForm } from '../../_components/forms/unit-form'
 import { MoveInForm, MoveOutForm, PaymentForm } from '../../_components/forms/tenancy-forms'
 import { BookingForm, MaintenanceForm } from '../../_components/forms/booking-maintenance-forms'
+import { DevelopmentSection } from '../../_components/development'
+import { DocumentList, DocumentUploadForm } from '../../_components/documents'
 
 type DrawerState =
   | { kind: 'edit-property' }
@@ -64,6 +83,7 @@ export default function PropertyDetailPage() {
   const today = todayISO()
   const [drawer, setDrawer] = useState<DrawerState>(null)
   const [openUnit, setOpenUnit] = useState<number | null>(null)
+  const [uploadOpen, setUploadOpen] = useState(false)
   const close = () => setDrawer(null)
 
   const property = p.propertyById.get(id)
@@ -110,6 +130,19 @@ export default function PropertyDetailPage() {
       />
     )
   }
+
+  const isLand = property.type === 'land'
+  const investment = propertyInvestment(property, p.expenses, p.maintenance)
+  const unitIdsHere = new Set(data.views.map((v) => v.unit.id))
+  const leaseIdsHere = new Set(p.leases.filter((l) => unitIdsHere.has(l.unitId)).map((l) => l.id))
+  const projectIdsHere = new Set(p.projects.filter((x) => x.propertyId === id).map((x) => x.id))
+  const propertyDocs = p.documents.filter(
+    (d) =>
+      d.propertyId === id ||
+      (d.unitId != null && unitIdsHere.has(d.unitId)) ||
+      (d.leaseId != null && leaseIdsHere.has(d.leaseId)) ||
+      (d.projectId != null && projectIdsHere.has(d.projectId))
+  )
 
   const unitView: UnitView | null = openUnit !== null ? (data.views.find((v) => v.unit.id === openUnit) ?? null) : null
   const leaseById = new Map(p.leases.map((l) => [l.id, l]))
@@ -159,34 +192,55 @@ export default function PropertyDetailPage() {
           </div>
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-5 divide-x divide-y lg:divide-y-0 divide-stone-100">
-          {[
-            { label: 'Units', value: String(data.stats.unitCount) },
-            { label: 'Occupancy', value: percent(data.stats.occupancy.rate) },
-            { label: 'Rent roll / mo', value: money(data.stats.rentRoll) },
-            { label: 'Owed', value: data.stats.arrears > 0 ? money(data.stats.arrears) : '—', warn: data.stats.arrears > 0 },
-            { label: 'Open repairs', value: String(data.stats.openRepairs) },
-          ].map((s) => (
+          {(isLand
+            ? [
+                { label: 'Size', value: property.land ? landSizeLabel(property.land.size, property.land.sizeUnit) : '—' },
+                { label: 'Stage', value: property.land ? landStageLabel(property.land.stage) : '—' },
+                { label: 'Paperwork', value: property.land ? landTitleLabel(property.land.titleStatus) : '—' },
+                { label: 'GPS address', value: property.land?.gpsAddress || '—' },
+                { label: 'Total invested', value: money(investment.total) },
+              ]
+            : [
+                { label: 'Units', value: String(data.stats.unitCount) },
+                { label: 'Occupancy', value: percent(data.stats.occupancy.rate) },
+                { label: 'Rent roll / mo', value: money(data.stats.rentRoll) },
+                { label: 'Owed', value: data.stats.arrears > 0 ? money(data.stats.arrears) : '—', warn: data.stats.arrears > 0 },
+                { label: 'Open repairs', value: String(data.stats.openRepairs) },
+              ]
+          ).map((s: { label: string; value: string; warn?: boolean }) => (
             <div key={s.label} className="px-5 py-4">
               <p className="text-[10px] font-bold uppercase tracking-wide text-stone-400">{s.label}</p>
               <p className={`text-lg font-extrabold tabular-nums mt-0.5 ${s.warn ? 'text-rose-600' : 'text-stone-900'}`}>{s.value}</p>
             </div>
           ))}
         </div>
-        <div className="px-5 pb-5">
-          <OccupancyBar counts={data.stats.occupancy.counts} />
-        </div>
+        {!isLand && (
+          <div className="px-5 pb-5">
+            <OccupancyBar counts={data.stats.occupancy.counts} />
+          </div>
+        )}
       </Card>
 
-      <Tabs defaultValue="units" className="mt-6">
+      <Tabs key={isLand ? 'land' : 'let'} defaultValue={isLand ? 'development' : 'units'} className="mt-6">
         <TabsList className="h-auto p-1 rounded-xl bg-stone-100 flex-wrap justify-start">
-          <TabsTrigger value="units" className="rounded-lg data-[state=active]:shadow-sm">
-            <TabLabel icon={LayoutGrid} label="Units" count={data.views.length} />
+          {!isLand && (
+            <>
+              <TabsTrigger value="units" className="rounded-lg data-[state=active]:shadow-sm">
+                <TabLabel icon={LayoutGrid} label="Units" count={data.views.length} />
+              </TabsTrigger>
+              <TabsTrigger value="tenants" className="rounded-lg data-[state=active]:shadow-sm">
+                <TabLabel icon={Users} label="Tenants" count={data.tenants.length} />
+              </TabsTrigger>
+              <TabsTrigger value="payments" className="rounded-lg data-[state=active]:shadow-sm">
+                <TabLabel icon={Receipt} label="Payments" />
+              </TabsTrigger>
+            </>
+          )}
+          <TabsTrigger value="development" className="rounded-lg data-[state=active]:shadow-sm">
+            <TabLabel icon={HardHat} label="Development" />
           </TabsTrigger>
-          <TabsTrigger value="tenants" className="rounded-lg data-[state=active]:shadow-sm">
-            <TabLabel icon={Users} label="Tenants" count={data.tenants.length} />
-          </TabsTrigger>
-          <TabsTrigger value="payments" className="rounded-lg data-[state=active]:shadow-sm">
-            <TabLabel icon={Receipt} label="Payments" />
+          <TabsTrigger value="documents" className="rounded-lg data-[state=active]:shadow-sm">
+            <TabLabel icon={FileText} label="Documents" count={propertyDocs.length || undefined} />
           </TabsTrigger>
           <TabsTrigger value="repairs" className="rounded-lg data-[state=active]:shadow-sm">
             <TabLabel icon={Hammer} label="Repairs" count={data.stats.openRepairs || undefined} />
@@ -258,6 +312,29 @@ export default function PropertyDetailPage() {
               })}
             </Card>
           )}
+        </TabsContent>
+
+        <TabsContent value="development" className="mt-4">
+          <DevelopmentSection property={property} />
+        </TabsContent>
+
+        <TabsContent value="documents" className="mt-4">
+          <div className="flex justify-end mb-3">
+            <Button size="sm" icon={Upload} onClick={() => setUploadOpen(true)}>
+              Upload
+            </Button>
+          </div>
+          <DocumentList
+            documents={propertyDocs}
+            emptyTitle={isLand ? 'Keep the land papers here' : 'No documents yet'}
+            emptyDescription={
+              isLand
+                ? 'Indenture, site plan, receipts from the family, building permit — upload photos or PDFs and share them on WhatsApp.'
+                : 'Tenancy agreements, receipts, permits and photos for this property.'
+            }
+            onUpload={() => setUploadOpen(true)}
+            showContext={false}
+          />
         </TabsContent>
 
         <TabsContent value="repairs" className="mt-4">
@@ -333,6 +410,11 @@ export default function PropertyDetailPage() {
           setDrawer({ kind: 'booking', unitId: openUnit })
           setOpenUnit(null)
         }}
+      />
+      <DocumentUploadForm
+        open={uploadOpen}
+        onOpenChange={setUploadOpen}
+        preset={{ propertyId: id, category: isLand ? 'indenture' : undefined }}
       />
       <PropertyForm open={drawer?.kind === 'edit-property'} onOpenChange={(o) => !o && close()} property={property} />
       <UnitForm

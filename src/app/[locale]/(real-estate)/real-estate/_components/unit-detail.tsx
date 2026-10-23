@@ -1,7 +1,7 @@
 'use client'
 
-import React from 'react'
-import { CalendarPlus, KeyRound, LogOut, Pencil, Phone, Trash2, Wallet } from 'lucide-react'
+import React, { useState } from 'react'
+import { CalendarPlus, KeyRound, LogOut, Pencil, Phone, Trash2, Upload, Wallet } from 'lucide-react'
 import { billingCycleLabel, channelLabel, paymentMethodLabel } from '../_logics/constants'
 import { bookingTotal, layoutLabel, leaseState, rentSummary, todayISO } from '../_logics/calc'
 import { dayMonth, money, shortDate } from '../_logics/format'
@@ -11,6 +11,7 @@ import type { UnitView } from '../_logics/selectors'
 import { Avatar, Badge, BOOKING, Button, OCCUPANCY, RENT } from './ui'
 import { Drawer } from './form'
 import { FacilityList } from './facilities'
+import { DocumentList, DocumentUploadForm } from './documents'
 
 const Fact = ({ label, value }: { label: string; value: React.ReactNode }) => (
   <div className="rounded-xl bg-stone-50 px-3 py-2.5">
@@ -40,6 +41,7 @@ export const UnitDetail = ({
 }) => {
   const p = usePortfolio()
   const today = todayISO()
+  const [uploadOpen, setUploadOpen] = useState(false)
   if (!view) return null
   const { unit, unitType, status, lease, tenant, rent } = view
   const isStay = unit.rentalMode === 'short-stay'
@@ -148,6 +150,36 @@ export const UnitDetail = ({
                 </Button>
               </div>
             </div>
+          </section>
+        )}
+
+        {/* Tenancy documents for the current lease */}
+        {!isStay && lease && (
+          <section>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-stone-400">Tenancy documents</p>
+              <Button size="sm" variant="ghost" icon={Upload} onClick={() => setUploadOpen(true)}>
+                Upload agreement
+              </Button>
+            </div>
+            <DocumentList
+              singleColumn
+              showContext={false}
+              documents={p.documents.filter((d) => d.leaseId === lease.id)}
+              emptyTitle="No tenancy agreement yet"
+              emptyDescription={`Upload the signed agreement — then send it to ${tenant?.fullName ?? 'the tenant'} on WhatsApp in one tap.`}
+            />
+            <DocumentUploadForm
+              open={uploadOpen}
+              onOpenChange={setUploadOpen}
+              preset={{
+                propertyId: unit.propertyId,
+                unitId: unit.id,
+                leaseId: lease.id,
+                tenantId: lease.tenantId,
+                category: 'tenancy-agreement',
+              }}
+            />
           </section>
         )}
 
