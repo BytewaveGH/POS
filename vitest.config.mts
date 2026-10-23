@@ -11,5 +11,7 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     include: ['tests/**/*.test.{ts,tsx}'],
+    // Let Vite resolve next-auth's bare `next/server` import the way Next does.
+    server: { deps: { inline: ['next-auth'] } },
   },
 })
