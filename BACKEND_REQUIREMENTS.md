@@ -154,7 +154,7 @@ Open points from the integration — resolved:
 
 - **`pricingRule`** — the server's enum is `flat | half-box | bulk-wholesale` (the YAML's `standard | box | bulk` was a doc error, now fixed). The frontend uses only those three values, including on recognition units.
 - **Product/unit request fields** — now documented in the YAML and matching what the frontend sends. `PUT /products/:id` sends `brand`/`sku`/`imageUrl` only when changed; `sku: ""` clears it.
-- **Duplicate SKU** — frontend shows "SKU already in use" on the SKU field for a **409** (planned) and, until that ships, for a **500** whose message mentions the SKU/unique constraint. *Backend: tell us when the 409 is live so the 500 branch can be removed.*
+- **Duplicate SKU** — frontend shows "SKU already in use" on the SKU field for a **409** (planned) and, until that ships, for a **500** whose message mentions the SKU/unique constraint. _Backend: tell us when the 409 is live so the 500 branch can be removed._
 - **Embedded `aliases`/`barcodes` on `GET /products/:id`** — not used; the dedicated endpoints are the source.
 - **`employeeId` on `POST /sales`** — the server doesn't derive it from the token, so the POS now sends the signed-in employee's id (admins send none). Interim; built in one place (`saleAttribution` in `pos/_logics/checkout.ts`) so it's easy to drop if the backend moves to token-based attribution.
 - **`appType`** — admins are routed by `user.appType` from admin-login/refresh (fallback `retail` + warning); employees by the tenant lookup's `appType`, since `/employees/login` doesn't return it.
@@ -171,18 +171,22 @@ Add `real-estate` to the `appType` enum everywhere it appears: tenant records, `
 
 ### 6.2 Endpoints
 
-Eight resources, each with the same four routes:
+Twelve resources, each with the same four routes:
 
-| Resource | Base path |
-|---|---|
-| Room types | `/real-estate/unit-types/` |
-| Properties | `/real-estate/properties/` |
-| Units | `/real-estate/units/` |
-| Tenants (renters, not SaaS tenants) | `/real-estate/tenants/` |
-| Leases | `/real-estate/leases/` |
-| Rent payments | `/real-estate/payments/` |
-| Short-stay bookings | `/real-estate/bookings/` |
-| Maintenance requests | `/real-estate/maintenance/` |
+| Resource                            | Base path                                     |
+| ----------------------------------- | --------------------------------------------- |
+| Room types                          | `/real-estate/unit-types/`                    |
+| Properties                          | `/real-estate/properties/`                    |
+| Units                               | `/real-estate/units/`                         |
+| Tenants (renters, not SaaS tenants) | `/real-estate/tenants/`                       |
+| Leases                              | `/real-estate/leases/`                        |
+| Rent payments                       | `/real-estate/payments/`                      |
+| Short-stay bookings                 | `/real-estate/bookings/`                      |
+| Maintenance requests                | `/real-estate/maintenance/`                   |
+| Building projects                   | `/real-estate/projects/`                      |
+| Project phases                      | `/real-estate/project-phases/`                |
+| Expenses                            | `/real-estate/expenses/`                      |
+| Documents (metadata)                | `/real-estate/documents/` (see 6.6 for files) |
 
 - `GET <base>` → all records for the tenant (`data: [...]`). Portfolios are small; no pagination needed for v1.
 - `POST <base>` → create; body = the object without `id`; returns the created object.
@@ -192,8 +196,17 @@ Eight resources, each with the same four routes:
 ### 6.3 Objects
 
 ```
-Property    { id, name, type, address, city, region?, description?, coverImageUrl?, createdAt? }
-            type: "compound-house" | "apartment-building" | "short-stay" | "single-family" | "commercial" | "mixed-use"
+Property    { id, name, type, address, city, region?, description?, coverImageUrl?,
+              purchasePrice?, purchaseDate?, seller?, land?, createdAt? }
+            type: "compound-house" | "apartment-building" | "short-stay" | "single-family" | "commercial"
+                | "mixed-use" | "land"
+            purchasePrice / purchaseDate / seller: what it cost to acquire (any type) — counts towards
+                "total invested"
+            land (type "land" only): { size, sizeUnit, stage, titleStatus, gpsAddress? }
+                sizeUnit: "plots" | "acres" | "hectares" | "sqm" | "sqft"
+                stage: "bare" | "fenced" | "under-construction" | "completed"
+                titleStatus: "none" | "allocation-note" | "indenture" | "site-plan" | "registered" | "title-certificate"
+                gpsAddress: GhanaPost GPS, e.g. "AK-485-9323"
 
 UnitType    { id, name, description?, bedrooms, livingRooms, facilities, amenities,
               rentalMode, defaultMonthlyRent, defaultNightlyRate, maxGuests }
@@ -237,6 +250,28 @@ MaintenanceRequest { id, propertyId, unitId?, title, description?, priority, sta
                      reportedOn, resolvedOn? }
             priority: "low" | "medium" | "high" | "urgent"
             status: "open" | "in-progress" | "resolved"
+
+Project     { id, propertyId, name, description?, status, startDate?, targetEndDate?, budget }
+            A building / renovation project on any property (typically land).
+            status: "planning" | "in-progress" | "on-hold" | "completed"
+
+ProjectPhase { id, projectId, name, position, status, startDate?, endDate?, budget, notes? }
+            position: display order (1, 2, 3…). The frontend creates phases in bulk from a
+                standard Ghanaian build list (fencing, foundation, blocks to lintel, roofing…).
+            status: "not-started" | "in-progress" | "done"
+
+Expense     { id, propertyId, projectId?, phaseId?, category, description, quantity?, unit?,
+              unitCost?, amount, date, supplier?, documentId? }
+            category: "land" | "materials" | "labour" | "equipment" | "transport" | "permits"
+                    | "professional" | "other"
+            quantity × unitCost should equal amount when both are sent (e.g. 200 bags × ₵95);
+                the frontend sends all three. Store amount as given.
+            documentId: receipt in Documents
+
+DocumentRecord { id, title, category, fileName, mimeType, size, uploadedAt,
+                 propertyId?, unitId?, tenantId?, leaseId?, projectId?, notes? }
+            category: "indenture" | "site-plan" | "land-title" | "building-permit" | "tenancy-agreement"
+                    | "receipt" | "id-document" | "photo" | "other"
 ```
 
 **Not stored, derived by the frontend:** occupancy (from leases and bookings, so it can never disagree with them), rent status / arrears / paid-through date (from the lease plus its payments), and booking totals (nights × rate + cleaning fee). Please don't add stored copies of these. If you later want them server-side, e.g. for SMS reminders, compute them the same way. The frontend's rules are in `src/app/[locale]/(real-estate)/real-estate/_logics/calc.ts`, with tests.
@@ -245,6 +280,9 @@ MaintenanceRequest { id, propertyId, unitId?, title, description?, priority, sta
 
 - **One live lease per unit:** creating or updating a lease that overlaps another non-terminated lease on the same unit → `409`.
 - **No double-booking:** a booking that overlaps another booking on the same unit whose status is not `cancelled` or `checked-out` → `409`. Back-to-back stays (one guest's `checkOut` = the next guest's `checkIn`) are allowed. The frontend checks this too, but the server is the authority.
+- **Projects, phases and expenses:**
+  - `budget`, `amount`, `quantity` and `unitCost` must be ≥ 0.
+  - An expense's `phaseId` must belong to its `projectId`, and its `projectId` to its `propertyId` → `422` otherwise.
 - **Room types:**
   - `name` is unique per tenant, compared case-insensitively → `409`.
   - Every key in `facilities` must be present, with one of the three values → `422` otherwise.
@@ -256,9 +294,15 @@ MaintenanceRequest { id, propertyId, unitId?, title, description?, priority, sta
   - All money values must be ≥ 0.
   - Foreign keys (`propertyId`, `unitId`, `unitTypeId`, `tenantId`, `leaseId`) must belong to the same tenant → `422` otherwise.
 - **Deletes cascade:**
-  - property → its units and maintenance;
+
+  - property → its units, maintenance, projects, expenses and documents (with their files);
   - unit → its leases and bookings;
-  - lease → its payments.
+  - lease → its payments;
+  - project → its phases and expenses;
+  - phase → nothing is deleted: its expenses keep `projectId`, and `phaseId` becomes null;
+  - document → its file (expenses pointing at it get `documentId: null`).
+
+  Documents linked to a deleted unit, tenant, lease or project are kept and that link is set to null. They are papers the owner still needs.
 
   The local mode already behaves this way, and the frontend warns before deleting.
 
@@ -266,14 +310,26 @@ MaintenanceRequest { id, propertyId, unitId?, title, description?, priority, sta
 
 Reuse the existing flags, matching the sidebar and the middleware:
 
-| Area | Flag |
-|---|---|
-| Portfolio dashboard | `canViewReports` |
-| Room types, properties and units (write) | `canManageProducts` |
-| Tenants, leases, payments, bookings | `canManageSales` |
-| Maintenance | `canManageOperations` |
+| Area                                     | Flag                  |
+| ---------------------------------------- | --------------------- |
+| Portfolio dashboard                      | `canViewReports`      |
+| Room types, properties and units (write) | `canManageProducts`   |
+| Projects, phases, expenses and documents | `canManageProducts`   |
+| Tenants, leases, payments, bookings      | `canManageSales`      |
+| Maintenance                              | `canManageOperations` |
 
 Admins have all of them.
+
+### 6.6 Document files
+
+Files are stored by the backend, for example in object storage, and served only to the owning tenant. Up to 15 MB each. Accepted types are PDF, JPEG/PNG/WebP/HEIC images and Word (.doc/.docx) → `415` otherwise, `413` when too large.
+
+- **`POST /real-estate/documents/`:** `multipart/form-data` with a `file` field plus the metadata fields (`title`, `category`, `propertyId`, `unitId`, `tenantId`, `leaseId`, `projectId`, `notes`; ids as decimal strings, omitted when not linked). The server sets `fileName`, `mimeType`, `size` and `uploadedAt` from the upload and returns the `DocumentRecord`.
+- **`GET /real-estate/documents/:id/file`:** streams the file with its `Content-Type` and `Content-Disposition: inline; filename="…"`. The frontend uses this for previews and downloads.
+- **`POST /real-estate/documents/:id/share-link`** → `{ data: { url, expiresAt } }`: a public, unguessable, **expiring** link (e.g. 7 days) to that one file. The frontend puts it in a WhatsApp message (`https://wa.me/<tenant phone>?text=…`) so it can be shared from any device. The link must work without signing in, must not reveal other files, and should stop working when it expires or the document is deleted.
+- **`PUT` / `DELETE /real-estate/documents/:id`:** as for other resources. PUT changes metadata only; the file can't be replaced.
+
+Until this exists, local mode stores the files in the browser's IndexedDB. On phones, sharing sends the actual file through the system share sheet; on desktops it downloads the file and opens WhatsApp Web with the message.
 
 ## Priority
 

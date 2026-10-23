@@ -12,7 +12,9 @@ import {
   CircleDollarSign,
   DoorOpen,
   Hammer,
+  HardHat,
   KeyRound,
+  LandPlot,
   Plus,
   Receipt,
   Wallet,
@@ -31,6 +33,8 @@ import {
 } from './_logics/calc'
 import { byUrgency, propertyStats, tenancyRows } from './_logics/selectors'
 import { dayMonth, money, percent, plural, shortDate } from './_logics/format'
+import { projectSummary, propertyInvestment } from './_logics/development'
+import { landSizeLabel, landStageLabel } from './_logics/constants'
 import {
   Badge,
   Button,
@@ -328,6 +332,70 @@ export default function RealEstateDashboard() {
               ))}
             </div>
           )}
+        </Card>
+      )}
+
+      {/* Land & building */}
+      {(p.projects.length > 0 || p.properties.some((x) => x.type === 'land')) && (
+        <Card className="p-5 mt-4">
+          <SectionTitle
+            title="Land & building"
+            hint={`${money(p.properties.reduce((sum, x) => sum + propertyInvestment(x, p.expenses, p.maintenance).total, 0))} invested across all properties`}
+          />
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {p.projects
+              .filter((x) => x.status !== 'completed')
+              .map((project) => {
+                const s = projectSummary(project, p.phases, p.expenses)
+                const prop = p.propertyById.get(project.propertyId)
+                return (
+                  <Link
+                    key={`pj-${project.id}`}
+                    href={href(`/properties/${project.propertyId}`)}
+                    className="rounded-2xl border border-stone-200 p-4 hover:border-endeavour/40 transition-colors"
+                  >
+                    <div className="flex items-center gap-2 text-xs font-semibold text-endeavour">
+                      <HardHat className="h-3.5 w-3.5" /> {s.currentPhase ? s.currentPhase.name : 'All phases done'}
+                    </div>
+                    <p className="text-sm font-bold text-stone-900 mt-1.5 truncate">{project.name}</p>
+                    <p className="text-xs text-stone-500 truncate">{prop?.name}</p>
+                    <div className="mt-3 h-1.5 rounded-full bg-stone-100 overflow-hidden" aria-hidden>
+                      <div className="h-full rounded-full bg-endeavour" style={{ width: `${s.progress * 100}%` }} />
+                    </div>
+                    <div className="flex justify-between text-[11px] mt-1.5">
+                      <span className="text-stone-500">
+                        {s.doneCount}/{s.phaseCount} phases
+                      </span>
+                      <span className="font-bold text-stone-900 tabular-nums">{money(s.spent)} spent</span>
+                    </div>
+                  </Link>
+                )
+              })}
+            {p.properties
+              .filter((x) => x.type === 'land' && !p.projects.some((pj) => pj.propertyId === x.id && pj.status !== 'completed'))
+              .map((land) => (
+                <Link
+                  key={`ld-${land.id}`}
+                  href={href(`/properties/${land.id}`)}
+                  className="rounded-2xl border border-stone-200 p-4 hover:border-endeavour/40 transition-colors"
+                >
+                  <div className="flex items-center gap-2 text-xs font-semibold text-teal-700">
+                    <LandPlot className="h-3.5 w-3.5" /> {land.land ? landStageLabel(land.land.stage) : 'Land'}
+                  </div>
+                  <p className="text-sm font-bold text-stone-900 mt-1.5 truncate">{land.name}</p>
+                  <p className="text-xs text-stone-500 truncate">
+                    {land.land ? landSizeLabel(land.land.size, land.land.sizeUnit) : ''}
+                    {land.city ? ` · ${land.city}` : ''}
+                  </p>
+                  <p className="text-[11px] mt-3">
+                    <span className="font-bold text-stone-900 tabular-nums">
+                      {money(propertyInvestment(land, p.expenses, p.maintenance).total)}
+                    </span>
+                    <span className="text-stone-500"> invested</span>
+                  </p>
+                </Link>
+              ))}
+          </div>
         </Card>
       )}
 

@@ -9,7 +9,7 @@
 
 import type { AxiosRequestConfig } from 'axios'
 import { ALL_PRIVATE, ALL_SHARED, LEGACY_UNIT_TYPE_LABELS } from './constants'
-import type { ResourceMap, ResourceName, Unit, UnitType } from './types'
+import type { DocumentRecord, ResourceMap, ResourceName, Unit, UnitType } from './types'
 
 export type DataSourceKind = 'api' | 'local'
 
@@ -23,7 +23,14 @@ export interface DataSource {
   create<R extends ResourceName>(resource: R, body: Draft<R>): Promise<ResourceMap[R]>
   update<R extends ResourceName>(resource: R, id: number, body: Partial<Draft<R>>): Promise<ResourceMap[R]>
   remove(resource: ResourceName, id: number): Promise<void>
+  // Documents: metadata + the file itself.
+  uploadDocument(meta: DocumentDraft, file: File): Promise<DocumentRecord>
+  getFile(doc: DocumentRecord): Promise<Blob>
+  // A time-limited link others can open (API only; local files can't be linked).
+  shareLink(doc: DocumentRecord): Promise<string | null>
 }
+
+export type DocumentDraft = Omit<DocumentRecord, 'id' | 'uploadedAt' | 'fileName' | 'mimeType' | 'size'>
 
 // ── API ──────────────────────────────────────────────────────────────────────
 
@@ -36,6 +43,10 @@ const PATHS: Record<ResourceName, string> = {
   payments: 'payments',
   bookings: 'bookings',
   maintenance: 'maintenance',
+  projects: 'projects',
+  phases: 'project-phases',
+  expenses: 'expenses',
+  documents: 'documents',
 }
 
 export const RealEstateServices = {
@@ -51,6 +62,9 @@ export const RealEstateServices = {
     data,
   }),
   Delete: (resource: ResourceName, id: number): AxiosRequestConfig => ({ method: 'DELETE', url: `/real-estate/${PATHS[resource]}/${id}` }),
+  UploadDocument: (form: FormData): AxiosRequestConfig => ({ method: 'POST', url: `/real-estate/documents/`, data: form }),
+  DocumentFile: (id: number): AxiosRequestConfig => ({ method: 'GET', url: `/real-estate/documents/${id}/file`, responseType: 'blob' }),
+  DocumentShareLink: (id: number): AxiosRequestConfig => ({ method: 'POST', url: `/real-estate/documents/${id}/share-link` }),
 }
 
 const unwrap = (res: any) => res?.data?.data ?? res?.data
@@ -66,7 +80,68 @@ export const createApiSource = (request: (c: AxiosRequestConfig) => Promise<any>
   remove: async (resource, id) => {
     await request(RealEstateServices.Delete(resource, id))
   },
+  uploadDocument: async (meta, file) => {
+    const form = new FormData()
+    form.append('file', file, file.name)
+    for (const [k, v] of Object.entries(meta)) if (v !== undefined && v !== null && v !== '') form.append(k, String(v))
+    return unwrap(await request(RealEstateServices.UploadDocument(form)))
+  },
+  getFile: async (doc) => (await request(RealEstateServices.DocumentFile(doc.id))).data as Blob,
+  shareLink: async (doc) => unwrap(await request(RealEstateServices.DocumentShareLink(doc.id)))?.url ?? null,
 })
+
+// ── File storage for local mode (IndexedDB — localStorage is far too small) ──
+
+export interface FileStore {
+  put(key: string, blob: Blob): Promise<void>
+  get(key: string): Promise<Blob | undefined>
+  delete(key: string): Promise<void>
+}
+
+const idbRequest = <T>(req: IDBRequest<T>) =>
+  new Promise<T>((resolve, reject) => {
+    req.onsuccess = () => resolve(req.result)
+    req.onerror = () => reject(req.error)
+  })
+
+export const createIndexedDbFileStore = (dbName = 'sellix-real-estate-files'): FileStore => {
+  let db: Promise<IDBDatabase> | null = null
+  const open = () => {
+    db ??= new Promise((resolve, reject) => {
+      const req = indexedDB.open(dbName, 1)
+      req.onupgradeneeded = () => req.result.createObjectStore('files')
+      req.onsuccess = () => resolve(req.result)
+      req.onerror = () => reject(req.error)
+    })
+    return db
+  }
+  const store = async (mode: IDBTransactionMode) => (await open()).transaction('files', mode).objectStore('files')
+  return {
+    put: async (key, blob) => {
+      await idbRequest((await store('readwrite')).put(blob, key))
+    },
+    get: async (key) => (await idbRequest((await store('readonly')).get(key))) as Blob | undefined,
+    delete: async (key) => {
+      await idbRequest((await store('readwrite')).delete(key))
+    },
+  }
+}
+
+export const createMemoryFileStore = (): FileStore => {
+  const m = new Map<string, Blob>()
+  return { put: async (k, b) => void m.set(k, b), get: async (k) => m.get(k), delete: async (k) => void m.delete(k) }
+}
+
+// One shared store per page (one IndexedDB connection). Replaceable for tests
+// and for environments without IndexedDB.
+let sharedFileStore: FileStore | null | undefined
+export const getLocalFileStore = (): FileStore | null => {
+  if (sharedFileStore === undefined) sharedFileStore = typeof indexedDB === 'undefined' ? null : createIndexedDbFileStore()
+  return sharedFileStore
+}
+export const setLocalFileStore = (store: FileStore | null) => {
+  sharedFileStore = store
+}
 
 // ── Local (browser) ──────────────────────────────────────────────────────────
 
@@ -74,8 +149,10 @@ type StorageLike = Pick<Storage, 'getItem' | 'setItem'>
 
 export const createLocalSource = (
   scope: string,
-  storage: StorageLike | null = typeof window === 'undefined' ? null : window.localStorage
+  storage: StorageLike | null = typeof window === 'undefined' ? null : window.localStorage,
+  files: FileStore | null = getLocalFileStore()
 ): DataSource => {
+  const fileKey = (id: number) => `${scope}:${id}`
   const key = (r: ResourceName) => `sellix-real-estate:${scope}:${r}`
   const read = <R extends ResourceName>(r: R): ResourceMap[R][] => {
     try {
@@ -145,16 +222,46 @@ export const createLocalSource = (
       )
       return removed
     }
+    // Documents survive the deletion of what they were linked to, unlinked.
+    const unlinkDocs = (field: 'unitId' | 'tenantId' | 'leaseId' | 'projectId') =>
+      write(
+        'documents',
+        read('documents').map((d) => (d[field] === id ? { ...d, [field]: null } : d))
+      )
     if (resource === 'properties') {
       const units = dropWhere('units', (u) => u.propertyId === id)
       dropWhere('maintenance', (m) => m.propertyId === id)
       units.forEach((u) => cascade('units', u.id))
+      const projects = dropWhere('projects', (x) => x.propertyId === id)
+      projects.forEach((x) => cascade('projects', x.id))
+      dropWhere('expenses', (e) => e.propertyId === id)
+      dropWhere('documents', (d) => d.propertyId === id).forEach((d) => void files?.delete(fileKey(d.id)))
     } else if (resource === 'units') {
       const leases = dropWhere('leases', (l) => l.unitId === id)
       dropWhere('bookings', (b) => b.unitId === id)
       leases.forEach((l) => cascade('leases', l.id))
+      unlinkDocs('unitId')
     } else if (resource === 'leases') {
       dropWhere('payments', (p) => p.leaseId === id)
+      unlinkDocs('leaseId')
+    } else if (resource === 'tenants') {
+      unlinkDocs('tenantId')
+    } else if (resource === 'projects') {
+      dropWhere('phases', (x) => x.projectId === id)
+      dropWhere('expenses', (e) => e.projectId === id)
+      unlinkDocs('projectId')
+    } else if (resource === 'phases') {
+      // Money spent stays on the project.
+      write(
+        'expenses',
+        read('expenses').map((e) => (e.phaseId === id ? { ...e, phaseId: null } : e))
+      )
+    } else if (resource === 'documents') {
+      void files?.delete(fileKey(id))
+      write(
+        'expenses',
+        read('expenses').map((e) => (e.documentId === id ? { ...e, documentId: null } : e))
+      )
     }
   }
 
@@ -187,5 +294,26 @@ export const createLocalSource = (
       )
       cascade(resource, id)
     },
+    uploadDocument: async (meta, file) => {
+      if (!files) throw new Error('File storage isn’t available in this browser')
+      const rows = read('documents')
+      const doc: DocumentRecord = {
+        ...meta,
+        id: nextId(rows),
+        fileName: file.name,
+        mimeType: file.type || 'application/octet-stream',
+        size: file.size,
+        uploadedAt: new Date().toISOString(),
+      }
+      await files.put(fileKey(doc.id), file)
+      write('documents', [...rows, doc])
+      return doc
+    },
+    getFile: async (doc) => {
+      const blob = await files?.get(fileKey(doc.id))
+      if (!blob) throw new Error('This file isn’t stored in this browser')
+      return blob
+    },
+    shareLink: async () => null,
   }
 }

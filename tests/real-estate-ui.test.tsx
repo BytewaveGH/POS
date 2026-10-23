@@ -20,7 +20,8 @@ import PropertyDetail from '@/app/[locale]/(real-estate)/real-estate/properties/
 import RoomTypesPage from '@/app/[locale]/(real-estate)/real-estate/room-types/page'
 import { RoomTypeForm } from '@/app/[locale]/(real-estate)/real-estate/_components/forms/room-type-form'
 import { ALL_PRIVATE, ALL_SHARED } from '@/app/[locale]/(real-estate)/real-estate/_logics/constants'
-import { createLocalSource } from '@/app/[locale]/(real-estate)/real-estate/_logics/data-source'
+import { createLocalSource, createMemoryFileStore, setLocalFileStore } from '@/app/[locale]/(real-estate)/real-estate/_logics/data-source'
+import DocumentsPage from '@/app/[locale]/(real-estate)/real-estate/documents/page'
 import { generateUnits, todayISO } from '@/app/[locale]/(real-estate)/real-estate/_logics/calc'
 import type { Unit } from '@/app/[locale]/(real-estate)/real-estate/_logics/types'
 
@@ -74,6 +75,7 @@ const seedCompound = async () => {
 }
 
 beforeEach(() => {
+  setLocalFileStore(createMemoryFileStore())
   localStorage.clear()
   vi.clearAllMocks()
 })
@@ -281,5 +283,91 @@ describe('real-estate screens (local data)', () => {
     expect(screen.queryByText(/Overlaps/)).toBeNull()
     expect(screen.getByText(/3 nights/)).toBeTruthy()
     expect(screen.getByText('₵1,350')).toBeTruthy()
+  })
+})
+
+describe('land, building projects and documents (local data)', () => {
+  const seedLand = async () => {
+    const s = db()
+    return s.create('properties', {
+      name: 'Abuakwa plot',
+      type: 'land',
+      address: 'Behind the school',
+      city: 'Kumasi',
+      purchasePrice: 45000,
+      land: { size: 1, sizeUnit: 'plots', stage: 'fenced', titleStatus: 'indenture' },
+    })
+  }
+
+  it('records a fenced plot with its price — no rooms needed', async () => {
+    withQuery(<PropertyForm open onOpenChange={() => {}} />)
+    fireEvent.click(screen.getByRole('button', { name: /^Land/ }))
+    expect(screen.queryByText('First, describe your kinds of rooms')).toBeNull()
+
+    fireEvent.change(screen.getByLabelText('Property name'), { target: { value: 'Abuakwa plot' } })
+    fireEvent.change(screen.getByLabelText('Address / landmark'), { target: { value: 'Behind the school' } })
+    fireEvent.change(screen.getByLabelText('City / town'), { target: { value: 'Kumasi' } })
+    fireEvent.change(screen.getByLabelText('Size'), { target: { value: '2' } })
+    fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Land stage' })).getByRole('radio', { name: /Fenced/ }))
+    fireEvent.change(screen.getByLabelText('Price paid'), { target: { value: '45000' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add land' }))
+
+    await waitFor(async () => expect(await db().list('properties')).toHaveLength(1))
+    const [plot] = await db().list('properties')
+    expect(plot).toMatchObject({ type: 'land', purchasePrice: 45000, land: { size: 2, sizeUnit: 'plots', stage: 'fenced' } })
+    expect(await db().list('units')).toEqual([])
+  })
+
+  it('starts a build on fenced land with the first phases already done, then records cement', async () => {
+    const plot = await seedLand()
+    nav.params = { locale: 'en', propertyId: String(plot.id) }
+    withQuery(<PropertyDetail />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Start a project' }))
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: '3-bedroom house' } })
+    fireEvent.click(screen.getByRole('button', { name: /External works/ })) // not needed
+    fireEvent.click(screen.getByRole('button', { name: 'Create project · 13 phases' }))
+
+    await waitFor(async () => expect(await db().list('phases')).toHaveLength(13))
+    const phases = await db().list('phases')
+    expect(phases.filter((x) => x.status === 'done').map((x) => x.name)).toEqual(['Land documentation', 'Site clearing', 'Fencing'])
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Record expense' }))
+    fireEvent.click(within(screen.getByLabelText('Common materials')).getByRole('button', { name: 'Cement' }))
+    fireEvent.change(screen.getByLabelText('Quantity'), { target: { value: '200' } })
+    fireEvent.change(screen.getByLabelText('Price per unit'), { target: { value: '95' } })
+    expect(screen.getAllByText('₵19,000').length).toBeGreaterThan(0)
+    fireEvent.click(screen.getByRole('button', { name: 'Record expense' }))
+
+    await waitFor(async () => expect(await db().list('expenses')).toHaveLength(1))
+    const [e] = await db().list('expenses')
+    const foundation = phases.find((x) => x.name === 'Foundation (to DPC)')!
+    expect(e).toMatchObject({
+      propertyId: plot.id,
+      description: 'Cement',
+      unit: 'bags',
+      quantity: 200,
+      unitCost: 95,
+      amount: 19000,
+      phaseId: foundation.id,
+    })
+    // Land price + cement
+    await waitFor(() => expect(screen.getAllByText('₵64,000').length).toBeGreaterThan(0))
+  })
+
+  it('uploads an indenture and offers WhatsApp sharing', async () => {
+    const plot = await seedLand()
+    withQuery(<DocumentsPage />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Upload documents' }))
+    const file = new File(['%PDF'], 'indenture.pdf', { type: 'application/pdf' })
+    fireEvent.change(screen.getByLabelText('Choose files'), { target: { files: [file] } })
+    fireEvent.change(screen.getByLabelText('Type of document'), { target: { value: 'indenture' } })
+    fireEvent.change(screen.getByLabelText('Property'), { target: { value: String(plot.id) } })
+    fireEvent.click(screen.getByRole('button', { name: 'Upload' }))
+
+    await waitFor(async () => expect(await db().list('documents')).toHaveLength(1))
+    expect((await db().list('documents'))[0]).toMatchObject({ category: 'indenture', propertyId: plot.id, fileName: 'indenture.pdf' })
+    expect(await screen.findByRole('button', { name: 'Share on WhatsApp' })).toBeTruthy()
   })
 })

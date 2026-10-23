@@ -31,6 +31,7 @@ const EMPLOYEE_ROUTE_PRIORITY = [
   // Real estate — same permission keys as its sidebar (src/components/generals/layouts/logics/data.tsx).
   { path: '/real-estate/properties', perm: 'canManageProducts' },
   { path: '/real-estate/room-types', perm: 'canManageProducts' },
+  { path: '/real-estate/documents', perm: 'canManageProducts' },
   { path: '/real-estate/tenants', perm: 'canManageSales' },
   { path: '/real-estate/rent', perm: 'canManageSales' },
   { path: '/real-estate/bookings', perm: 'canManageSales' },
