@@ -2,17 +2,19 @@
 
 Sellix Eats lets many different food and drink businesses each sell under their own brand. They share one data model, one backend and one set of components. Only a per-restaurant **theme config** changes how a storefront looks.
 
-| Where                                                | Who                   | What                                                                                |
-| ---------------------------------------------------- | --------------------- | ----------------------------------------------------------------------------------- |
-| `/eat`                                               | Customers, no sign-in | Directory of every restaurant. Each card is styled with that restaurant's theme.    |
-| `/eat/<slug>` (`?table=<name>` from a table QR code) | Customers             | Branded storefront: menu, options, deals, ordering.                                 |
-| `/eat/<slug>/checkout`                               | Customers             | Cart, pickup / delivery / at my table, details, payment (cash, MoMo, pay at table). |
-| `/eat/<slug>/order/<code>`                           | Customers             | Live order status. Updates every 10 s.                                              |
-| `/eatery`                                            | Owners and staff      | Overview, plus onboarding for a business with no restaurant yet.                    |
-| `/eatery/orders`                                     | `canManageSales`      | Live board: New → In the kitchen → Ready / on the way → Done.                       |
-| `/eatery/menu`                                       | `canManageProducts`   | Sections, items, option groups, combos, availability, time-based deals.             |
-| `/eatery/brand`                                      | `canManageProducts`   | Theme editor with presets, a contrast checker and a live phone preview.             |
-| `/eatery/settings`                                   | `canManageOperations` | Details, hours, ways to order, payments, table QR codes.                            |
+| Where                                                | Who                   | What                                                                                               |
+| ---------------------------------------------------- | --------------------- | -------------------------------------------------------------------------------------------------- |
+| `/eat`                                               | Customers, no sign-in | Directory of every restaurant. Each card is styled with that restaurant's theme.                   |
+| `/eat/<slug>` (`?table=<name>` from a table QR code) | Customers             | Branded storefront: menu, options, deals, ordering.                                                |
+| `/eat/<slug>/checkout`                               | Customers             | Cart, pickup / delivery / at my table, details, payment (cash, MoMo, pay at table).                |
+| `/eat/<slug>/order/<code>`                           | Customers             | Live order status. Updates every 10 s.                                                             |
+| `/eatery`                                            | Owners and staff      | Overview, plus onboarding for a business with no restaurant yet.                                   |
+| `/eatery/pos`                                        | `canManageSales`      | Counter POS: tap to ring up dine-in or take-away orders; accept or decline incoming online orders. |
+| `/eatery/orders`                                     | `canManageSales`      | Live board: New → In the kitchen → Ready / on the way → Done.                                      |
+| `/eatery/stock`                                      | `canManageStock`      | Ingredients and stock, recipes and margins, expenses, stock history.                               |
+| `/eatery/menu`                                       | `canManageProducts`   | Sections, items, option groups, combos, availability, time-based deals.                            |
+| `/eatery/brand`                                      | `canManageProducts`   | Theme editor with presets, a contrast checker and a live phone preview.                            |
+| `/eatery/settings`                                   | `canManageOperations` | Details, hours, ways to order, payments, table QR codes.                                           |
 
 One business (tenant) can own several restaurants. A switcher on each owner page selects which one is being managed.
 
@@ -146,7 +148,35 @@ The theme is stored as JSON on `restaurant.theme` (`ThemeConfig` in `src/lib/eat
 
 At render time, `<ThemeScope theme>` turns the config into CSS custom properties: `--e-bg`, `--e-surface`, `--e-text`, `--e-muted`, `--e-primary`, `--e-on-primary`, `--e-primary-text`, `--e-accent`, `--e-on-accent`, `--e-border`, `--e-radius`, `--e-radius-control`, `--e-font-display`, `--e-font-body` and `--e-heading-case`. The contrast-safe values are already applied. Every storefront component reads only these variables (`src/components/eatery/storefront.css`), which is why one set of components renders every brand.
 
-## 4. Code map
+## 4. Counter, ingredients and profit
+
+**Counter POS** (`/eatery/pos`):
+
+- Staff tap items onto a ticket. Items with sizes or extras open the same option sheet customers use.
+- They choose dine-in (with a table) or take-away, and payment by cash, MoMo or card. Payment can be now or later; for cash, the POS works out the change.
+- **Charge** creates a counter order that is already accepted.
+- The printed receipt carries a QR code. Scanning it opens the customer's own order page, which pings them when the order is ready.
+- Online orders waiting for a decision appear at the top of the POS and on the orders board, with a chime and a system notification. Accepting one updates the customer's page within 10 seconds. The customer gets a sound, a vibration and, if they allowed it, a system notification.
+
+**Ingredients** (`/eatery/stock`):
+
+- Each ingredient has a unit, an average cost and a stock level.
+- **Bought** adds stock and re-averages the cost. **Waste** removes stock and counts it against profit. **Count** sets the actual level.
+- A **recipe** says what one portion of a menu item uses. Option choices can add to or swap ingredients, e.g. Large adds dough and cheese, Beef replaces chicken.
+- When an order is accepted, its ingredients leave stock and the order records its cost. Cancelling puts them back.
+
+**Profit** (overview), per period (today, this week, this month, 30 days):
+
+- Sales.
+- Ingredients used.
+- Gross profit.
+- Waste and running costs (rent, wages, gas, electricity…).
+- Net profit, with a breakdown bar and the best earners by profit.
+- Warnings when sold items have no recipe (cost understated) and when ingredients are running low.
+
+Rules: `src/lib/eatery/costing.ts`. Contract: `BACKEND_REQUIREMENTS.md` §7.5.
+
+## 5. Code map
 
 | Path                                    | Contents                                                                                                                                                                             |
 | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -155,7 +185,7 @@ At render time, `<ThemeScope theme>` turns the config into CSS custom properties
 | `src/app/[locale]/(eatery-public)/eat/` | Customer pages, outside the dashboard shell and public in `middleware.ts`                                                                                                            |
 | `src/app/[locale]/(eatery)/eatery/`     | Owner pages                                                                                                                                                                          |
 
-## 5. Local mode (until the backend ships)
+## 6. Local mode (until the backend ships)
 
 With `NEXT_PUBLIC_EATERY_DATA_SOURCE=local`, everything lives in this browser's `localStorage`. That includes customers' orders, so an order placed on a phone won't reach the owner's laptop.
 

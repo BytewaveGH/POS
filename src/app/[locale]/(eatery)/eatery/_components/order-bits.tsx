@@ -55,7 +55,7 @@ export const ago = (iso: string, now: Date) => {
 }
 
 export const paymentLabel = (o: Order) =>
-  `${o.payment.method === 'momo' ? 'MoMo' : o.payment.method === 'cash' ? 'Cash' : 'At table'} · ${o.payment.status === 'paid' ? 'paid' : o.payment.status === 'pending' ? 'to confirm' : 'unpaid'}`
+  `${o.payment.method === 'momo' ? 'MoMo' : o.payment.method === 'cash' ? 'Cash' : o.payment.method === 'card' ? 'Card' : 'At table'} · ${o.payment.status === 'paid' ? 'paid' : o.payment.status === 'pending' ? 'to confirm' : 'unpaid'}`
 
 export const OrderCard = ({
   order,
@@ -95,6 +95,7 @@ export const OrderCard = ({
       </header>
       <p className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-stone-100 px-2 py-1 text-xs font-bold text-stone-700">
         <Icon className="h-3.5 w-3.5" /> {fulfilmentLabel(order)}
+        {order.channel === 'counter' && <span className="ml-1 rounded bg-white px-1 text-[10px] text-stone-500">Counter</span>}
       </p>
       {!compact && (
         <ul className="mt-3 space-y-1.5 text-sm">

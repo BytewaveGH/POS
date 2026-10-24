@@ -8,6 +8,7 @@ import { useEateryActions, useNow } from '@/lib/eatery/hooks'
 import type { FulfilmentType, Order, OrderStatus } from '@/lib/eatery/types'
 import { EateryFrame, RestaurantSwitcher } from '../_components/frame'
 import { OrderCard } from '../_components/order-bits'
+import { SoundToggle, useNewOrderAlert } from '../_components/alerts'
 
 const COLUMNS: { key: string; title: string; statuses: OrderStatus[]; empty: string }[] = [
   { key: 'new', title: 'New', statuses: ['placed'], empty: 'New orders land here' },
@@ -21,6 +22,15 @@ const TitleCount = ({ count }: { count: number }) => {
     document.title = count ? `(${count}) Orders · Sellix` : 'Orders · Sellix'
   }, [count])
   return null
+}
+
+const Alerts = ({ orders, currency }: { orders: Order[]; currency: string }) => {
+  const { sound, toggle } = useNewOrderAlert(orders, currency)
+  return (
+    <div className="mb-3 flex justify-end">
+      <SoundToggle sound={sound} onToggle={() => void toggle()} />
+    </div>
+  )
 }
 
 export default function OrdersBoard() {
@@ -51,6 +61,7 @@ export default function OrdersBoard() {
         return (
           <>
             <TitleCount count={fresh} />
+            <Alerts orders={o.orders} currency={r.currency} />
             <PageHeader
               eyebrow={r.name}
               title="Live orders"

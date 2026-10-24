@@ -40,7 +40,9 @@ const EMPLOYEE_ROUTE_PRIORITY = [
   { path: '/real-estate/maintenance', perm: ['canManageOperations', 'canViewReports'] },
   { path: '/real-estate', perm: 'canViewReports' },
   // Eatery
+  { path: '/eatery/pos', perm: 'canManageSales' },
   { path: '/eatery/orders', perm: 'canManageSales' },
+  { path: '/eatery/stock', perm: 'canManageStock' },
   { path: '/eatery/menu', perm: 'canManageProducts' },
   { path: '/eatery/brand', perm: 'canManageProducts' },
   { path: '/eatery/settings', perm: 'canManageOperations' },

@@ -154,7 +154,8 @@ export interface Promotion {
 // ── Orders ──────────────────────────────────────────────────────────────────
 
 export type FulfilmentType = 'pickup' | 'delivery' | 'dine-in'
-export type PaymentMethod = 'cash' | 'momo' | 'pay-at-table'
+// 'card' is taken at the counter only (POS); customers online pay cash, MoMo or at the table.
+export type PaymentMethod = 'cash' | 'momo' | 'pay-at-table' | 'card'
 export type OrderStatus = 'placed' | 'accepted' | 'preparing' | 'ready' | 'out-for-delivery' | 'completed' | 'cancelled'
 
 // What a customer sends: ids and choices only — never prices. The server
@@ -177,6 +178,8 @@ export interface OrderLine extends OrderLineInput {
   // Promotion discount per unit included in unitPrice.
   discountPerUnit: number
   lineTotal: number
+  // Ingredient cost per unit, worked out when stock was deducted (owner-only).
+  unitCost?: number
 }
 
 export interface CheckoutInput {
@@ -205,6 +208,89 @@ export interface Order {
   status: OrderStatus
   history: { status: OrderStatus; at: string }[]
   notes?: string
+  // 'online' from the storefront; 'counter' entered by staff on the POS.
+  channel?: OrderChannel
+  // Set once ingredients were taken out of stock (when the order is accepted,
+  // or straight away for counter orders) and put back if it's cancelled.
+  stockDeducted?: boolean
+  // Ingredient cost of the whole order at that moment (owner-only).
+  costOfGoods?: number
+  // Counter cash: what the customer handed over.
+  tendered?: number
+}
+
+export type OrderChannel = 'online' | 'counter'
+
+// What staff send from the POS: no prices either — priced like online orders.
+export interface CounterOrderInput {
+  lines: OrderLineInput[]
+  fulfilment: { type: 'dine-in' | 'pickup'; table?: string }
+  customer?: { name?: string; phone?: string }
+  payment: { method: 'cash' | 'momo' | 'card'; paid: boolean; reference?: string; tendered?: number }
+  notes?: string
+}
+
+// ── Ingredients, recipes and costs (owner-only) ─────────────────────────────
+
+export type IngredientUnit = 'g' | 'kg' | 'ml' | 'l' | 'pcs' | 'bag' | 'crate' | 'bottle' | 'tin' | 'pack'
+
+export interface Ingredient {
+  id: number
+  restaurantId: number
+  name: string
+  unit: IngredientUnit
+  // Average cost of one unit, updated by every purchase (weighted average).
+  costPerUnit: number
+  // Current quantity in `unit`. Can go negative if sales outrun recorded purchases.
+  stock: number
+  // Warn when stock falls to this level.
+  lowStockAt: number
+  supplier?: string
+}
+
+export interface RecipeLine {
+  ingredientId: number
+  // In the ingredient's unit, per one item sold.
+  quantity: number
+}
+
+// What one menu item uses. `choices` adds ingredients for options:
+// "Large" uses more dough, "Extra cheese" adds cheese.
+export interface Recipe {
+  id: number
+  restaurantId: number
+  itemId: number
+  ingredients: RecipeLine[]
+  choices: Record<string, RecipeLine[]>
+}
+
+export type StockMoveType = 'purchase' | 'usage' | 'return' | 'waste' | 'count'
+
+export interface StockMove {
+  id: number
+  restaurantId: number
+  ingredientId: number
+  type: StockMoveType
+  // + into stock, − out of stock, in the ingredient's unit.
+  quantity: number
+  // Cost of this movement (purchases: what was paid; usage/waste: at average cost).
+  totalCost: number
+  date: string
+  orderId?: number
+  supplier?: string
+  note?: string
+}
+
+export type ExpenseCategory = 'rent' | 'staff' | 'utilities' | 'gas' | 'transport' | 'packaging' | 'marketing' | 'repairs' | 'other'
+
+// Running costs that aren't ingredients: rent, salaries, light bill, gas…
+export interface Expense {
+  id: number
+  restaurantId: number
+  category: ExpenseCategory
+  amount: number
+  date: string
+  note?: string
 }
 
 export interface StorefrontBundle {
@@ -220,5 +306,9 @@ export interface ResourceMap {
   items: MenuItem
   promotions: Promotion
   orders: Order
+  ingredients: Ingredient
+  recipes: Recipe
+  stockMoves: StockMove
+  expenses: Expense
 }
 export type ResourceName = keyof ResourceMap

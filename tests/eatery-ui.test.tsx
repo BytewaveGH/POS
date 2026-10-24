@@ -20,6 +20,9 @@ import RestaurantPage from '@/app/[locale]/(eatery-public)/eat/[slug]/page'
 import CheckoutPage from '@/app/[locale]/(eatery-public)/eat/[slug]/checkout/page'
 import OrdersBoard from '@/app/[locale]/(eatery)/eatery/orders/page'
 import BrandPage from '@/app/[locale]/(eatery)/eatery/brand/page'
+import PosPage from '@/app/[locale]/(eatery)/eatery/pos/page'
+import StockPage from '@/app/[locale]/(eatery)/eatery/stock/page'
+import EateryOverview from '@/app/[locale]/(eatery)/eatery/page'
 import { createLocalSource } from '@/lib/eatery/data-source'
 import { useCart } from '@/lib/eatery/cart'
 import type { StorefrontBundle } from '@/lib/eatery/types'
@@ -152,6 +155,101 @@ describe('eatery platform (local data)', () => {
       const saved = (await owner.list('restaurants')).find((r) => r.id === velvet.id)!
       expect(saved.theme.colors.text).not.toBe('#2A2A2A')
       expect(saved.theme.colors.text).not.toBe(velvet.theme.colors.text)
+    })
+  })
+
+  describe('counter POS, stock and profit', () => {
+    const ownBlaze = async () => {
+      const owner = createLocalSource('acme')
+      const mine = await owner.claimDemo!()
+      const blaze = mine.find((r) => r.slug === 'blaze-pizza-shawarma')!
+      localStorage.setItem('sellix-eatery:selected', String(blaze.id))
+      return { owner, blaze }
+    }
+
+    it('rings up a walk-in take-away paid in cash, with change', async () => {
+      const { owner } = await ownBlaze()
+      withQuery(<PosPage />)
+      fireEvent.click(await screen.findByRole('button', { name: 'Coca-Cola' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Coca-Cola' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Fries' }))
+      expect(screen.getByTestId('pos-total').textContent).toBe('₵55')
+      fireEvent.click(screen.getByRole('radio', { name: 'Take-away' }))
+      fireEvent.change(screen.getByLabelText('Cash given'), { target: { value: '100' } })
+      expect(screen.getByText('Change: ₵45')).toBeTruthy()
+      fireEvent.click(screen.getByRole('button', { name: 'Charge ₵55' }))
+
+      expect(await screen.findByText(/sent to the kitchen/)).toBeTruthy()
+      expect(screen.getByText('Change ₵45')).toBeTruthy()
+      const [order] = await owner.list('orders')
+      expect(order).toMatchObject({
+        channel: 'counter',
+        status: 'accepted',
+        total: 55,
+        fulfilment: { type: 'pickup' },
+        payment: { method: 'cash', status: 'paid' },
+        stockDeducted: true,
+      })
+    })
+
+    it('opens the options sheet for items with sizes and adds them to the ticket', async () => {
+      await ownBlaze()
+      withQuery(<PosPage />)
+      fireEvent.click(await screen.findByRole('button', { name: 'Margherita' }))
+      const sheet = await screen.findByRole('dialog')
+      fireEvent.click(within(sheet).getByLabelText(/Medium/))
+      fireEvent.click(within(sheet).getByRole('button', { name: 'Add · ₵110' }))
+      await waitFor(() => expect(screen.getByTestId('pos-total').textContent).toBe('₵110'))
+    })
+
+    it('accepts a waiting online order from the counter', async () => {
+      const { owner } = await ownBlaze()
+      const pub = createLocalSource(null)
+      const bundle = (await pub.storefront('blaze-pizza-shawarma')) as StorefrontBundle
+      const fries = bundle.items.find((i) => i.name === 'Fries')!
+      const o = await pub.placeOrder('blaze-pizza-shawarma', {
+        lines: [{ itemId: fries.id, quantity: 1, choices: {} }],
+        customer: { name: 'Esi', phone: '0241112222' },
+        fulfilment: { type: 'pickup' },
+        payment: { method: 'cash' },
+      })
+      withQuery(<PosPage />)
+      const card = await screen.findByRole('listitem', { name: `Online order ${o.code}` })
+      fireEvent.click(within(card).getByRole('button', { name: 'Accept' }))
+      await waitFor(async () => expect((await owner.list('orders'))[0].status).toBe('accepted'))
+      expect((await pub.trackOrder({ slug: 'blaze-pizza-shawarma', code: o.code, accessKey: o.accessKey }))?.status).toBe('accepted')
+    })
+
+    it('records a purchase, updating stock and average cost', async () => {
+      const { owner } = await ownBlaze()
+      withQuery(<StockPage />)
+      fireEvent.click(within(await screen.findByRole('group', { name: 'Mozzarella' })).getByRole('button', { name: 'Bought' }))
+      fireEvent.change(await screen.findByLabelText('Quantity (g)'), { target: { value: '2000' } })
+      fireEvent.change(screen.getByLabelText('Total paid'), { target: { value: '320' } })
+      expect(screen.getByText(/New average cost/)).toBeTruthy()
+      fireEvent.click(screen.getByRole('button', { name: 'Add to stock' }))
+      await waitFor(async () =>
+        expect((await owner.list('ingredients')).find((i) => i.name === 'Mozzarella')).toMatchObject({ stock: 10000, costPerUnit: 0.128 })
+      )
+    })
+
+    it('the overview shows profit after ingredient costs and expenses', async () => {
+      const { owner, blaze } = await ownBlaze()
+      const bundle = (await createLocalSource(null).storefront('blaze-pizza-shawarma')) as StorefrontBundle
+      const coke = bundle.items.find((i) => i.name === 'Coca-Cola')!
+      const fries = bundle.items.find((i) => i.name === 'Fries')!
+      await owner.createCounterOrder(blaze.id, {
+        lines: [
+          { itemId: coke.id, quantity: 2, choices: {} },
+          { itemId: fries.id, quantity: 1, choices: {} },
+        ],
+        fulfilment: { type: 'pickup' },
+        payment: { method: 'cash', paid: true },
+      })
+      withQuery(<EateryOverview />)
+      // ₵55 sales − ₵20.95 ingredients − ₵9,800 running costs this month (rent, gas, wages, ECG)
+      expect((await screen.findByTestId('net-profit')).textContent).toBe('−₵9,766')
+      expect(screen.getByText('Loss')).toBeTruthy()
     })
   })
 })

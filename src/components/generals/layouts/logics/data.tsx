@@ -155,8 +155,10 @@ const eaterySidebarItems = [
   {
     title: 'Restaurant',
     items: [
+      { label: 'Counter (POS)', href: '/en/eatery/pos', icon: ScanLine, requiredPermission: 'canManageSales' },
       { label: 'Live orders', href: '/en/eatery/orders', icon: ClipboardList, requiredPermission: 'canManageSales' },
       { label: 'Menu', href: '/en/eatery/menu', icon: UtensilsCrossed, requiredPermission: 'canManageProducts' },
+      { label: 'Ingredients & costs', href: '/en/eatery/stock', icon: Package, requiredPermission: 'canManageStock' },
       { label: 'Brand & theme', href: '/en/eatery/brand', icon: Palette, requiredPermission: 'canManageProducts' },
       { label: 'Settings', href: '/en/eatery/settings', icon: Settings, requiredPermission: 'canManageOperations' },
     ],

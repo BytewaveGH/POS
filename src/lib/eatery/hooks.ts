@@ -8,7 +8,7 @@ import { useAxios } from '@/hooks/use-axios'
 import { publicApiClient } from '@/lib/public-axios-client'
 import { apiErrorMessage, apiStatus } from '@/lib/api-error'
 import { createApiSource, createLocalSource, DATA_SOURCE_KIND, type EaterySource, type OrderTicket } from './data-source'
-import type { ResourceMap, ResourceName, Restaurant } from './types'
+import type { CounterOrderInput, ResourceMap, ResourceName, Restaurant } from './types'
 
 // Network errors and 5xx only, at most twice; a failed query waits for the user.
 const retry = (count: number, err: unknown) => count < 2 && (apiStatus(err) === undefined || (apiStatus(err) ?? 0) >= 500)
@@ -102,7 +102,17 @@ export const useOwnerSource = (): { source: EaterySource; ready: boolean; scope:
   return { source, ready: status === 'authenticated', scope }
 }
 
-const OWNER_RESOURCES: ResourceName[] = ['restaurants', 'categories', 'items', 'promotions', 'orders']
+const OWNER_RESOURCES: ResourceName[] = [
+  'restaurants',
+  'categories',
+  'items',
+  'promotions',
+  'orders',
+  'ingredients',
+  'recipes',
+  'stockMoves',
+  'expenses',
+]
 const SELECTED_KEY = 'sellix-eatery:selected'
 
 const readSelected = () => {
@@ -160,6 +170,10 @@ export const useOwnerData = (): OwnerData => {
       items: data.items.filter((i) => i.restaurantId === rid).sort((a, b) => a.position - b.position),
       promotions: data.promotions.filter((p) => p.restaurantId === rid),
       orders: data.orders.filter((o) => o.restaurantId === rid).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)),
+      ingredients: data.ingredients.filter((x) => x.restaurantId === rid).sort((a, b) => a.name.localeCompare(b.name)),
+      recipes: data.recipes.filter((x) => x.restaurantId === rid),
+      stockMoves: data.stockMoves.filter((x) => x.restaurantId === rid).sort((a, b) => (a.date < b.date ? 1 : -1)),
+      expenses: data.expenses.filter((x) => x.restaurantId === rid).sort((a, b) => (a.date < b.date ? 1 : -1)),
       isLoading: !ready || (!failed && results.some((r) => r.isLoading)),
       error: failed ? apiErrorMessage(failed.error, 'Couldn’t load your restaurants.') : null,
       retry: () => results.forEach((r) => r.isError && void r.refetch()),
@@ -201,6 +215,9 @@ export const useEateryActions = () => {
     update: <R extends ResourceName>(r: R, id: number, body: Partial<Omit<ResourceMap[R], 'id'>>) =>
       run(() => source.update(r, id, body), 'Couldn’t save changes.'),
     remove: (r: ResourceName, id: number) => run(() => source.remove(r, id), 'Couldn’t delete.'),
+    // Counter (POS) order: priced by the source, accepted at once.
+    createCounterOrder: (restaurantId: number, input: CounterOrderInput) =>
+      run(() => source.createCounterOrder(restaurantId, input), 'Couldn’t send the order.'),
     claimDemo: () => run(() => (source.claimDemo ? source.claimDemo() : Promise.resolve([])), 'Couldn’t add the examples.'),
     // Sequential, for building a menu from a preset.
     createMany: <R extends ResourceName>(r: R, bodies: Omit<ResourceMap[R], 'id'>[]) =>

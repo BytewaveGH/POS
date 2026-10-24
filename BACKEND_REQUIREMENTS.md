@@ -407,6 +407,69 @@ Same four routes per resource as §6.2 (`GET /`, `POST /`, `PUT /:id`, `DELETE /
 
 As in `src/lib/eatery/types.ts`: `Restaurant` (with `theme: ThemeConfig`, `hours`, `fulfilment`, `payments`), `MenuCategory`, `MenuItem` (with `optionGroups`, optional `combo.slots`, `status`, optional `schedule`), `Promotion` and `Order`. Store `theme`, `hours`, `fulfilment`, `payments`, `optionGroups`, `combo`, `schedule` and order `lines` as JSON. The frontend owns their shape, and the server only needs the fields used in the pricing and validation rules above. Validate `theme.version === 1` and that colours are `#rrggbb`. The frontend fixes contrast itself.
 
+### 7.5 Counter POS, ingredients and profit
+
+**Counter orders (POS):** `POST /eatery/orders/counter`, signed in, `canManageSales`.
+
+```
+{ restaurantId, lines: OrderLineInput[], fulfilment: { type: "dine-in" | "pickup", table? },
+  customer?: { name?, phone? }, payment: { method: "cash" | "momo" | "card", paid, reference?, tendered? }, notes? }
+```
+
+- Priced exactly like §7.2. Opening hours and `acceptingOrders` are **not** checked, because staff are there. Items that are sold out, hidden or outside their schedule are still refused with `422`.
+- The created order has:
+  - `channel: "counter"` and `status: "accepted"` (history: placed, then accepted);
+  - `customer.name` of "Walk-in" when none is given;
+  - `payment.status` of `paid` or `unpaid`;
+  - `tendered` stored for cash.
+- Returns the `Order` plus `accessKey`. The printed receipt has a QR code to `/eat/<slug>/order/<code>?k=<accessKey>`, so a take-away customer can follow the order on their phone.
+- Online orders get `channel: "online"`.
+
+**Owner-only resources** (same four routes, `canManageStock`; never exposed by public endpoints):
+
+| Resource    | Path                   |
+| ----------- | ---------------------- |
+| Ingredients | `/eatery/ingredients/` |
+| Recipes     | `/eatery/recipes/`     |
+| Stock moves | `/eatery/stock-moves/` |
+| Expenses    | `/eatery/expenses/`    |
+
+```
+Ingredient { id, restaurantId, name, unit, costPerUnit, stock, lowStockAt, supplier? }
+            unit: "g" | "kg" | "ml" | "l" | "pcs" | "bag" | "crate" | "bottle" | "tin" | "pack"
+            name unique per restaurant → 409; delete while used in a recipe → 409
+Recipe     { id, restaurantId, itemId, ingredients: [{ ingredientId, quantity }], choices: { [choiceId]: [{ ingredientId, quantity }] } }
+            one per item → 409; quantities in the ingredient's unit, per portion; a negative
+            quantity under a choice swaps an ingredient (Beef: chicken −150 g, beef +150 g)
+StockMove  { id, restaurantId, ingredientId, type, quantity, totalCost, date, orderId?, supplier?, note? }
+            type: "purchase" | "usage" | "return" | "waste" | "count"; never edited or deleted (422)
+Expense    { id, restaurantId, category, amount, date, note? }
+            category: "rent" | "staff" | "utilities" | "gas" | "transport" | "packaging" | "marketing" | "repairs" | "other"
+```
+
+**Stock effects.** Apply each one in the same transaction as the change that causes it.
+
+- **`POST /stock-moves/` with `purchase`** (`quantity` > 0, `totalCost` = what was paid):
+  - `costPerUnit` becomes the weighted average `(max(stock, 0) × costPerUnit + totalCost) / (max(stock, 0) + quantity)`;
+  - `stock += quantity`.
+- **`POST /stock-moves/` with `waste`** (`quantity` > 0): `stock −= quantity`. The server stores the move with `quantity: −q` and `totalCost: q × costPerUnit`.
+- **`POST /stock-moves/` with `count`** (`quantity` = what was counted): `stock` is set to that amount. The server stores the difference and its cost.
+- **When an order first reaches an active status** (`accepted`, `preparing`, `ready`, `out-for-delivery`, `completed`), or when a counter order is created:
+  - For each line, work out usage = item recipe + recipes of the chosen options + recipes of combo picks, times quantity. Write one `usage` move per ingredient: `quantity: −q`, `totalCost: q × costPerUnit`, `orderId`.
+  - Decrease `stock`, and allow it to go negative.
+  - Set `order.lines[].unitCost`, `order.costOfGoods` and `order.stockDeducted = true`.
+  - Do this only once per order.
+- **When a deducted order is cancelled:** write a `return` move for each usage move and give the stock back. Set `stockDeducted` to false.
+
+**Profit** (computed in the frontend today; a `GET /eatery/reports/profit?from&to` endpoint later would be welcome):
+
+- Sales: non-cancelled order totals.
+- Cost of goods: the sum of `costOfGoods`.
+- Gross profit: sales − cost of goods.
+- Net profit: gross profit − waste moves' cost − expenses.
+
+Purchases are money out, not a cost, until the stock is used or wasted.
+
 ### 7.4 Later
 
 - Real-time order push (SSE or WebSocket) instead of polling.
