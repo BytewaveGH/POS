@@ -41,6 +41,7 @@ import {
   Skeleton,
 } from '../../_components/ui'
 import { TenancyItem } from '../../_components/cards'
+import { NoAccess } from '../../_components/load-state'
 import { UnitBoard } from '../../_components/unit-board'
 import { UnitDetail } from '../../_components/unit-detail'
 import { useLocaleHref } from '../../_components/module-frame'
@@ -85,6 +86,10 @@ export default function PropertyDetailPage() {
   const [openUnit, setOpenUnit] = useState<number | null>(null)
   const [uploadOpen, setUploadOpen] = useState(false)
   const close = () => setDrawer(null)
+  const canBuild = p.can.write('catalog')
+  const canLet = p.can.write('lettings')
+  const canRepair = p.can.write('maintenance')
+  const canFile = p.can.write('development')
 
   const property = p.propertyById.get(id)
   const data = useMemo(() => {
@@ -175,15 +180,17 @@ export default function PropertyDetailPage() {
               </p>
             </div>
             <div className="flex gap-2 flex-shrink-0">
-              <Button variant="secondary" size="sm" icon={Pencil} onClick={() => setDrawer({ kind: 'edit-property' })}>
-                Edit
-              </Button>
-              {data.hasStays && (
+              {canBuild && (
+                <Button variant="secondary" size="sm" icon={Pencil} onClick={() => setDrawer({ kind: 'edit-property' })}>
+                  Edit
+                </Button>
+              )}
+              {canLet && data.hasStays && (
                 <Button variant="secondary" size="sm" icon={CalendarPlus} onClick={() => setDrawer({ kind: 'booking', unitId: null })}>
                   New booking
                 </Button>
               )}
-              {data.views.some((v) => v.unit.rentalMode === 'long-term') && (
+              {canLet && data.views.some((v) => v.unit.rentalMode === 'long-term') && (
                 <Button size="sm" icon={KeyRound} onClick={() => setDrawer({ kind: 'move-in', unitId: null })}>
                   Move tenant in
                 </Button>
@@ -251,27 +258,35 @@ export default function PropertyDetailPage() {
           <UnitBoard
             views={data.views}
             onOpen={(v) => setOpenUnit(v.unit.id)}
-            onMoveIn={(v) => setDrawer({ kind: 'move-in', unitId: v.unit.id })}
-            onAdd={() => setDrawer({ kind: 'unit', unitId: null })}
+            onMoveIn={canLet ? (v) => setDrawer({ kind: 'move-in', unitId: v.unit.id }) : undefined}
+            onAdd={canBuild ? () => setDrawer({ kind: 'unit', unitId: null }) : undefined}
           />
         </TabsContent>
 
         <TabsContent value="tenants" className="mt-4">
-          {data.tenants.length === 0 ? (
+          {!p.can.read('lettings') ? (
+            <NoAccess />
+          ) : data.tenants.length === 0 ? (
             <EmptyState
               icon={Users}
               title="No tenants yet"
               description="Move a tenant into a vacant unit to start tracking their rent."
               action={
-                <Button icon={KeyRound} onClick={() => setDrawer({ kind: 'move-in', unitId: null })}>
-                  Move tenant in
-                </Button>
+                canLet && (
+                  <Button icon={KeyRound} onClick={() => setDrawer({ kind: 'move-in', unitId: null })}>
+                    Move tenant in
+                  </Button>
+                )
               }
             />
           ) : (
             <Card className="px-4 divide-y divide-stone-100">
               {data.tenants.map((r) => (
-                <TenancyItem key={r.lease.id} row={r} onPay={() => setDrawer({ kind: 'payment', leaseId: r.lease.id })} />
+                <TenancyItem
+                  key={r.lease.id}
+                  row={r}
+                  onPay={canLet ? () => setDrawer({ kind: 'payment', leaseId: r.lease.id }) : undefined}
+                />
               ))}
             </Card>
           )}
@@ -283,12 +298,16 @@ export default function PropertyDetailPage() {
         </TabsContent>
 
         <TabsContent value="payments" className="mt-4">
-          <div className="flex justify-end mb-3">
-            <Button size="sm" icon={Wallet} onClick={() => setDrawer({ kind: 'payment', leaseId: null })}>
-              Record payment
-            </Button>
-          </div>
-          {data.payments.length === 0 ? (
+          {canLet && (
+            <div className="flex justify-end mb-3">
+              <Button size="sm" icon={Wallet} onClick={() => setDrawer({ kind: 'payment', leaseId: null })}>
+                Record payment
+              </Button>
+            </div>
+          )}
+          {!p.can.read('lettings') ? (
+            <NoAccess />
+          ) : data.payments.length === 0 ? (
             <EmptyState icon={Receipt} title="No payments recorded" />
           ) : (
             <Card className="divide-y divide-stone-100">
@@ -319,31 +338,41 @@ export default function PropertyDetailPage() {
         </TabsContent>
 
         <TabsContent value="documents" className="mt-4">
-          <div className="flex justify-end mb-3">
-            <Button size="sm" icon={Upload} onClick={() => setUploadOpen(true)}>
-              Upload
-            </Button>
-          </div>
-          <DocumentList
-            documents={propertyDocs}
-            emptyTitle={isLand ? 'Keep the land papers here' : 'No documents yet'}
-            emptyDescription={
-              isLand
-                ? 'Indenture, site plan, receipts from the family, building permit — upload photos or PDFs and share them on WhatsApp.'
-                : 'Tenancy agreements, receipts, permits and photos for this property.'
-            }
-            onUpload={() => setUploadOpen(true)}
-            showContext={false}
-          />
+          {canFile && (
+            <div className="flex justify-end mb-3">
+              <Button size="sm" icon={Upload} onClick={() => setUploadOpen(true)}>
+                Upload
+              </Button>
+            </div>
+          )}
+          {!p.can.read('development') ? (
+            <NoAccess />
+          ) : (
+            <DocumentList
+              documents={propertyDocs}
+              emptyTitle={isLand ? 'Keep the land papers here' : 'No documents yet'}
+              emptyDescription={
+                isLand
+                  ? 'Indenture, site plan, receipts from the family, building permit — upload photos or PDFs and share them on WhatsApp.'
+                  : 'Tenancy agreements, receipts, permits and photos for this property.'
+              }
+              onUpload={canFile ? () => setUploadOpen(true) : undefined}
+              showContext={false}
+            />
+          )}
         </TabsContent>
 
         <TabsContent value="repairs" className="mt-4">
-          <div className="flex justify-end mb-3">
-            <Button size="sm" icon={Plus} onClick={() => setDrawer({ kind: 'repair', item: null })}>
-              Log repair
-            </Button>
-          </div>
-          {data.repairs.length === 0 ? (
+          {canRepair && (
+            <div className="flex justify-end mb-3">
+              <Button size="sm" icon={Plus} onClick={() => setDrawer({ kind: 'repair', item: null })}>
+                Log repair
+              </Button>
+            </div>
+          )}
+          {!p.can.read('maintenance') ? (
+            <NoAccess />
+          ) : data.repairs.length === 0 ? (
             <EmptyState
               icon={Hammer}
               title="No repairs logged"
@@ -355,6 +384,7 @@ export default function PropertyDetailPage() {
                 <button
                   key={m.id}
                   type="button"
+                  disabled={!canRepair}
                   onClick={() => setDrawer({ kind: 'repair', item: m })}
                   className="w-full text-left flex items-center justify-between gap-3 px-4 py-3 hover:bg-stone-50"
                 >
@@ -376,40 +406,66 @@ export default function PropertyDetailPage() {
         </TabsContent>
       </Tabs>
 
-      <div className="mt-10 flex justify-end">
-        <Button variant="danger" size="sm" icon={Trash2} onClick={() => setDrawer({ kind: 'delete-property' })}>
-          Delete property
-        </Button>
-      </div>
+      {canBuild && (
+        <div className="mt-10 flex justify-end">
+          <Button variant="danger" size="sm" icon={Trash2} onClick={() => setDrawer({ kind: 'delete-property' })}>
+            Delete property
+          </Button>
+        </div>
+      )}
 
       {/* Drawers & dialogs */}
       <UnitDetail
         view={unitView}
         onOpenChange={(o) => !o && setOpenUnit(null)}
-        onEdit={() => {
-          setDrawer({ kind: 'unit', unitId: openUnit })
-          setOpenUnit(null)
-        }}
-        onDelete={() => {
-          if (openUnit !== null) setDrawer({ kind: 'delete-unit', unitId: openUnit })
-          setOpenUnit(null)
-        }}
-        onMoveIn={() => {
-          setDrawer({ kind: 'move-in', unitId: openUnit })
-          setOpenUnit(null)
-        }}
-        onMoveOut={(lease) => {
-          setDrawer({ kind: 'move-out', lease })
-          setOpenUnit(null)
-        }}
-        onPay={(leaseId) => {
-          setDrawer({ kind: 'payment', leaseId })
-          setOpenUnit(null)
-        }}
-        onBook={() => {
-          setDrawer({ kind: 'booking', unitId: openUnit })
-          setOpenUnit(null)
-        }}
+        onEdit={
+          canBuild
+            ? () => {
+                setDrawer({ kind: 'unit', unitId: openUnit })
+                setOpenUnit(null)
+              }
+            : undefined
+        }
+        onDelete={
+          canBuild
+            ? () => {
+                if (openUnit !== null) setDrawer({ kind: 'delete-unit', unitId: openUnit })
+                setOpenUnit(null)
+              }
+            : undefined
+        }
+        onMoveIn={
+          canLet
+            ? () => {
+                setDrawer({ kind: 'move-in', unitId: openUnit })
+                setOpenUnit(null)
+              }
+            : undefined
+        }
+        onMoveOut={
+          canLet
+            ? (lease) => {
+                setDrawer({ kind: 'move-out', lease })
+                setOpenUnit(null)
+              }
+            : undefined
+        }
+        onPay={
+          canLet
+            ? (leaseId) => {
+                setDrawer({ kind: 'payment', leaseId })
+                setOpenUnit(null)
+              }
+            : undefined
+        }
+        onBook={
+          canLet
+            ? () => {
+                setDrawer({ kind: 'booking', unitId: openUnit })
+                setOpenUnit(null)
+              }
+            : undefined
+        }
       />
       <DocumentUploadForm
         open={uploadOpen}
@@ -459,12 +515,8 @@ export default function PropertyDetailPage() {
             : 'This removes the property with its units, tenancies, payments, bookings and repairs. This cannot be undone.'
         }
         onConfirm={async () => {
-          try {
-            await actions.remove('properties', id)
-            router.push(href('/properties'))
-          } catch {
-            // toast shown
-          }
+          await actions.remove('properties', id, { inline: true })
+          router.push(href('/properties'))
         }}
       />
       <ConfirmDialog
@@ -472,7 +524,7 @@ export default function PropertyDetailPage() {
         onOpenChange={(o) => !o && close()}
         title={`Delete ${drawer?.kind === 'delete-unit' ? (p.unitById.get(drawer.unitId)?.name ?? 'unit') : 'unit'}?`}
         description="Its tenancies, payments and bookings are removed too. This cannot be undone."
-        onConfirm={() => drawer?.kind === 'delete-unit' && void actions.remove('units', drawer.unitId).catch(() => {})}
+        onConfirm={() => (drawer?.kind === 'delete-unit' ? actions.remove('units', drawer.unitId, { inline: true }) : undefined)}
       />
     </>
   )

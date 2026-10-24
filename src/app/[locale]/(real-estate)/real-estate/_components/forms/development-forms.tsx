@@ -40,7 +40,7 @@ export const ProjectForm = ({
   project?: Project | null
   onSaved?: (p: Project) => void
 }) => {
-  const actions = useRealEstateActions()
+  const actions = useRealEstateActions({ inline: true })
   const [saving, setSaving] = useState(false)
   const [phases, setPhases] = useState<string[]>(STANDARD_PHASES)
   const [picked, setPicked] = useState<Set<string>>(new Set(STANDARD_PHASES))
@@ -108,6 +108,7 @@ export const ProjectForm = ({
   const err = form.formState.errors
   return (
     <Drawer
+      error={actions.error}
       open={open}
       onOpenChange={onOpenChange}
       wide
@@ -239,7 +240,7 @@ export const PhaseForm = ({
   nextPosition: number
   onDelete?: () => void
 }) => {
-  const actions = useRealEstateActions()
+  const actions = useRealEstateActions({ inline: true })
   const [saving, setSaving] = useState(false)
   const form = useForm<z.infer<typeof phaseSchema>>({ resolver: zodResolver(phaseSchema) })
   useEffect(() => {
@@ -279,6 +280,7 @@ export const PhaseForm = ({
 
   return (
     <Drawer
+      error={actions.error}
       open={open}
       onOpenChange={onOpenChange}
       title={phase ? `Edit ${phase.name}` : 'Add a phase'}
@@ -354,7 +356,7 @@ export const ExpenseForm = ({
   preset?: { projectId?: number; phaseId?: number } | null
 }) => {
   const p = usePortfolio()
-  const actions = useRealEstateActions()
+  const actions = useRealEstateActions({ inline: true })
   const [saving, setSaving] = useState(false)
   const [receipt, setReceipt] = useState<File | null>(null)
   const [receiptError, setReceiptError] = useState<string | null>(null)
@@ -438,6 +440,7 @@ export const ExpenseForm = ({
 
   return (
     <Drawer
+      error={actions.error}
       open={open}
       onOpenChange={onOpenChange}
       title={expense ? 'Edit expense' : 'Record an expense'}

@@ -1,12 +1,15 @@
 'use client'
 
-import { useMemo } from 'react'
-import { useQueries, useQueryClient } from '@tanstack/react-query'
+import { useMemo, useState } from 'react'
+import { useQueries, useQueryClient, type Query } from '@tanstack/react-query'
 import { useSession } from 'next-auth/react'
 import { toast } from 'sonner'
 import { useAxios } from '@/hooks/use-axios'
-import { apiErrorMessage } from '@/lib/api-error'
+import { usePermissions } from '@/hooks/use-permissions'
+import { apiErrorMessage, apiStatus } from '@/lib/api-error'
 import { createApiSource, createLocalSource, DATA_SOURCE_KIND, type DataSource, type DocumentDraft } from './data-source'
+import { realEstateAccess, RESOURCE_AREA, type Area, type RealEstateAccess } from './access'
+import { classifyLoadError, isFormError, loadErrorMessage, retryDelay, shouldRetry, type LoadErrorKind } from './errors'
 import type { DocumentRecord, ResourceMap, ResourceName } from './types'
 
 const RESOURCES: ResourceName[] = [
@@ -24,6 +27,10 @@ const RESOURCES: ResourceName[] = [
   'documents',
 ]
 
+// Added after the first eight. A backend without them yet answers 404 on the
+// list, which just means "none".
+const OPTIONAL: ResourceName[] = ['projects', 'phases', 'expenses', 'documents']
+
 export const useDataSource = (): { source: DataSource; ready: boolean; scope: string } => {
   const request = useAxios()
   const { data: session, status } = useSession()
@@ -33,9 +40,28 @@ export const useDataSource = (): { source: DataSource; ready: boolean; scope: st
   return { source, ready: status === 'authenticated', scope }
 }
 
+export const useRealEstateAccess = (): RealEstateAccess => {
+  const { canViewReports, canManageProducts, canManageSales, canManageOperations } = usePermissions()
+  return useMemo(
+    () => realEstateAccess({ canViewReports, canManageProducts, canManageSales, canManageOperations }),
+    [canViewReports, canManageProducts, canManageSales, canManageOperations]
+  )
+}
+
+// A failed query stays failed until the user asks again: no refetch when
+// another section mounts, the window regains focus or the network returns.
+const notFailed = (q: Query) => q.state.status !== 'error'
+
 export type Portfolio = { [R in ResourceName]: ResourceMap[R][] } & {
   isLoading: boolean
+  // Page-level failure (anything but a section's 403), shown as an error panel.
   error: string | null
+  errorKind: LoadErrorKind | null
+  // Refetch the collections that failed, once.
+  retry: () => void
+  isRetrying: boolean
+  // Permission, and any 403 actually received, per area.
+  can: { read: (a: Area) => boolean; write: (a: Area) => boolean }
   propertyById: Map<number, ResourceMap['properties']>
   unitById: Map<number, ResourceMap['units']>
   unitTypeById: Map<number, ResourceMap['unitTypes']>
@@ -46,12 +72,28 @@ export type Portfolio = { [R in ResourceName]: ResourceMap[R][] } & {
 // and derive what they need. React Query shares and caches the requests.
 export const usePortfolio = (): Portfolio => {
   const { source, ready, scope } = useDataSource()
+  const access = useRealEstateAccess()
   const results = useQueries({
     queries: RESOURCES.map((r) => ({
       queryKey: ['real-estate', source.kind, scope, r],
-      queryFn: () => source.list(r),
-      enabled: ready,
+      queryFn: async () => {
+        try {
+          return await source.list(r)
+        } catch (err) {
+          if (OPTIONAL.includes(r) && apiStatus(err) === 404) return []
+          throw err
+        }
+      },
+      // Never ask for what this user isn't allowed to read.
+      enabled: ready && access[RESOURCE_AREA[r]].read,
       staleTime: 30_000,
+      // Network errors and 5xx only, at most twice. 4xx answers are final.
+      retry: shouldRetry,
+      retryDelay,
+      retryOnMount: false,
+      refetchOnMount: notFailed,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: notFailed,
     })),
   })
 
@@ -59,41 +101,71 @@ export const usePortfolio = (): Portfolio => {
     const data = Object.fromEntries(RESOURCES.map((r, i) => [r, (results[i].data as unknown[]) ?? []])) as {
       [R in ResourceName]: ResourceMap[R][]
     }
-    const failed = results.find((r) => r.error)
+    const denied = new Set<Area>()
+    let fatal: unknown = null
+    results.forEach((r, i) => {
+      if (!r.error) return
+      if (classifyLoadError(r.error) === 'forbidden') denied.add(RESOURCE_AREA[RESOURCES[i]])
+      else fatal ??= r.error
+    })
     return {
       ...data,
-      isLoading: !ready || results.some((r) => r.isLoading),
-      error: failed ? apiErrorMessage(failed.error, 'Couldn’t load your properties.') : null,
+      // A failure ends the loading state even while other collections are still out.
+      isLoading: !ready || (!fatal && results.some((r) => r.isLoading)),
+      error: fatal ? loadErrorMessage(fatal) : null,
+      errorKind: fatal ? classifyLoadError(fatal) : null,
+      retry: () => results.forEach((r) => r.isError && !r.isFetching && void r.refetch()),
+      isRetrying: results.some((r) => r.isError && r.isFetching),
+      can: {
+        read: (a: Area) => access[a].read && !denied.has(a),
+        write: (a: Area) => access[a].write && !denied.has(a),
+      },
       propertyById: new Map(data.properties.map((p) => [p.id, p])),
       unitById: new Map(data.units.map((u) => [u.id, u])),
       unitTypeById: new Map(data.unitTypes.map((t) => [t.id, t])),
       tenantById: new Map(data.tenants.map((t) => [t.id, t])),
     }
-    // results is a new array each render; its data/error identities are what matter.
+    // results is a new array each render; its data/error/fetching identities are what matter.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, ...results.map((r) => r.data), ...results.map((r) => r.error)])
+  }, [ready, access, ...results.map((r) => r.data), ...results.map((r) => r.error), ...results.map((r) => r.isFetching)])
 }
 
 // Writes. Each call refreshes all real-estate data (cascades on delete touch
-// several collections) and surfaces failures as a toast before rethrowing.
-export const useRealEstateActions = () => {
+// several collections). Writes are never retried. Failures are surfaced, then
+// rethrown:
+// - 400/409/422 on an `inline` call → `error`, for the open form or dialog to show;
+// - 404 → a toast, and the lists are refetched once so the stale row goes;
+// - anything else → a toast.
+export const useRealEstateActions = (opts: { inline?: boolean } = {}) => {
   const { source, scope } = useDataSource()
   const qc = useQueryClient()
+  const [error, setError] = useState<{ message: string } | null>(null)
   const refresh = () => qc.invalidateQueries({ queryKey: ['real-estate', source.kind, scope] })
 
-  const run = async <T>(fn: () => Promise<T>, failMsg: string): Promise<T> => {
+  const run = async <T>(fn: () => Promise<T>, failMsg: string, inline = opts.inline): Promise<T> => {
+    setError(null)
     try {
       const out = await fn()
       await refresh()
       return out
     } catch (err) {
-      toast.error(apiErrorMessage(err, failMsg))
+      const message = apiErrorMessage(err, failMsg)
+      if (apiStatus(err) === 404) {
+        toast.error(message === 'not found' ? 'That record no longer exists.' : message)
+        void refresh()
+      } else if (inline && isFormError(err)) {
+        setError({ message })
+      } else {
+        toast.error(message)
+      }
       throw err
     }
   }
 
   return {
     kind: source.kind,
+    // The last 400/409/422 of an `inline` call; cleared when the next call starts.
+    error,
     create: <R extends ResourceName>(r: R, body: Omit<ResourceMap[R], 'id'>) => run(() => source.create(r, body), 'Couldn’t save.'),
     // Sequential so generated unit names keep their order.
     createMany: <R extends ResourceName>(r: R, bodies: Omit<ResourceMap[R], 'id'>[]) =>
@@ -104,7 +176,9 @@ export const useRealEstateActions = () => {
       }, 'Couldn’t save.'),
     update: <R extends ResourceName>(r: R, id: number, body: Partial<Omit<ResourceMap[R], 'id'>>) =>
       run(() => source.update(r, id, body), 'Couldn’t save changes.'),
-    remove: (r: ResourceName, id: number) => run(() => source.remove(r, id), 'Couldn’t delete.'),
+    // `inline` when called from a ConfirmDialog, which shows a conflict in place.
+    remove: (r: ResourceName, id: number, o: { inline?: boolean } = {}) =>
+      run(() => source.remove(r, id), 'Couldn’t delete.', o.inline ?? opts.inline),
     uploadDocument: (meta: DocumentDraft, file: File) => run(() => source.uploadDocument(meta, file), `Couldn’t upload ${file.name}.`),
     // Reads don't refresh anything; failures still toast.
     getFile: async (doc: DocumentRecord) => {

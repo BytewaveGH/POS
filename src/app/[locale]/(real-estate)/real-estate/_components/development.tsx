@@ -10,6 +10,7 @@ import { money, percent, plural, shortDate } from '../_logics/format'
 import { usePortfolio, useRealEstateActions } from '../_logics/hooks'
 import type { Expense, Project, ProjectPhase, Property } from '../_logics/types'
 import { Button, Card, EmptyState, SectionTitle } from './ui'
+import { NoAccess } from './load-state'
 import { ConfirmDialog, Select } from './form'
 import { ExpenseForm, PhaseForm, ProjectForm } from './forms/development-forms'
 
@@ -124,6 +125,7 @@ export const DevelopmentSection = ({ property }: { property: Property }) => {
   const [phaseFilter, setPhaseFilter] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
   const [busyPhase, setBusyPhase] = useState<number | null>(null)
+  const canEdit = p.can.write('development')
 
   const summary = project ? projectSummary(project, p.phases, p.expenses) : null
   const propertyExpenses = p.expenses.filter((e) => e.propertyId === property.id)
@@ -151,6 +153,8 @@ export const DevelopmentSection = ({ property }: { property: Property }) => {
     }
   }
 
+  if (!p.can.read('development')) return <NoAccess />
+
   return (
     <div className="flex flex-col gap-4">
       <InvestmentSummary property={property} />
@@ -158,17 +162,19 @@ export const DevelopmentSection = ({ property }: { property: Property }) => {
       {projects.length === 0 ? (
         <EmptyState
           icon={HardHat}
-          title="Track a building project"
+          title={canEdit ? 'Track a building project' : 'No building projects yet'}
           description="Follow each phase — foundation, blocks, roofing… — and every bag of cement, trip of sand and day of labour, so you always know what the land has cost."
           action={
-            <div className="flex flex-wrap justify-center gap-2">
-              <Button icon={Plus} onClick={() => setProjectForm({ project: null })}>
-                Start a project
-              </Button>
-              <Button variant="secondary" icon={Receipt} onClick={() => setExpenseForm({ expense: null })}>
-                Record an expense
-              </Button>
-            </div>
+            canEdit && (
+              <div className="flex flex-wrap justify-center gap-2">
+                <Button icon={Plus} onClick={() => setProjectForm({ project: null })}>
+                  Start a project
+                </Button>
+                <Button variant="secondary" icon={Receipt} onClick={() => setExpenseForm({ expense: null })}>
+                  Record an expense
+                </Button>
+              </div>
+            )
           }
         />
       ) : (
@@ -211,21 +217,25 @@ export const DevelopmentSection = ({ property }: { property: Property }) => {
                     {summary.currentPhase ? ` · now: ${summary.currentPhase.name}` : summary.phaseCount ? ' · all phases done' : ''}
                   </p>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    size="sm"
-                    icon={Receipt}
-                    onClick={() => setExpenseForm({ expense: null, preset: { projectId: project.id, phaseId: summary.currentPhase?.id } })}
-                  >
-                    Record expense
-                  </Button>
-                  <Button size="sm" variant="secondary" icon={Pencil} onClick={() => setProjectForm({ project })}>
-                    Edit
-                  </Button>
-                  <Button size="sm" variant="secondary" icon={Plus} onClick={() => setProjectForm({ project: null })}>
-                    New project
-                  </Button>
-                </div>
+                {canEdit && (
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      icon={Receipt}
+                      onClick={() =>
+                        setExpenseForm({ expense: null, preset: { projectId: project.id, phaseId: summary.currentPhase?.id } })
+                      }
+                    >
+                      Record expense
+                    </Button>
+                    <Button size="sm" variant="secondary" icon={Pencil} onClick={() => setProjectForm({ project })}>
+                      Edit
+                    </Button>
+                    <Button size="sm" variant="secondary" icon={Plus} onClick={() => setProjectForm({ project: null })}>
+                      New project
+                    </Button>
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-5">
@@ -273,9 +283,11 @@ export const DevelopmentSection = ({ property }: { property: Property }) => {
                 title="Phases"
                 hint={`${percent(summary.progress)} complete`}
                 action={
-                  <Button size="sm" variant="ghost" icon={Plus} onClick={() => setPhaseForm({ phase: null })}>
-                    Add phase
-                  </Button>
+                  canEdit && (
+                    <Button size="sm" variant="ghost" icon={Plus} onClick={() => setPhaseForm({ phase: null })}>
+                      Add phase
+                    </Button>
+                  )
                 }
               />
               {summary.phases.length === 0 ? (
@@ -311,7 +323,7 @@ export const DevelopmentSection = ({ property }: { property: Property }) => {
                           </div>
                           <div className="flex items-center gap-1">
                             <span className="text-sm font-extrabold text-stone-900 tabular-nums mr-1">{money(spent)}</span>
-                            {phase.status !== 'done' && (
+                            {canEdit && phase.status !== 'done' && (
                               <Button
                                 size="sm"
                                 variant="secondary"
@@ -321,23 +333,27 @@ export const DevelopmentSection = ({ property }: { property: Property }) => {
                                 {phase.status === 'not-started' ? 'Start' : 'Mark done'}
                               </Button>
                             )}
-                            <button
-                              type="button"
-                              aria-label={`Add expense to ${phase.name}`}
-                              title="Add expense"
-                              onClick={() => setExpenseForm({ expense: null, preset: { projectId: project.id, phaseId: phase.id } })}
-                              className="h-9 w-9 rounded-lg inline-flex items-center justify-center text-stone-400 hover:text-endeavour hover:bg-stone-100"
-                            >
-                              <Plus className="h-4 w-4" />
-                            </button>
-                            <button
-                              type="button"
-                              aria-label={`Edit ${phase.name}`}
-                              onClick={() => setPhaseForm({ phase })}
-                              className="h-9 w-9 rounded-lg inline-flex items-center justify-center text-stone-400 hover:text-endeavour hover:bg-stone-100"
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </button>
+                            {canEdit && (
+                              <>
+                                <button
+                                  type="button"
+                                  aria-label={`Add expense to ${phase.name}`}
+                                  title="Add expense"
+                                  onClick={() => setExpenseForm({ expense: null, preset: { projectId: project.id, phaseId: phase.id } })}
+                                  className="h-9 w-9 rounded-lg inline-flex items-center justify-center text-stone-400 hover:text-endeavour hover:bg-stone-100"
+                                >
+                                  <Plus className="h-4 w-4" />
+                                </button>
+                                <button
+                                  type="button"
+                                  aria-label={`Edit ${phase.name}`}
+                                  onClick={() => setPhaseForm({ phase })}
+                                  className="h-9 w-9 rounded-lg inline-flex items-center justify-center text-stone-400 hover:text-endeavour hover:bg-stone-100"
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </button>
+                              </>
+                            )}
                           </div>
                         </div>
                         {budget > 0 && (
@@ -373,14 +389,16 @@ export const DevelopmentSection = ({ property }: { property: Property }) => {
             title="Expenses"
             hint={`${plural(ledger.length, 'entry', 'entries')} · ${money(ledger.reduce((s, e) => s + expenseAmount(e), 0))}`}
             action={
-              <Button
-                size="sm"
-                variant="ghost"
-                icon={Plus}
-                onClick={() => setExpenseForm({ expense: null, preset: project ? { projectId: project.id } : undefined })}
-              >
-                Add
-              </Button>
+              canEdit && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  icon={Plus}
+                  onClick={() => setExpenseForm({ expense: null, preset: project ? { projectId: project.id } : undefined })}
+                >
+                  Add
+                </Button>
+              )
             }
           />
           <div className="flex flex-col sm:flex-row gap-2 mb-3">
@@ -433,24 +451,26 @@ export const DevelopmentSection = ({ property }: { property: Property }) => {
                     )}
                   </div>
                   <span className="text-sm font-extrabold text-stone-900 tabular-nums">{money(expenseAmount(e))}</span>
-                  <div className="flex sm:opacity-0 group-hover:opacity-100 focus-within:opacity-100">
-                    <button
-                      type="button"
-                      aria-label={`Edit ${e.description}`}
-                      onClick={() => setExpenseForm({ expense: e })}
-                      className="h-8 w-8 rounded-lg inline-flex items-center justify-center text-stone-400 hover:text-endeavour hover:bg-stone-100"
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      aria-label={`Delete ${e.description}`}
-                      onClick={() => setConfirm({ kind: 'expense', id: e.id, label: e.description })}
-                      className="h-8 w-8 rounded-lg inline-flex items-center justify-center text-stone-400 hover:text-rose-600 hover:bg-rose-50"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
+                  {canEdit && (
+                    <div className="flex sm:opacity-0 group-hover:opacity-100 focus-within:opacity-100">
+                      <button
+                        type="button"
+                        aria-label={`Edit ${e.description}`}
+                        onClick={() => setExpenseForm({ expense: e })}
+                        className="h-8 w-8 rounded-lg inline-flex items-center justify-center text-stone-400 hover:text-endeavour hover:bg-stone-100"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Delete ${e.description}`}
+                        onClick={() => setConfirm({ kind: 'expense', id: e.id, label: e.description })}
+                        className="h-8 w-8 rounded-lg inline-flex items-center justify-center text-stone-400 hover:text-rose-600 hover:bg-rose-50"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  )}
                 </div>
               )
             })}
@@ -465,7 +485,7 @@ export const DevelopmentSection = ({ property }: { property: Property }) => {
         </Card>
       )}
 
-      {project && (
+      {canEdit && project && (
         <div className="flex justify-end">
           <Button
             variant="danger"
@@ -521,8 +541,9 @@ export const DevelopmentSection = ({ property }: { property: Property }) => {
         onConfirm={() => {
           if (!confirm) return
           const r = confirm.kind === 'project' ? 'projects' : confirm.kind === 'phase' ? 'phases' : 'expenses'
-          if (confirm.kind === 'project') setSelectedId(null)
-          void actions.remove(r, confirm.id).catch(() => {})
+          return actions.remove(r, confirm.id, { inline: true }).then(() => {
+            if (confirm.kind === 'project') setSelectedId(null)
+          })
         }}
       />
     </div>

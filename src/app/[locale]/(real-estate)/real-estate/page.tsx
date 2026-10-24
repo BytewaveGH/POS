@@ -62,6 +62,8 @@ const greeting = () => {
 
 export default function RealEstateDashboard() {
   const p = usePortfolio()
+  const canBuild = p.can.write('catalog')
+  const canLet = p.can.write('lettings')
   const href = useLocaleHref()
   const today = todayISO()
   const [drawer, setDrawer] = useState<null | 'property' | 'move-in' | 'payment'>(null)
@@ -140,9 +142,11 @@ export default function RealEstateDashboard() {
           title="Add your first property"
           description="Set up the building and its rooms in one step — e.g. 2 single rooms and 7 self-contained chamber & halls — then move your tenants in."
           action={
-            <Button icon={Plus} onClick={() => setDrawer('property')}>
-              Add property
-            </Button>
+            canBuild && (
+              <Button icon={Plus} onClick={() => setDrawer('property')}>
+                Add property
+              </Button>
+            )
           }
         />
         <div className="grid gap-3 sm:grid-cols-3 mt-4">
@@ -178,15 +182,21 @@ export default function RealEstateDashboard() {
         description={`${plural(p.properties.length, 'property', 'properties')} · ${plural(p.units.length, 'unit')} · ${plural(view.rows.filter((r) => r.state === 'active').length, 'tenant')}`}
         actions={
           <>
-            <Button variant="secondary" icon={Wallet} onClick={() => pay()}>
-              Record payment
-            </Button>
-            <Button variant="secondary" icon={KeyRound} onClick={() => setDrawer('move-in')}>
-              Move tenant in
-            </Button>
-            <Button icon={Plus} onClick={() => setDrawer('property')}>
-              Add property
-            </Button>
+            {canLet && (
+              <>
+                <Button variant="secondary" icon={Wallet} onClick={() => pay()}>
+                  Record payment
+                </Button>
+                <Button variant="secondary" icon={KeyRound} onClick={() => setDrawer('move-in')}>
+                  Move tenant in
+                </Button>
+              </>
+            )}
+            {canBuild && (
+              <Button icon={Plus} onClick={() => setDrawer('property')}>
+                Add property
+              </Button>
+            )}
           </>
         }
       />
@@ -257,6 +267,7 @@ export default function RealEstateDashboard() {
                 <button
                   key={r.lease.id}
                   type="button"
+                  disabled={!canLet}
                   onClick={() => pay(r.lease.id)}
                   className="w-full text-left hover:bg-stone-50 -mx-2 px-2 rounded-xl"
                 >

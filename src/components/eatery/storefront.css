@@ -1,0 +1,187 @@
+/* Storefront styling. Every rule reads the restaurant's theme through CSS
+   variables set by <ThemeScope> (src/lib/eatery/theme.ts), so one set of
+   components renders every brand. */
+
+.e-scope {
+  background: var(--e-bg);
+  color: var(--e-text);
+  font-family: var(--e-font-body);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.e-display {
+  font-family: var(--e-font-display);
+  text-transform: var(--e-heading-case);
+  letter-spacing: -0.01em;
+  line-height: 1.05;
+}
+.e-scope[data-case='upper'] .e-display {
+  letter-spacing: 0.01em;
+}
+
+.e-muted {
+  color: var(--e-muted);
+}
+.e-price {
+  color: var(--e-primary-text);
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+
+.e-card {
+  background: var(--e-surface);
+  border: 1px solid var(--e-border);
+  border-radius: var(--e-radius);
+}
+
+.e-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 44px;
+  padding: 0 1.1rem;
+  background: var(--e-primary);
+  color: var(--e-on-primary);
+  border-radius: var(--e-radius-control);
+  font-weight: 800;
+  transition:
+    transform 0.12s ease,
+    filter 0.12s ease;
+}
+.e-btn:hover {
+  filter: brightness(1.06);
+}
+.e-btn:active {
+  transform: scale(0.98);
+}
+.e-btn:disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+.e-btn-quiet {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 44px;
+  padding: 0 1rem;
+  border: 1.5px solid var(--e-border);
+  color: var(--e-text);
+  border-radius: var(--e-radius-control);
+  font-weight: 700;
+  background: transparent;
+}
+.e-btn-quiet:hover {
+  background: var(--e-primary-soft);
+}
+
+.e-focus:focus-visible,
+.e-btn:focus-visible,
+.e-btn-quiet:focus-visible,
+.e-scope a:focus-visible,
+.e-scope button:focus-visible,
+.e-scope input:focus-visible,
+.e-scope textarea:focus-visible,
+.e-scope select:focus-visible {
+  outline: 3px solid var(--e-primary-text);
+  outline-offset: 2px;
+}
+
+.e-accent {
+  background: var(--e-accent);
+  color: var(--e-on-accent);
+}
+.e-soft {
+  background: var(--e-primary-soft);
+}
+.e-border {
+  border-color: var(--e-border);
+}
+
+.e-input {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 0.9rem;
+  background: var(--e-surface);
+  color: var(--e-text);
+  border: 1.5px solid var(--e-border);
+  border-radius: var(--e-radius-control);
+  font-size: 16px; /* no zoom on iOS */
+}
+.e-input::placeholder {
+  color: var(--e-muted);
+  opacity: 0.8;
+}
+textarea.e-input {
+  padding-top: 0.7rem;
+  padding-bottom: 0.7rem;
+  min-height: 84px;
+}
+
+.e-choice {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 52px;
+  padding: 0.5rem 0.9rem;
+  border: 1.5px solid var(--e-border);
+  border-radius: var(--e-radius-control);
+  cursor: pointer;
+  transition:
+    border-color 0.12s ease,
+    background 0.12s ease;
+}
+.e-scope[data-shape='pill'] .e-choice {
+  border-radius: 16px;
+}
+.e-choice:has(input:checked) {
+  border-color: var(--e-primary-text);
+  background: var(--e-primary-soft);
+}
+.e-choice:has(input:disabled) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.e-choice:has(input:focus-visible) {
+  outline: 3px solid var(--e-primary-text);
+  outline-offset: 2px;
+}
+
+.e-leader {
+  flex: 1;
+  min-width: 1.5rem;
+  border-bottom: 1.5px dotted var(--e-border);
+  transform: translateY(-0.3em);
+}
+
+.e-tabs {
+  scrollbar-width: none;
+}
+.e-tabs::-webkit-scrollbar {
+  display: none;
+}
+.e-tab {
+  white-space: nowrap;
+  min-height: 40px;
+  padding: 0 1rem;
+  border-radius: var(--e-radius-control);
+  font-weight: 700;
+  font-size: 0.875rem;
+  color: var(--e-muted);
+}
+.e-tab[aria-current='true'] {
+  background: var(--e-primary);
+  color: var(--e-on-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .e-scope *,
+  .e-scope *::before,
+  .e-scope *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

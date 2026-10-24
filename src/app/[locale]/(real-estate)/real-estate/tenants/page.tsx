@@ -4,6 +4,7 @@ import React, { useMemo, useState } from 'react'
 import { KeyRound, Pencil, Phone, Search, UserPlus, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { usePortfolio } from '../_logics/hooks'
+import { NoAccess } from '../_components/load-state'
 import { todayISO, type RentStatus } from '../_logics/calc'
 import { byUrgency, tenancyRows, type TenancyRow } from '../_logics/selectors'
 import { money, plural, shortDate } from '../_logics/format'
@@ -26,6 +27,7 @@ type Entry = { tenant: Tenant; row?: TenancyRow }
 
 export default function TenantsPage() {
   const p = usePortfolio()
+  const canEdit = p.can.write('lettings')
   const today = todayISO()
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
@@ -73,19 +75,23 @@ export default function TenantsPage() {
         title="Tenants"
         description="Everyone renting from you, and where their rent stands."
         actions={
-          <>
-            <Button variant="secondary" icon={UserPlus} onClick={() => setEditing(null)}>
-              Add tenant
-            </Button>
-            <Button icon={KeyRound} onClick={() => setMoveIn(true)}>
-              Move tenant in
-            </Button>
-          </>
+          canEdit && (
+            <>
+              <Button variant="secondary" icon={UserPlus} onClick={() => setEditing(null)}>
+                Add tenant
+              </Button>
+              <Button icon={KeyRound} onClick={() => setMoveIn(true)}>
+                Move tenant in
+              </Button>
+            </>
+          )
         }
       />
       {p.error && <ErrorNote message={p.error} />}
 
-      {p.isLoading ? (
+      {!p.can.read('lettings') ? (
+        <NoAccess />
+      ) : p.isLoading ? (
         <LoadingGrid count={2} className="xl:grid-cols-2" />
       ) : p.tenants.length === 0 ? (
         <EmptyState
@@ -93,9 +99,11 @@ export default function TenantsPage() {
           title="No tenants yet"
           description="Moving a tenant into a unit adds them here, with their rent tracked automatically."
           action={
-            <Button icon={KeyRound} onClick={() => setMoveIn(true)}>
-              Move tenant in
-            </Button>
+            canEdit && (
+              <Button icon={KeyRound} onClick={() => setMoveIn(true)}>
+                Move tenant in
+              </Button>
+            )
           }
         />
       ) : (
@@ -177,15 +185,17 @@ export default function TenantsPage() {
                     >
                       <Phone className="h-4 w-4" />
                     </a>
-                    <button
-                      type="button"
-                      onClick={() => setEditing(tenant)}
-                      aria-label={`Edit ${tenant.fullName}`}
-                      className="h-9 w-9 rounded-xl flex items-center justify-center text-stone-500 hover:bg-stone-100 hover:text-endeavour"
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </button>
-                    {row && row.rent.status !== 'ended' && (
+                    {canEdit && (
+                      <button
+                        type="button"
+                        onClick={() => setEditing(tenant)}
+                        aria-label={`Edit ${tenant.fullName}`}
+                        className="h-9 w-9 rounded-xl flex items-center justify-center text-stone-500 hover:bg-stone-100 hover:text-endeavour"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                    )}
+                    {canEdit && row && row.rent.status !== 'ended' && (
                       <Button size="sm" variant="secondary" onClick={() => setPayLease(row.lease.id)}>
                         Record payment
                       </Button>

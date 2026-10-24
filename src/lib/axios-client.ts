@@ -1,7 +1,7 @@
 'use client'
 import axios, { AxiosRequestConfig } from 'axios'
 import { getSession } from 'next-auth/react'
-import { isSessionRebindError } from './api-error'
+import { apiErrorMessage, isSessionRebindError } from './api-error'
 import { forceLogout } from './force-logout'
 
 let isRefreshing = false
@@ -11,10 +11,15 @@ export const apiClient = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL,
 })
 
+// Real-estate screens show "tenant mismatch" as an error panel instead of
+// signing out (their error contract: a 403 never refreshes or logs out).
+const isRealEstateUrl = (url?: string) => /(^|\/)real-estate\//.test(url ?? '')
+
 apiClient.interceptors.request.use(async (config) => {
   const session = await getSession()
   if (session?.user?.accessToken) {
-    config.headers['Authorization'] = `Bearer ${session.user.accessToken}`
+    // A retry after a refresh already carries the new token; the session may still hold the old one.
+    if (!(config as { _retry?: boolean })._retry) config.headers['Authorization'] = `Bearer ${session.user.accessToken}`
     config.headers['X-Tenant-Domain'] = session.user.tenant
     config.headers['Cache-Control'] = 'no-cache'
   }
@@ -25,13 +30,19 @@ apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     // Old (pre tenant-binding) token or tenant mismatch — refreshing can't help.
-    if (isSessionRebindError(error)) {
+    if (isSessionRebindError(error) && !(isRealEstateUrl(error.config?.url) && /tenant mismatch/i.test(apiErrorMessage(error, '')))) {
       void forceLogout('rebind')
       return Promise.reject(error)
     }
 
+    // Only a 401 refreshes — never a 403 — and only once per request.
     const original = error.config as AxiosRequestConfig & { _retry?: boolean }
-    if (error.response?.status !== 401 || original._retry) {
+    if (error.response?.status !== 401 || !original) {
+      return Promise.reject(error)
+    }
+    if (original._retry) {
+      // Still 401 with a fresh token: the session is dead.
+      void forceLogout('expired')
       return Promise.reject(error)
     }
     original._retry = true

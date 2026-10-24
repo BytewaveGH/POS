@@ -10,9 +10,11 @@ import { formatBytes } from '../_logics/share'
 import { Button, ErrorNote, LoadingGrid, PageHeader } from '../_components/ui'
 import { Select } from '../_components/form'
 import { DocumentList, DocumentUploadForm, documentContext } from '../_components/documents'
+import { NoAccess } from '../_components/load-state'
 
 export default function DocumentsPage() {
   const p = usePortfolio()
+  const canEdit = p.can.write('development')
   const [uploadOpen, setUploadOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState<string>('all')
@@ -45,9 +47,11 @@ export default function DocumentsPage() {
         title="Documents"
         description="Land papers, tenancy agreements, receipts and photos — preview, download or send on WhatsApp."
         actions={
-          <Button icon={Upload} onClick={() => setUploadOpen(true)}>
-            Upload documents
-          </Button>
+          canEdit && (
+            <Button icon={Upload} onClick={() => setUploadOpen(true)}>
+              Upload documents
+            </Button>
+          )
         }
       />
       {p.error && <ErrorNote message={p.error} />}
@@ -58,7 +62,9 @@ export default function DocumentsPage() {
         </p>
       )}
 
-      {p.isLoading ? (
+      {!p.can.read('development') ? (
+        <NoAccess />
+      ) : p.isLoading ? (
         <LoadingGrid count={3} className="xl:grid-cols-3" />
       ) : (
         <>
@@ -120,7 +126,7 @@ export default function DocumentsPage() {
                 ? 'Try a different search or filter.'
                 : 'Upload indentures, site plans, tenancy agreements and receipts — take a photo on your phone or pick a PDF.'
             }
-            onUpload={p.documents.length ? undefined : () => setUploadOpen(true)}
+            onUpload={p.documents.length || !canEdit ? undefined : () => setUploadOpen(true)}
           />
         </>
       )}

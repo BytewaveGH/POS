@@ -38,7 +38,7 @@ export const RoomTypeForm = ({
   onSaved?: (t: UnitType) => void
 }) => {
   const p = usePortfolio()
-  const actions = useRealEstateActions()
+  const actions = useRealEstateActions({ inline: true })
   const [saving, setSaving] = useState(false)
   const [facilities, setFacilities] = useState<Record<FacilityKey, FacilityAccess>>(ALL_SHARED)
   const [amenities, setAmenities] = useState<string[]>([])
@@ -124,6 +124,7 @@ export const RoomTypeForm = ({
   const err = form.formState.errors
   return (
     <Drawer
+      error={actions.error}
       open={open}
       onOpenChange={onOpenChange}
       title={roomType ? `Edit ${roomType.name}` : 'New room type'}

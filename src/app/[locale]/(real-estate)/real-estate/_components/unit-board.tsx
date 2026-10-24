@@ -9,7 +9,7 @@ import { Avatar, Badge, OCCUPANCY, RENT } from './ui'
 import { FacilitySummaryPill } from './facilities'
 
 // One tile per unit — the "floor plan" of a property at a glance.
-const UnitTile = ({ view, onOpen, onMoveIn }: { view: UnitView; onOpen: () => void; onMoveIn: () => void }) => {
+const UnitTile = ({ view, onOpen, onMoveIn }: { view: UnitView; onOpen: () => void; onMoveIn?: () => void }) => {
   const { unit, unitType, status, tenant, rent, lease, currentBooking, nextBooking } = view
   const spec = OCCUPANCY[status]
   const isStay = unit.rentalMode === 'short-stay'
@@ -64,7 +64,7 @@ const UnitTile = ({ view, onOpen, onMoveIn }: { view: UnitView; onOpen: () => vo
               </p>
             </div>
           </div>
-        ) : vacantLongTerm ? (
+        ) : vacantLongTerm && onMoveIn ? (
           <button
             type="button"
             onClick={onMoveIn}
@@ -113,19 +113,22 @@ export const UnitBoard = ({
 }: {
   views: UnitView[]
   onOpen: (v: UnitView) => void
-  onMoveIn: (v: UnitView) => void
-  onAdd: () => void
+  // Left out for users who can't let units / add units.
+  onMoveIn?: (v: UnitView) => void
+  onAdd?: () => void
 }) => (
   <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
     {views.map((v) => (
-      <UnitTile key={v.unit.id} view={v} onOpen={() => onOpen(v)} onMoveIn={() => onMoveIn(v)} />
+      <UnitTile key={v.unit.id} view={v} onOpen={() => onOpen(v)} onMoveIn={onMoveIn && (() => onMoveIn(v))} />
     ))}
-    <button
-      type="button"
-      onClick={onAdd}
-      className="rounded-2xl border border-dashed border-stone-300 min-h-[168px] flex flex-col items-center justify-center gap-2 text-sm font-semibold text-stone-500 hover:border-endeavour hover:text-endeavour transition-colors"
-    >
-      <Plus className="h-5 w-5" /> Add unit
-    </button>
+    {onAdd && (
+      <button
+        type="button"
+        onClick={onAdd}
+        className="rounded-2xl border border-dashed border-stone-300 min-h-[168px] flex flex-col items-center justify-center gap-2 text-sm font-semibold text-stone-500 hover:border-endeavour hover:text-endeavour transition-colors"
+      >
+        <Plus className="h-5 w-5" /> Add unit
+      </button>
+    )}
   </div>
 )
