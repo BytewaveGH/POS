@@ -120,8 +120,8 @@ describe('eatery platform (local data)', () => {
     page.unmount()
 
     withQuery(<CheckoutPage />)
-    fireEvent.change(await screen.findByLabelText('Name'), { target: { value: 'Ama Owusu' } })
-    fireEvent.change(screen.getByLabelText('Phone'), { target: { value: '024 123 4567' } })
+    fireEvent.change(await screen.findByLabelText(/^Name/), { target: { value: 'Ama Owusu' } })
+    fireEvent.change(screen.getByLabelText(/^Phone/), { target: { value: '024 123 4567' } })
     expect(screen.getByRole('radio', { name: /Mobile money/ }).getAttribute('aria-checked')).toBe('true')
     fireEvent.change(screen.getByLabelText(/Transaction ID/), { target: { value: 'MP2610' } })
     fireEvent.click(screen.getAllByRole('button', { name: 'Place order · ₵187' })[0])
@@ -239,6 +239,33 @@ describe('eatery platform (local data)', () => {
       fireEvent.click(within(sheet).getByLabelText(/Medium/))
       fireEvent.click(within(sheet).getByRole('button', { name: 'Add · ₵110' }))
       await waitFor(() => expect(screen.getByTestId('pos-total').textContent).toBe('₵110'))
+    })
+
+    it('shows each waiting order’s options and scrolls the strip instead of stretching the page', async () => {
+      await ownBlaze()
+      const pub = createLocalSource(null)
+      const bundle = (await pub.storefront('blaze-pizza-shawarma')) as StorefrontBundle
+      const pizza = bundle.items.find((i) => i.name === 'Pepperoni Feast')!
+      const [size, crust, toppings] = pizza.optionGroups
+      const o = await pub.placeOrder('blaze-pizza-shawarma', {
+        lines: [
+          {
+            itemId: pizza.id,
+            quantity: 1,
+            choices: { [size.id]: [size.choices[2].id], [crust.id]: [crust.choices[0].id], [toppings.id]: [toppings.choices[0].id] },
+            note: 'well done',
+          },
+        ],
+        customer: { name: '', phone: '' },
+        fulfilment: { type: 'pickup' },
+        payment: { method: 'cash' },
+      })
+      withQuery(<PosPage />)
+      const card = await screen.findByRole('listitem', { name: `Online order ${o.code}` })
+      expect(within(card).getByText(/Large.*Classic hand-tossed.*\+ Extra cheese/)).toBeTruthy()
+      expect(within(card).getByText('“well done”')).toBeTruthy()
+      expect(within(card).getByText(/Guest/)).toBeTruthy()
+      expect(screen.getByRole('region', { name: 'Online orders waiting' }).className).toMatch(/min-w-0/)
     })
 
     it('accepts a waiting online order from the counter', async () => {

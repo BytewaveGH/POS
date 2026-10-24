@@ -161,8 +161,11 @@ export default function CheckoutPage() {
   const cashLabel = way === 'delivery' ? 'Cash on delivery' : way === 'dine-in' ? 'Cash' : 'Cash on pickup'
 
   const fieldErrors: Record<string, string> = {}
-  if (!contact.name.trim()) fieldErrors.name = 'Add your name'
-  if (contact.phone.replace(/\D/g, '').length < 9) fieldErrors.phone = 'Add a phone number we can reach you on'
+  // Name and phone are optional — people in a hurry at the counter shouldn't
+  // have to type them. Delivery needs a phone so the rider can reach them.
+  const phoneDigits = contact.phone.replace(/\D/g, '').length
+  if (way === 'delivery' && phoneDigits === 0) fieldErrors.phone = 'Add a phone number so the rider can reach you'
+  else if (phoneDigits > 0 && phoneDigits < 9) fieldErrors.phone = 'That phone number looks too short'
   if (way === 'delivery' && !contact.address.trim()) fieldErrors.address = 'Where should we deliver?'
   if (way === 'dine-in' && !table) fieldErrors.table = 'Choose your table'
   if (!method) fieldErrors.method = 'Choose how you’ll pay'
@@ -179,7 +182,7 @@ export default function CheckoutPage() {
     try {
       const order = await source.placeOrder(slug, {
         lines: lines.map(({ itemId, quantity, choices, comboPicks, note }) => ({ itemId, quantity, choices, comboPicks, note })),
-        customer: { name: contact.name, phone: contact.phone },
+        customer: { name: contact.name.trim() || 'Guest', phone: contact.phone.trim() },
         fulfilment: {
           type: way,
           table: way === 'dine-in' ? table : undefined,
@@ -397,19 +400,29 @@ export default function CheckoutPage() {
               </Section>
 
               <Section title="Your details" id="sec-details" step={2}>
+                <p className="-mt-2 mb-3 text-sm e-muted">
+                  {way === 'delivery'
+                    ? 'Your name is optional; we need a phone number for the rider.'
+                    : 'Optional — leave blank and we’ll call you “Guest”. Your order code is all you need.'}
+                </p>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="block" data-invalid={tried && !!fieldErrors.name}>
-                    <span className="text-sm font-bold">Name</span>
+                    <span className="text-sm font-bold">
+                      Name <span className="font-normal e-muted">(optional)</span>
+                    </span>
                     <input
                       value={contact.name}
                       onChange={(e) => setContact({ name: e.target.value })}
                       className="e-input mt-1.5"
+                      placeholder="Guest"
                       autoComplete="name"
                     />
                     {err('name')}
                   </label>
                   <label className="block" data-invalid={tried && !!fieldErrors.phone}>
-                    <span className="text-sm font-bold">Phone</span>
+                    <span className="text-sm font-bold">
+                      Phone {way !== 'delivery' && <span className="font-normal e-muted">(optional)</span>}
+                    </span>
                     <input
                       value={contact.phone}
                       onChange={(e) => setContact({ phone: e.target.value })}

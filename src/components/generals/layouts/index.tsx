@@ -33,9 +33,10 @@ const ILayout = ({ children }: { children: React.ReactNode }) => {
       </nav>
       <SidebarProvider>
         <AppSidebar isGrouped groupedItems={visibleItems} />
-        <main className="w-full flex">
+        <main className="w-full min-w-0 flex">
           <SidebarTrigger />
-          <div className="w-full p-3 md:p-4">{children}</div>
+          {/* min-w-0: wide rows (e.g. scrolling strips) scroll inside the page instead of stretching it */}
+          <div className="w-full min-w-0 p-3 md:p-4">{children}</div>
         </main>
       </SidebarProvider>
     </main>

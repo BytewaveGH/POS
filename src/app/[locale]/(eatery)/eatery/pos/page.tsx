@@ -52,7 +52,7 @@ const Incoming = ({
   busy: number | null
 }) =>
   orders.length === 0 ? null : (
-    <section aria-label="Online orders waiting" className="mb-3 rounded-2xl border border-rose-200 bg-rose-50/70 p-3">
+    <section aria-label="Online orders waiting" className="mb-3 min-w-0 max-w-full rounded-2xl border border-rose-200 bg-rose-50/70 p-3">
       <p className="mb-2 flex items-center gap-2 text-sm font-extrabold text-rose-800">
         <span className="relative flex h-2.5 w-2.5">
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-400 opacity-75" />
@@ -60,9 +60,9 @@ const Incoming = ({
         </span>
         {orders.length} online order{orders.length === 1 ? '' : 's'} waiting
       </p>
-      <ul className="flex gap-2 overflow-x-auto pb-1">
+      <ul className="flex max-w-full snap-x gap-2 overflow-x-auto overscroll-x-contain pb-1">
         {orders.map((o) => (
-          <li key={o.id} className="w-64 flex-shrink-0 rounded-xl bg-white p-3 shadow-sm" aria-label={`Online order ${o.code}`}>
+          <li key={o.id} className="w-64 flex-shrink-0 snap-start rounded-xl bg-white p-3 shadow-sm" aria-label={`Online order ${o.code}`}>
             <div className="flex items-start justify-between gap-2">
               <div>
                 <p className="font-extrabold tracking-wider text-stone-900">#{o.code}</p>
@@ -82,7 +82,18 @@ const Incoming = ({
               )}
               {fulfilmentLabel(o)}
             </p>
-            <p className="mt-1.5 line-clamp-2 text-xs text-stone-700">{o.lines.map((l) => `${l.quantity}× ${l.name}`).join(', ')}</p>
+            <ul className="mt-2 max-h-40 space-y-1.5 overflow-y-auto text-xs">
+              {o.lines.map((l, i) => (
+                <li key={i}>
+                  <span className="font-bold text-stone-900">
+                    {l.quantity}× {l.name}
+                  </span>
+                  {l.summary && <span className="block text-stone-500">{l.summary}</span>}
+                  {l.note && <span className="block italic text-amber-700">“{l.note}”</span>}
+                </li>
+              ))}
+            </ul>
+            {o.notes && <p className="mt-1.5 rounded-md bg-amber-50 px-2 py-1 text-[11px] text-amber-800">“{o.notes}”</p>}
             <div className="mt-2 flex gap-2">
               <button
                 type="button"
@@ -420,7 +431,7 @@ const PosScreen = ({ o }: { o: OwnerData & { restaurant: Restaurant } }) => {
   )
 
   return (
-    <div className="-m-3 md:-m-4 flex min-h-[calc(100dvh-64px)] flex-col lg:flex-row">
+    <div className="-m-3 md:-m-4 flex min-h-[calc(100dvh-64px)] min-w-0 flex-col lg:flex-row">
       <div className="min-w-0 flex-1 p-3 md:p-4 pb-28 lg:pb-4">
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <h1 className="mr-auto text-2xl font-extrabold tracking-tight text-stone-900">
@@ -449,7 +460,7 @@ const PosScreen = ({ o }: { o: OwnerData & { restaurant: Restaurant } }) => {
               className="h-11 w-full rounded-xl border border-stone-200 bg-white pl-9 pr-3 text-base sm:text-sm"
             />
           </label>
-          <div className="mt-2 flex gap-1.5 overflow-x-auto" role="group" aria-label="Menu sections">
+          <div className="mt-2 flex max-w-full gap-1.5 overflow-x-auto" role="group" aria-label="Menu sections">
             {[{ id: 'all' as const, name: 'All' }, ...o.categories].map((c) => (
               <button
                 key={c.id}

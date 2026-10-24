@@ -398,7 +398,9 @@ Same four routes per resource as §6.2 (`GET /`, `POST /`, `PUT /:id`, `DELETE /
     - delivery is below `minOrder`, or has no address;
     - the table isn't in `dineIn.tables`;
     - the fulfilment type or payment method isn't enabled (`pay-at-table` is dine-in only);
-    - the name is missing, or the phone has fewer than 9 digits.
+    - a phone is given but has fewer than 9 digits, or a delivery order has no phone (the rider must be able to call).
+
+  Name and phone are otherwise **optional**: store an empty name as `"Guest"` and an empty phone as `""`.
 
   `payment.status` is `pending` for MoMo with a reference, otherwise `unpaid`. `code` is 4 characters from `ABCDEFGHJKMNPQRSTUVWXYZ23456789`, unique per restaurant.
 

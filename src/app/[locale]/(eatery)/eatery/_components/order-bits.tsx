@@ -97,19 +97,20 @@ export const OrderCard = ({
         <Icon className="h-3.5 w-3.5" /> {fulfilmentLabel(order)}
         {order.channel === 'counter' && <span className="ml-1 rounded bg-white px-1 text-[10px] text-stone-500">Counter</span>}
       </p>
-      {!compact && (
-        <ul className="mt-3 space-y-1.5 text-sm">
+      {/* Every line with its options (size, toppings, sauces…) — compact cards too. */}
+      {
+        <ul className={cn('mt-3 space-y-1.5', compact ? 'text-xs' : 'text-sm')}>
           {order.lines.map((l, i) => (
             <li key={i}>
               <span className="font-bold text-stone-900">
                 {l.quantity}× {l.name}
               </span>
-              {l.summary && <span className="block text-xs text-stone-500">{l.summary}</span>}
+              {l.summary && <span className={cn('block text-stone-500', compact ? 'text-[11px]' : 'text-xs')}>{l.summary}</span>}
               {l.note && <span className="block text-xs italic text-amber-700">“{l.note}”</span>}
             </li>
           ))}
         </ul>
-      )}
+      }
       {!compact && order.fulfilment.type === 'delivery' && (
         <p className="mt-2 text-xs text-stone-600">
           {order.fulfilment.address}
