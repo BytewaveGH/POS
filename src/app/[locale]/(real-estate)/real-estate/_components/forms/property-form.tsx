@@ -172,7 +172,7 @@ export const PropertyForm = ({
   property?: Property | null
 }) => {
   const p = usePortfolio()
-  const actions = useRealEstateActions()
+  const actions = useRealEstateActions({ inline: true })
   const editing = !!property
   const [saving, setSaving] = useState(false)
   const [groups, setGroups] = useState<UnitGroupDraft[]>([defaultGroup([], 'compound-house')])
@@ -275,6 +275,7 @@ export const PropertyForm = ({
 
   return (
     <Drawer
+      error={actions.error}
       open={open}
       onOpenChange={onOpenChange}
       wide

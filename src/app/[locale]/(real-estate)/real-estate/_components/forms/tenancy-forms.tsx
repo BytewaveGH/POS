@@ -123,7 +123,7 @@ export const MoveInForm = ({
   unitId?: number | null
 }) => {
   const p = usePortfolio()
-  const actions = useRealEstateActions()
+  const actions = useRealEstateActions({ inline: true })
   const [saving, setSaving] = useState(false)
   const today = todayISO()
 
@@ -216,6 +216,7 @@ export const MoveInForm = ({
   const err = form.formState.errors
   return (
     <Drawer
+      error={actions.error}
       open={open}
       onOpenChange={onOpenChange}
       wide
@@ -370,7 +371,7 @@ export const PaymentForm = ({
   leaseId?: number | null
 }) => {
   const p = usePortfolio()
-  const actions = useRealEstateActions()
+  const actions = useRealEstateActions({ inline: true })
   const [saving, setSaving] = useState(false)
   const today = todayISO()
 
@@ -426,6 +427,7 @@ export const PaymentForm = ({
   const err = form.formState.errors
   return (
     <Drawer
+      error={actions.error}
       open={open}
       onOpenChange={onOpenChange}
       title="Record a payment"
@@ -505,7 +507,7 @@ export const TenantForm = ({
   onOpenChange: (o: boolean) => void
   tenant?: Tenant | null
 }) => {
-  const actions = useRealEstateActions()
+  const actions = useRealEstateActions({ inline: true })
   const [saving, setSaving] = useState(false)
   const form = useForm<z.infer<typeof tenantSchema>>({ resolver: zodResolver(tenantSchema) })
 
@@ -540,6 +542,7 @@ export const TenantForm = ({
 
   return (
     <Drawer
+      error={actions.error}
       open={open}
       onOpenChange={onOpenChange}
       title={tenant ? `Edit ${tenant.fullName}` : 'Add a tenant'}
@@ -568,7 +571,7 @@ export const TenantForm = ({
 
 export const MoveOutForm = ({ open, onOpenChange, lease }: { open: boolean; onOpenChange: (o: boolean) => void; lease: Lease | null }) => {
   const p = usePortfolio()
-  const actions = useRealEstateActions()
+  const actions = useRealEstateActions({ inline: true })
   const [date, setDate] = useState(todayISO())
   const [saving, setSaving] = useState(false)
   useEffect(() => {
@@ -594,6 +597,7 @@ export const MoveOutForm = ({ open, onOpenChange, lease }: { open: boolean; onOp
 
   return (
     <Drawer
+      error={actions.error}
       open={open}
       onOpenChange={onOpenChange}
       title={`Move out ${tenant?.fullName ?? 'tenant'}`}

@@ -56,7 +56,7 @@ export const DocumentUploadForm = ({
   preset?: DocumentLinks | null
 }) => {
   const p = usePortfolio()
-  const actions = useRealEstateActions()
+  const actions = useRealEstateActions({ inline: true })
   const [files, setFiles] = useState<File[]>([])
   const [problems, setProblems] = useState<string[]>([])
   const [title, setTitle] = useState('')
@@ -126,6 +126,7 @@ export const DocumentUploadForm = ({
 
   return (
     <Drawer
+      error={actions.error}
       open={open}
       onOpenChange={onOpenChange}
       title="Upload documents"
@@ -466,7 +467,7 @@ export const DocumentList = ({
                       {sharing === doc.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MessageCircle className="h-3.5 w-3.5" />}
                       WhatsApp
                     </button>
-                    <IconAction label="Delete" onClick={() => setDeleting(doc)} icon={Trash2} danger />
+                    {p.can.write('development') && <IconAction label="Delete" onClick={() => setDeleting(doc)} icon={Trash2} danger />}
                   </div>
                 </div>
               </div>
@@ -479,7 +480,7 @@ export const DocumentList = ({
         onOpenChange={(o) => !o && setDeleting(null)}
         title={`Delete ${deleting?.title ?? 'document'}?`}
         description="The file is removed for good. Anything it was linked to stays."
-        onConfirm={() => deleting && void actions.remove('documents', deleting.id).catch(() => {})}
+        onConfirm={() => (deleting ? actions.remove('documents', deleting.id, { inline: true }) : undefined)}
       />
     </>
   )

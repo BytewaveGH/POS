@@ -308,15 +308,17 @@ DocumentRecord { id, title, category, fileName, mimeType, size, uploadedAt,
 
 ### 6.5 Permissions (employees)
 
-Reuse the existing flags, matching the sidebar and the middleware:
+Reuse the existing flags. The frontend only asks for what a user may read and hides what they may not write (`_logics/access.ts`):
 
-| Area                                     | Flag                  |
-| ---------------------------------------- | --------------------- |
-| Portfolio dashboard                      | `canViewReports`      |
-| Room types, properties and units (write) | `canManageProducts`   |
-| Projects, phases, expenses and documents | `canManageProducts`   |
-| Tenants, leases, payments, bookings      | `canManageSales`      |
-| Maintenance                              | `canManageOperations` |
+| Area                                     | Read                                      | Write                 |
+| ---------------------------------------- | ----------------------------------------- | --------------------- |
+| Room types, properties and units         | everyone signed in                        | `canManageProducts`   |
+| Tenants, leases, payments, bookings      | `canManageSales` or `canViewReports`      | `canManageSales`      |
+| Maintenance                              | `canManageOperations` or `canViewReports` | `canManageOperations` |
+| Projects, phases, expenses and documents | `canManageProducts` or `canViewReports`   | `canManageProducts`   |
+| Portfolio dashboard                      | `canViewReports`                          | (none)                |
+
+The projects/documents row is a frontend proposal (the backend's table doesn't cover these yet). Until those four endpoints exist, a 404 on their list is read as "none".
 
 Admins have all of them.
 
@@ -331,13 +333,95 @@ Files are stored by the backend, for example in object storage, and served only 
 
 Until this exists, local mode stores the files in the browser's IndexedDB. On phones, sharing sends the actual file through the system share sheet; on desktops it downloads the file and opens WhatsApp Web with the message.
 
+## 7. Eatery platform (new) — frontend built, backend needed
+
+Owners run restaurants from the dashboard (`/eatery/*`). Each restaurant also has a public storefront for customers at `/eat/<slug>`, with no sign-in. A business (tenant, `appType: "eatery"`) may own **several** restaurants. The public directory lists restaurants from **all** eatery tenants. Data model, theme format and design notes: `docs/EATERY_PLATFORM.md`. Types: `src/lib/eatery/types.ts`.
+
+The frontend runs today on browser storage (`NEXT_PUBLIC_EATERY_DATA_SOURCE=local`). These endpoints make it real. Errors use the same envelope and contract as §6: `{ status: false, error }`; 409 for a conflict, 422 for validation, 404 for not found.
+
+### 7.1 Owner endpoints (signed in, scoped to the token's tenant)
+
+Same four routes per resource as §6.2 (`GET /`, `POST /`, `PUT /:id`, `DELETE /:id`), under `/eatery/`:
+
+| Resource        | Path                       |
+| --------------- | -------------------------- |
+| Restaurants     | `/eatery/restaurants/`     |
+| Menu categories | `/eatery/menu-categories/` |
+| Menu items      | `/eatery/menu-items/`      |
+| Promotions      | `/eatery/promotions/`      |
+| Orders          | `/eatery/orders/`          |
+
+- Lists return only this tenant's rows: restaurants they own, and everything belonging to those restaurants. `ownerScope` is set by the server from the token and never taken from the body.
+- `slug` is unique **across the platform** → `409` "The address /eat/<slug> is taken".
+- Orders are never created here (customers create them, §7.2). `PUT` changes `status` and `payment.status` only. On every status change the server appends `{ status, at }` to `history` and sets `updatedAt`.
+- Deletes:
+  - restaurant → its categories, items, promotions and orders;
+  - category → its items;
+  - item → it is removed from promotions' `itemIds` and from combo slots that offered it.
+- Permissions:
+  - orders: `canManageSales`;
+  - menu, promotions and theme: `canManageProducts`;
+  - restaurant settings: `canManageOperations`;
+  - dashboard: `canViewReports`;
+  - admins have all of them.
+
+### 7.2 Public endpoints (no sign-in; never return `ownerScope`)
+
+- **`GET /public/eatery/restaurants`:** every restaurant on the platform (the directory), including `theme`, hours and fulfilment settings.
+- **`GET /public/eatery/restaurants/:slug`** → `{ restaurant, categories, items, promotions }`: the storefront bundle. Hidden items and inactive promotions are left out. Returns `404` for an unknown slug.
+- **`POST /public/eatery/restaurants/:slug/orders`:** the body is a `CheckoutInput` and carries **no prices**:
+
+  ```
+  { lines: [{ itemId, quantity, choices: { [groupId]: [choiceId] }, comboPicks?: { [slotId]: itemId }, note? }],
+    customer: { name, phone },
+    fulfilment: { type: "pickup" | "delivery" | "dine-in", table?, address?, landmark?, pickupAt?: "asap" | "HH:mm" },
+    payment: { method: "cash" | "momo" | "pay-at-table", reference? },
+    notes? }
+  ```
+
+  The server prices every line from the current menu, in the restaurant's local time:
+
+  - Unit price = item price + each chosen option's `priceDelta` + each combo pick's `upcharge`.
+  - Then the single best **live** promotion covering the item (by item or category, or the whole menu when both lists are empty) takes `percentOff`.
+  - Delivery adds `fulfilment.delivery.fee`.
+  - It returns the `Order` plus a one-time `accessKey`, which is a random secret of at least 16 characters.
+
+  Reject with:
+
+  - `409` when `acceptingOrders` is false, or the restaurant is closed now per `hours` (overnight periods belong to the day they start).
+  - `422` with a readable `error`:
+    - an item is unknown, hidden or sold out, or outside its own or its category's `schedule`;
+    - an option group's choices fall outside `min..max`, or a chosen option is sold out;
+    - a combo slot has no valid pick;
+    - delivery is below `minOrder`, or has no address;
+    - the table isn't in `dineIn.tables`;
+    - the fulfilment type or payment method isn't enabled (`pay-at-table` is dine-in only);
+    - the name is missing, or the phone has fewer than 9 digits.
+
+  `payment.status` is `pending` for MoMo with a reference, otherwise `unpaid`. `code` is 4 characters from `ABCDEFGHJKMNPQRSTUVWXYZ23456789`, unique per restaurant.
+
+- **`GET /public/eatery/restaurants/:slug/orders/:code`** with header `X-Order-Key: <accessKey>`: that order without `accessKey`. It returns `404` when the key doesn't match, so a guessed code reveals nothing. The customer's page polls this every 10 s until the order is `completed` or `cancelled`.
+- Rate-limit order creation per IP and phone. The endpoints are public.
+
+### 7.3 Objects
+
+As in `src/lib/eatery/types.ts`: `Restaurant` (with `theme: ThemeConfig`, `hours`, `fulfilment`, `payments`), `MenuCategory`, `MenuItem` (with `optionGroups`, optional `combo.slots`, `status`, optional `schedule`), `Promotion` and `Order`. Store `theme`, `hours`, `fulfilment`, `payments`, `optionGroups`, `combo`, `schedule` and order `lines` as JSON. The frontend owns their shape, and the server only needs the fields used in the pricing and validation rules above. Validate `theme.version === 1` and that colours are `#rrggbb`. The frontend fixes contrast itself.
+
+### 7.4 Later
+
+- Real-time order push (SSE or WebSocket) instead of polling.
+- MoMo collection through a payment gateway, with a webhook marking orders `paid`.
+- Image upload for logos, covers and items (only URLs today).
+- Per-restaurant staff assignment.
+
 ## Priority
 
 1. Tenant CRUD + owner-account creation (§1) — unblocks the whole "register a new business" flow for real, replaces the local JSON-file placeholder entirely.
 2. `appType` on login responses (§2) — small addition, unblocks correct per-vertical routing for every real tenant (currently everyone defaults to "retail").
 3. Platform-level stats/employees (§3) — lower priority, purely additive to the super admin dashboard; the mock data is clearly labeled as such and isn't blocking anything else.
 4. Real estate vertical (§6) — frontend is live on browser-only storage; these endpoints make it multi-device and durable.
-5. ~~Camera product recognition (§5)~~ — ✅ done; open points resolved, one pending backend change (SKU 409).
-6. ~~Attractions/tickets/bookings/leaderboard (§4)~~ — ✅ done, confirmed live and matching the frontend's contract exactly (2026-08-29).
+5. Eatery platform (§7) — owner dashboard and public storefronts are live on browser-only storage; customers' orders only reach the owner once these exist.
+6. ~~Camera product recognition (§5)~~ — ✅ done; open points resolved, one pending backend change (SKU 409).
+7. ~~Attractions/tickets/bookings/leaderboard (§4)~~ — ✅ done, confirmed live and matching the frontend's contract exactly (2026-08-29).
 
 Happy to hop on a call to go through response shapes/edge cases once you've had a look.

@@ -1,0 +1,224 @@
+// The eatery platform's shared data model. Every restaurant — cocktail bar,
+// pizza & shawarma spot, café, chop bar — uses exactly these records; only its
+// `theme` (see theme.ts) changes how it looks. Contract: BACKEND_REQUIREMENTS.md §7.
+
+import type { ThemeConfig } from './theme'
+
+// What kind of place it is. Picks the starting design preset and menu kit
+// (presets.ts); add a new kind by adding one preset — nothing else changes.
+export type CategoryKey = 'cocktail-bar' | 'fast-food' | 'cafe' | 'local-dishes' | 'grill' | 'bakery' | 'juice-bar' | 'general'
+
+// Drinks-only places get drinks wording, an 18+ notice for alcohol, no delivery prompts for food…
+export type MenuKind = 'drinks' | 'food' | 'mixed'
+
+// "HH:mm", 24h.
+export type ClockTime = string
+
+// A recurring window, e.g. happy hour Mon–Fri 17:00–19:00. `to` earlier than
+// `from` runs past midnight (22:00–02:00). Days: 0 = Sunday … 6 = Saturday;
+// for overnight windows the day is the one it starts on.
+export interface TimeWindow {
+  days: number[]
+  from: ClockTime
+  to: ClockTime
+}
+
+// Per weekday (0–6): opening periods. An empty list = closed that day.
+export type WeeklyHours = Record<number, { open: ClockTime; close: ClockTime }[]>
+
+export interface Fulfilment {
+  pickup: { enabled: boolean; prepMinutes: number }
+  delivery: { enabled: boolean; fee: number; minOrder: number; area?: string; etaMinutes: number }
+  // Tables get a QR code linking to /eat/<slug>?table=<name>.
+  dineIn: { enabled: boolean; tables: string[] }
+}
+
+export type MomoNetwork = 'mtn' | 'telecel' | 'airteltigo'
+
+export interface PaymentSettings {
+  cash: boolean
+  // Customers send to this number and may enter the transaction ID; staff confirm.
+  momo: { enabled: boolean; number: string; accountName: string; network: MomoNetwork }
+  payAtTable: boolean
+}
+
+export interface Restaurant {
+  id: number
+  // Tenant (business) that owns it. One business may run several restaurants.
+  ownerScope: string
+  // Public address: /eat/<slug>. Unique across the platform.
+  slug: string
+  name: string
+  tagline?: string
+  description?: string
+  category: CategoryKey
+  menuKind: MenuKind
+  theme: ThemeConfig
+  currency: string
+  address: string
+  city: string
+  phone?: string
+  whatsapp?: string
+  hours: WeeklyHours
+  fulfilment: Fulfilment
+  payments: PaymentSettings
+  // Master switch: false pauses all new orders (menu stays visible).
+  acceptingOrders: boolean
+  // Shows an 18+ notice on items that contain alcohol.
+  servesAlcohol: boolean
+  createdAt: string
+}
+
+export interface MenuCategory {
+  id: number
+  restaurantId: number
+  name: string
+  description?: string
+  position: number
+  // Only orderable inside these windows (e.g. "Breakfast" 07:00–11:00). None = whenever open.
+  schedule?: TimeWindow[]
+}
+
+export type ItemTag =
+  | 'popular'
+  | 'new'
+  | 'signature'
+  | 'spicy'
+  | 'vegetarian'
+  | 'vegan'
+  | 'gluten-free'
+  | 'alcoholic'
+  | 'non-alcoholic'
+  | 'sharing'
+
+export interface OptionChoice {
+  id: string
+  name: string
+  // Added to the item price (can be 0, or negative for a smaller size).
+  priceDelta: number
+  soldOut?: boolean
+}
+
+// One question on an item: "Size" (pick 1), "Toppings" (up to 5), "Ice" (pick 1)…
+export interface OptionGroup {
+  id: string
+  name: string
+  // variant: changes what the item is (size, crust, protein) — exactly one.
+  // addon: optional extras (toppings, sauces, mixers) — min..max.
+  kind: 'variant' | 'addon'
+  min: number
+  max: number
+  choices: OptionChoice[]
+}
+
+// A combo: fixed price, the customer picks one item per slot (main, side, drink).
+export interface ComboSlot {
+  id: string
+  name: string
+  choices: { itemId: number; upcharge: number }[]
+}
+
+export type ItemStatus = 'available' | 'sold-out' | 'hidden'
+
+export interface MenuItem {
+  id: number
+  restaurantId: number
+  categoryId: number
+  name: string
+  description?: string
+  imageUrl?: string
+  price: number
+  tags: ItemTag[]
+  optionGroups: OptionGroup[]
+  combo?: { slots: ComboSlot[] }
+  status: ItemStatus
+  // Time-based availability for this item only (e.g. "after 17:00").
+  schedule?: TimeWindow[]
+  position: number
+}
+
+// Time-based discount, e.g. "Happy hour: 25% off cocktails, Mon–Fri 17:00–19:00".
+// No categoryIds and no itemIds = the whole menu.
+export interface Promotion {
+  id: number
+  restaurantId: number
+  name: string
+  description?: string
+  percentOff: number
+  schedule: TimeWindow[]
+  categoryIds: number[]
+  itemIds: number[]
+  active: boolean
+}
+
+// ── Orders ──────────────────────────────────────────────────────────────────
+
+export type FulfilmentType = 'pickup' | 'delivery' | 'dine-in'
+export type PaymentMethod = 'cash' | 'momo' | 'pay-at-table'
+export type OrderStatus = 'placed' | 'accepted' | 'preparing' | 'ready' | 'out-for-delivery' | 'completed' | 'cancelled'
+
+// What a customer sends: ids and choices only — never prices. The server
+// (or the local source) prices it from the current menu.
+export interface OrderLineInput {
+  itemId: number
+  quantity: number
+  // optionGroup id → chosen choice ids
+  choices: Record<string, string[]>
+  // combo slot id → chosen item id
+  comboPicks?: Record<string, number>
+  note?: string
+}
+
+export interface OrderLine extends OrderLineInput {
+  name: string
+  // "Large · Thin crust · + Extra cheese"
+  summary: string
+  unitPrice: number
+  // Promotion discount per unit included in unitPrice.
+  discountPerUnit: number
+  lineTotal: number
+}
+
+export interface CheckoutInput {
+  lines: OrderLineInput[]
+  customer: { name: string; phone: string }
+  fulfilment: { type: FulfilmentType; table?: string; address?: string; landmark?: string; pickupAt?: 'asap' | ClockTime }
+  payment: { method: PaymentMethod; reference?: string }
+  notes?: string
+}
+
+export interface Order {
+  id: number
+  // Short code shown to the customer and staff, e.g. "K7Q2".
+  code: string
+  restaurantId: number
+  createdAt: string
+  updatedAt: string
+  customer: CheckoutInput['customer']
+  fulfilment: CheckoutInput['fulfilment']
+  payment: { method: PaymentMethod; status: 'unpaid' | 'pending' | 'paid'; reference?: string }
+  lines: OrderLine[]
+  subtotal: number
+  discount: number
+  deliveryFee: number
+  total: number
+  status: OrderStatus
+  history: { status: OrderStatus; at: string }[]
+  notes?: string
+}
+
+export interface StorefrontBundle {
+  restaurant: Restaurant
+  categories: MenuCategory[]
+  items: MenuItem[]
+  promotions: Promotion[]
+}
+
+export interface ResourceMap {
+  restaurants: Restaurant
+  categories: MenuCategory
+  items: MenuItem
+  promotions: Promotion
+  orders: Order
+}
+export type ResourceName = keyof ResourceMap

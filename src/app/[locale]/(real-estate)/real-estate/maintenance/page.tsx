@@ -5,6 +5,7 @@ import { differenceInCalendarDays } from 'date-fns'
 import { ArrowRight, Hammer, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { usePortfolio, useRealEstateActions } from '../_logics/hooks'
+import { NoAccess } from '../_components/load-state'
 import { parseDate, todayISO } from '../_logics/calc'
 import { MAINTENANCE_STATUSES } from '../_logics/constants'
 import { money, plural, shortDate } from '../_logics/format'
@@ -20,6 +21,7 @@ const PRIORITY_RANK = { urgent: 0, high: 1, medium: 2, low: 3 }
 
 export default function MaintenancePage() {
   const p = usePortfolio()
+  const canEdit = p.can.write('maintenance')
   const actions = useRealEstateActions()
   const today = todayISO()
   const [editing, setEditing] = useState<MaintenanceRequest | null | undefined>(undefined)
@@ -44,6 +46,7 @@ export default function MaintenancePage() {
         title="Repairs & maintenance"
         description={`Track jobs across your properties · ${money(spentThisYear)} spent this year`}
         actions={
+          canEdit &&
           p.properties.length > 0 && (
             <Button icon={Plus} onClick={() => setEditing(null)}>
               Log repair
@@ -53,7 +56,9 @@ export default function MaintenancePage() {
       />
       {p.error && <ErrorNote message={p.error} />}
 
-      {p.isLoading ? (
+      {!p.can.read('maintenance') ? (
+        <NoAccess />
+      ) : p.isLoading ? (
         <LoadingGrid count={3} className="xl:grid-cols-3" />
       ) : p.properties.length === 0 ? (
         <EmptyState icon={Hammer} title="Add a property first" description="Repairs are logged against a property, or a unit in it." />
@@ -98,7 +103,7 @@ export default function MaintenancePage() {
                     const next = NEXT[m.status]
                     return (
                       <Card key={m.id} className="p-3.5">
-                        <button type="button" onClick={() => setEditing(m)} className="text-left w-full">
+                        <button type="button" disabled={!canEdit} onClick={() => setEditing(m)} className="text-left w-full">
                           <div className="flex items-start justify-between gap-2">
                             <p className="text-sm font-semibold text-stone-900 leading-snug">{m.title}</p>
                             <Badge spec={PRIORITY[m.priority]} />
@@ -118,7 +123,7 @@ export default function MaintenancePage() {
                                 : `${plural(age, 'day')} old`}
                             {m.cost > 0 ? ` · ${money(m.cost)}` : ''}
                           </span>
-                          {next && (
+                          {canEdit && next && (
                             <button
                               type="button"
                               onClick={() => move(m, next.to)}

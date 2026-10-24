@@ -36,7 +36,7 @@ export const UnitForm = ({
   propertyId: number
 }) => {
   const p = usePortfolio()
-  const actions = useRealEstateActions()
+  const actions = useRealEstateActions({ inline: true })
   const [saving, setSaving] = useState(false)
   const [mode, setMode] = useState<RentalMode>('long-term')
   const [availability, setAvailability] = useState<UnitAvailability>('available')
@@ -97,6 +97,7 @@ export const UnitForm = ({
   const err = form.formState.errors
   return (
     <Drawer
+      error={actions.error}
       open={open}
       onOpenChange={onOpenChange}
       title={unit ? `Edit ${unit.name}` : 'Add a unit'}

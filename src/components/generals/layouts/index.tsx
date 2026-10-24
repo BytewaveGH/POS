@@ -17,7 +17,11 @@ const ILayout = ({ children }: { children: React.ReactNode }) => {
     ? sidebarItems
         .map((group) => ({
           ...group,
-          items: group.items.filter((item) => !item.requiredPermission || !!user?.[item.requiredPermission]),
+          // requiredPermission: one key, or a list of which any one is enough.
+          items: group.items.filter((item) => {
+            const req: string | string[] | undefined = item.requiredPermission
+            return !req || (Array.isArray(req) ? req : [req]).some((k) => !!user?.[k])
+          }),
         }))
         .filter((group) => group.items.length > 0)
     : sidebarItems

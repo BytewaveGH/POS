@@ -4,6 +4,7 @@ import React from 'react'
 import { useParams } from 'next/navigation'
 import { HardDrive } from 'lucide-react'
 import { DATA_SOURCE_KIND } from '../_logics/data-source'
+import { LoadGate } from './load-state'
 
 export const useLocaleHref = () => {
   const params = useParams()
@@ -11,7 +12,8 @@ export const useLocaleHref = () => {
   return (path: string) => `/${locale}/real-estate${path}`
 }
 
-// Wraps every real-estate page: width, rhythm, and the local-data notice.
+// Wraps every real-estate page: width, rhythm, the local-data notice, and the
+// error panel that replaces the page when its data can't load.
 export const ModuleFrame = ({ children }: { children: React.ReactNode }) => (
   <div className="w-full max-w-[1400px] mx-auto pb-16">
     {DATA_SOURCE_KIND === 'local' && (
@@ -23,6 +25,6 @@ export const ModuleFrame = ({ children }: { children: React.ReactNode }) => (
         </p>
       </div>
     )}
-    {children}
+    <LoadGate>{children}</LoadGate>
   </div>
 )

@@ -5,6 +5,7 @@ import { addMonths, format, subMonths } from 'date-fns'
 import { AlertTriangle, ChevronLeft, ChevronRight, Clock, Receipt, Trash2, Wallet } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { usePortfolio, useRealEstateActions } from '../_logics/hooks'
+import { NoAccess } from '../_components/load-state'
 import { parseDate, todayISO } from '../_logics/calc'
 import { byUrgency, tenancyRows } from '../_logics/selectors'
 import { billingCycleLabel, paymentMethodLabel } from '../_logics/constants'
@@ -16,6 +17,7 @@ import { PaymentForm } from '../_components/forms/tenancy-forms'
 
 export default function RentPage() {
   const p = usePortfolio()
+  const canEdit = p.can.write('lettings')
   const actions = useRealEstateActions()
   const today = todayISO()
   const [payLease, setPayLease] = useState<number | null | undefined>(undefined)
@@ -47,14 +49,18 @@ export default function RentPage() {
         title="Rent & payments"
         description="Who has paid, who is due, and every payment received."
         actions={
-          <Button icon={Wallet} onClick={() => setPayLease(null)}>
-            Record payment
-          </Button>
+          canEdit && (
+            <Button icon={Wallet} onClick={() => setPayLease(null)}>
+              Record payment
+            </Button>
+          )
         }
       />
       {p.error && <ErrorNote message={p.error} />}
 
-      {p.isLoading ? (
+      {!p.can.read('lettings') ? (
+        <NoAccess />
+      ) : p.isLoading ? (
         <LoadingGrid count={3} className="xl:grid-cols-3" />
       ) : (
         <>
@@ -115,7 +121,7 @@ export default function RentPage() {
                                 : `Covered to ${shortDate(r.rent.paidThrough)}`}
                           </p>
                         </div>
-                        {r.rent.status !== 'ended' && (
+                        {canEdit && r.rent.status !== 'ended' && (
                           <Button
                             size="sm"
                             variant={r.rent.status === 'overdue' ? 'primary' : 'secondary'}
@@ -176,14 +182,16 @@ export default function RentPage() {
                         </p>
                       </div>
                       <p className="text-sm font-bold text-emerald-700 tabular-nums">+{money(x.amount)}</p>
-                      <button
-                        type="button"
-                        onClick={() => setDeleting(x)}
-                        aria-label="Delete payment"
-                        className="h-8 w-8 rounded-lg flex items-center justify-center text-stone-300 hover:text-rose-600 hover:bg-rose-50 sm:opacity-0 group-hover:opacity-100 focus:opacity-100"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      {canEdit && (
+                        <button
+                          type="button"
+                          onClick={() => setDeleting(x)}
+                          aria-label="Delete payment"
+                          className="h-8 w-8 rounded-lg flex items-center justify-center text-stone-300 hover:text-rose-600 hover:bg-rose-50 sm:opacity-0 group-hover:opacity-100 focus:opacity-100"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
                     </div>
                   )
                 })}
@@ -201,7 +209,7 @@ export default function RentPage() {
         description={
           deleting ? `${money(deleting.amount)} received ${shortDate(deleting.paidOn)}. The tenant’s balance will be recalculated.` : ''
         }
-        onConfirm={() => deleting && void actions.remove('payments', deleting.id).catch(() => {})}
+        onConfirm={() => (deleting ? actions.remove('payments', deleting.id, { inline: true }) : undefined)}
       />
     </>
   )

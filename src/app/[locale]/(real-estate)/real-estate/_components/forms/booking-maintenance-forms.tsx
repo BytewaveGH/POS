@@ -53,7 +53,7 @@ export const BookingForm = ({
   preset?: { unitId?: number; checkIn?: string } | null
 }) => {
   const p = usePortfolio()
-  const actions = useRealEstateActions()
+  const actions = useRealEstateActions({ inline: true })
   const [saving, setSaving] = useState(false)
 
   const units = useMemo(
@@ -122,6 +122,7 @@ export const BookingForm = ({
   const err = form.formState.errors
   return (
     <Drawer
+      error={actions.error}
       open={open}
       onOpenChange={onOpenChange}
       title={booking ? 'Edit booking' : 'New booking'}
@@ -247,7 +248,7 @@ export const MaintenanceForm = ({
   propertyId?: number
 }) => {
   const p = usePortfolio()
-  const actions = useRealEstateActions()
+  const actions = useRealEstateActions({ inline: true })
   const [saving, setSaving] = useState(false)
   const form = useForm<MaintenanceValues>({ resolver: zodResolver(maintenanceSchema) })
 
@@ -299,6 +300,7 @@ export const MaintenanceForm = ({
   const err = form.formState.errors
   return (
     <Drawer
+      error={actions.error}
       open={open}
       onOpenChange={onOpenChange}
       title={item ? 'Edit request' : 'Log a repair'}

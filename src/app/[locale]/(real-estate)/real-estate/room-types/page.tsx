@@ -146,7 +146,7 @@ export default function RoomTypesPage() {
         onOpenChange={(o) => !o && setDeleting(null)}
         title={`Delete ${deleting?.name ?? 'room type'}?`}
         description="No rooms use it, so nothing else changes."
-        onConfirm={() => deleting && void actions.remove('unitTypes', deleting.id).catch(() => {})}
+        onConfirm={() => (deleting ? actions.remove('unitTypes', deleting.id, { inline: true }) : undefined)}
       />
     </>
   )

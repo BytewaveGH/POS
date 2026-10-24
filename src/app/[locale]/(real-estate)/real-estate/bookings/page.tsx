@@ -5,6 +5,7 @@ import { addDays, differenceInCalendarDays, endOfMonth, format, isWeekend, start
 import { BedDouble, CalendarCheck2, CalendarPlus, ChevronLeft, ChevronRight, LogIn, LogOut, Moon, Wallet } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { usePortfolio, useRealEstateActions } from '../_logics/hooks'
+import { NoAccess } from '../_components/load-state'
 import { bookingNights, bookingTotal, parseDate, shortStayOccupancy, toISODate, todayISO } from '../_logics/calc'
 import { channelLabel } from '../_logics/constants'
 import { dayMonth, money, percent, plural } from '../_logics/format'
@@ -34,6 +35,7 @@ const BAR: Record<string, string> = {
 
 export default function BookingsPage() {
   const p = usePortfolio()
+  const canEdit = p.can.write('lettings')
   const actions = useRealEstateActions()
   const today = todayISO()
   const [from, setFrom] = useState(() => toISODate(startOfWeek(parseDate(today), { weekStartsOn: 1 })))
@@ -73,11 +75,11 @@ export default function BookingsPage() {
 
   const setStatus = (b: Booking, status: Booking['status']) => void actions.update('bookings', b.id, { status }).catch(() => {})
 
-  if (p.isLoading) {
+  if (p.isLoading || !p.can.read('lettings')) {
     return (
       <>
         <PageHeader eyebrow="Real estate" title="Short-stay bookings" />
-        <LoadingGrid />
+        {p.can.read('lettings') ? <LoadingGrid /> : <NoAccess />}
       </>
     )
   }
@@ -89,6 +91,7 @@ export default function BookingsPage() {
         title="Short-stay bookings"
         description="Airbnb and nightly guests across your short-stay units."
         actions={
+          canEdit &&
           units.length > 0 && (
             <Button icon={CalendarPlus} onClick={() => setForm({ booking: null, preset: null })}>
               New booking
@@ -198,6 +201,7 @@ export default function BookingsPage() {
                           key={d}
                           type="button"
                           aria-label={`Book ${u.name} from ${dayMonth(d)}`}
+                          disabled={!canEdit}
                           onClick={() => setForm({ booking: null, preset: { unitId: u.id, checkIn: d } })}
                           className={cn(
                             'h-14 border-l border-stone-100 hover:bg-endeavour/[0.05] transition-colors',
@@ -218,6 +222,7 @@ export default function BookingsPage() {
                             <button
                               key={b.id}
                               type="button"
+                              disabled={!canEdit}
                               onClick={() => setForm({ booking: b, preset: null })}
                               title={`${b.guestName} · ${dayMonth(b.checkIn)} → ${dayMonth(b.checkOut)} · ${BOOKING[b.status].label}`}
                               className={cn(
@@ -264,6 +269,7 @@ export default function BookingsPage() {
                     <div key={b.id} className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3.5">
                       <button
                         type="button"
+                        disabled={!canEdit}
                         onClick={() => setForm({ booking: b, preset: null })}
                         className="flex items-center gap-3 min-w-0 flex-1 text-left"
                       >
@@ -283,17 +289,17 @@ export default function BookingsPage() {
                             {due > 0 ? `${money(due)} to collect` : `${money(total)} paid`}
                           </p>
                         </div>
-                        {b.status === 'confirmed' && b.checkIn <= today && (
+                        {canEdit && b.status === 'confirmed' && b.checkIn <= today && (
                           <Button size="sm" icon={LogIn} onClick={() => setStatus(b, 'checked-in')}>
                             Check in
                           </Button>
                         )}
-                        {b.status === 'checked-in' && (
+                        {canEdit && b.status === 'checked-in' && (
                           <Button size="sm" variant="secondary" icon={LogOut} onClick={() => setStatus(b, 'checked-out')}>
                             Check out
                           </Button>
                         )}
-                        {b.status === 'inquiry' && (
+                        {canEdit && b.status === 'inquiry' && (
                           <Button size="sm" variant="secondary" onClick={() => setStatus(b, 'confirmed')}>
                             Confirm
                           </Button>

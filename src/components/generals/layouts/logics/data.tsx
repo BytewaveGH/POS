@@ -22,6 +22,9 @@ import {
   Hammer,
   Shapes,
   FileText,
+  ClipboardList,
+  UtensilsCrossed,
+  Palette,
 } from 'lucide-react'
 import { ITopNavItems } from './interface'
 
@@ -108,18 +111,32 @@ const realEstateSidebarItems = [
     items: [
       { label: 'Properties', href: '/en/real-estate/properties', icon: Building, requiredPermission: 'canManageProducts' },
       { label: 'Room types', href: '/en/real-estate/room-types', icon: Shapes, requiredPermission: 'canManageProducts' },
-      { label: 'Tenants', href: '/en/real-estate/tenants', icon: Users, requiredPermission: 'canManageSales' },
-      { label: 'Rent & payments', href: '/en/real-estate/rent', icon: Wallet, requiredPermission: 'canManageSales' },
-      { label: 'Documents', href: '/en/real-estate/documents', icon: FileText, requiredPermission: 'canManageProducts' },
+      { label: 'Tenants', href: '/en/real-estate/tenants', icon: Users, requiredPermission: ['canManageSales', 'canViewReports'] },
+      { label: 'Rent & payments', href: '/en/real-estate/rent', icon: Wallet, requiredPermission: ['canManageSales', 'canViewReports'] },
+      {
+        label: 'Documents',
+        href: '/en/real-estate/documents',
+        icon: FileText,
+        requiredPermission: ['canManageProducts', 'canViewReports'],
+      },
     ],
   },
   {
     title: 'Short stays',
-    items: [{ label: 'Bookings', href: '/en/real-estate/bookings', icon: BedDouble, requiredPermission: 'canManageSales' }],
+    items: [
+      { label: 'Bookings', href: '/en/real-estate/bookings', icon: BedDouble, requiredPermission: ['canManageSales', 'canViewReports'] },
+    ],
   },
   {
     title: 'Upkeep',
-    items: [{ label: 'Repairs', href: '/en/real-estate/maintenance', icon: Hammer, requiredPermission: 'canManageOperations' }],
+    items: [
+      {
+        label: 'Repairs',
+        href: '/en/real-estate/maintenance',
+        icon: Hammer,
+        requiredPermission: ['canManageOperations', 'canViewReports'],
+      },
+    ],
   },
   {
     title: 'Users',
@@ -136,19 +153,40 @@ const eaterySidebarItems = [
     items: [{ label: 'Overview', href: '/en/eatery', icon: LayoutDashboard, requiredPermission: 'canViewReports' }],
   },
   {
+    title: 'Restaurant',
+    items: [
+      { label: 'Live orders', href: '/en/eatery/orders', icon: ClipboardList, requiredPermission: 'canManageSales' },
+      { label: 'Menu', href: '/en/eatery/menu', icon: UtensilsCrossed, requiredPermission: 'canManageProducts' },
+      { label: 'Brand & theme', href: '/en/eatery/brand', icon: Palette, requiredPermission: 'canManageProducts' },
+      { label: 'Settings', href: '/en/eatery/settings', icon: Settings, requiredPermission: 'canManageOperations' },
+    ],
+  },
+  {
     title: 'Users',
     items: [{ label: 'Employees', href: '/en/stores/users', icon: UserCog, requiredPermission: 'canManageEmployees' }],
   },
 ]
 
-const sidebarItemsByAppType: Record<string, typeof retailSidebarItems> = {
+type SidebarGroup = {
+  title: string
+  // One permission key, or a list of which any one is enough.
+  items: {
+    label: string
+    href: string
+    icon: (typeof retailSidebarItems)[number]['items'][number]['icon']
+    requiredPermission?: string | string[]
+  }[]
+}
+
+const sidebarItemsByAppType: Record<string, SidebarGroup[]> = {
   retail: retailSidebarItems,
   amusement: amusementSidebarItems,
   eatery: eaterySidebarItems,
   'real-estate': realEstateSidebarItems,
 }
 
-export const getSidebarItems = (appType: string | undefined | null) => sidebarItemsByAppType[appType ?? 'retail'] ?? retailSidebarItems
+export const getSidebarItems = (appType: string | undefined | null): SidebarGroup[] =>
+  sidebarItemsByAppType[appType ?? 'retail'] ?? retailSidebarItems
 
 // Retail is still the default vertical — keep this export for anything importing the flat list directly.
 export const sidebarItems = retailSidebarItems

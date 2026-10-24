@@ -13,6 +13,8 @@ const SUPER_ADMIN_AREA_RE = /^\/(en|fr)\/super-admin(\/.*)?$/
 // Public leaderboard display — no login required (meant for a lobby screen or a
 // shared link); see src/app/[locale]/(amusement-public)/amusement/board.
 const AMUSEMENT_BOARD_RE = /^\/(en|fr)\/amusement\/board\/?$/
+// The customer-facing eatery site (directory, menus, checkout, order tracking).
+const EAT_RE = /^\/(en|fr)\/eat(\/.*)?$/
 
 // Ordered list used to find the first route an employee can access.
 // More specific paths must come before their parents (e.g. /products/inventory before /products).
@@ -31,22 +33,31 @@ const EMPLOYEE_ROUTE_PRIORITY = [
   // Real estate — same permission keys as its sidebar (src/components/generals/layouts/logics/data.tsx).
   { path: '/real-estate/properties', perm: 'canManageProducts' },
   { path: '/real-estate/room-types', perm: 'canManageProducts' },
-  { path: '/real-estate/documents', perm: 'canManageProducts' },
-  { path: '/real-estate/tenants', perm: 'canManageSales' },
-  { path: '/real-estate/rent', perm: 'canManageSales' },
-  { path: '/real-estate/bookings', perm: 'canManageSales' },
-  { path: '/real-estate/maintenance', perm: 'canManageOperations' },
+  { path: '/real-estate/documents', perm: ['canManageProducts', 'canViewReports'] },
+  { path: '/real-estate/tenants', perm: ['canManageSales', 'canViewReports'] },
+  { path: '/real-estate/rent', perm: ['canManageSales', 'canViewReports'] },
+  { path: '/real-estate/bookings', perm: ['canManageSales', 'canViewReports'] },
+  { path: '/real-estate/maintenance', perm: ['canManageOperations', 'canViewReports'] },
   { path: '/real-estate', perm: 'canViewReports' },
+  // Eatery
+  { path: '/eatery/orders', perm: 'canManageSales' },
+  { path: '/eatery/menu', perm: 'canManageProducts' },
+  { path: '/eatery/brand', perm: 'canManageProducts' },
+  { path: '/eatery/settings', perm: 'canManageOperations' },
+  { path: '/eatery', perm: 'canViewReports' },
 ]
+
+// A route's `perm` is one key, or a list of which any one is enough.
+const allows = (user: any, perm: string | string[]) => (Array.isArray(perm) ? perm : [perm]).some((k) => !!user?.[k])
 
 // Redirect targets stay inside the employee's own vertical. Retail (and the
 // verticals without their own routes yet) keep using the /stores list.
-const verticalRoot = (appType: unknown) => (appType === 'real-estate' ? '/real-estate' : '/stores')
+const verticalRoot = (appType: unknown) => (appType === 'real-estate' ? '/real-estate' : appType === 'eatery' ? '/eatery' : '/stores')
 
 function firstAllowedPath(user: any, locale: string): string {
   const root = verticalRoot(user.appType)
   for (const { path, perm } of EMPLOYEE_ROUTE_PRIORITY) {
-    if (path.startsWith(root) && user[perm]) return `/${locale}${path}`
+    if (path.startsWith(root) && allows(user, perm)) return `/${locale}${path}`
   }
   // No permissions at all — send back to staff login
   return `/${locale}/staff`
@@ -60,7 +71,7 @@ export default auth((req: NextAuthRequest) => {
   // Disabled entirely (kind is never 'root') until NEXT_PUBLIC_ROOT_DOMAIN is set.
   const hostKind = classifyHost(req.headers.get('host')).kind
   if (hostKind === 'root') {
-    if (SELECT_APP_RE.test(pathname)) {
+    if (SELECT_APP_RE.test(pathname) || EAT_RE.test(pathname)) {
       return intlMiddleware(req as unknown as NextRequest)
     }
     if (!SUPER_ADMIN_AREA_RE.test(pathname)) {
@@ -90,6 +101,7 @@ export default auth((req: NextAuthRequest) => {
     /^\/(en|fr)\/staff\/?$/.test(pathname) ||
     SUPER_ADMIN_LOGIN_RE.test(pathname) ||
     AMUSEMENT_BOARD_RE.test(pathname) ||
+    EAT_RE.test(pathname) ||
     pathname === '/'
 
   if (!isLoggedIn && !isAuthPage) {
@@ -107,7 +119,7 @@ export default auth((req: NextAuthRequest) => {
     // Find which permission this path requires
     const match = EMPLOYEE_ROUTE_PRIORITY.find(({ path }) => barePath === path || barePath.startsWith(path + '/'))
 
-    if (match && !user[match.perm]) {
+    if (match && !allows(user, match.perm)) {
       return Response.redirect(new URL(firstAllowedPath(user, locale), req.url))
     }
   }

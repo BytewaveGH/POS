@@ -32,12 +32,13 @@ export const UnitDetail = ({
 }: {
   view: UnitView | null
   onOpenChange: (o: boolean) => void
-  onEdit: () => void
-  onDelete: () => void
-  onMoveIn: () => void
-  onMoveOut: (lease: Lease) => void
-  onPay: (leaseId: number) => void
-  onBook: () => void
+  // Each action is left out when the user may not do it.
+  onEdit?: () => void
+  onDelete?: () => void
+  onMoveIn?: () => void
+  onMoveOut?: (lease: Lease) => void
+  onPay?: (leaseId: number) => void
+  onBook?: () => void
 }) => {
   const p = usePortfolio()
   const today = todayISO()
@@ -59,24 +60,32 @@ export const UnitDetail = ({
       title={unit.name}
       description={`${unitType?.name ?? 'No room type set'} · ${p.propertyById.get(unit.propertyId)?.name ?? ''}`}
       footer={
-        <>
-          <Button variant="ghost" icon={Trash2} onClick={onDelete} className="mr-auto text-rose-600 hover:bg-rose-50">
-            Delete
-          </Button>
-          <Button variant="secondary" icon={Pencil} onClick={onEdit}>
-            Edit unit
-          </Button>
-        </>
+        onEdit || onDelete ? (
+          <>
+            {onDelete && (
+              <Button variant="ghost" icon={Trash2} onClick={onDelete} className="mr-auto text-rose-600 hover:bg-rose-50">
+                Delete
+              </Button>
+            )}
+            {onEdit && (
+              <Button variant="secondary" icon={Pencil} onClick={onEdit}>
+                Edit unit
+              </Button>
+            )}
+          </>
+        ) : undefined
       }
     >
       <div className="flex flex-col gap-6">
         <div className="flex items-center justify-between">
           <Badge spec={OCCUPANCY[status]} />
           {isStay ? (
-            <Button size="sm" icon={CalendarPlus} onClick={onBook}>
-              New booking
-            </Button>
-          ) : !lease && status !== 'maintenance' ? (
+            onBook && (
+              <Button size="sm" icon={CalendarPlus} onClick={onBook}>
+                New booking
+              </Button>
+            )
+          ) : !lease && status !== 'maintenance' && onMoveIn ? (
             <Button size="sm" icon={KeyRound} onClick={onMoveIn}>
               Move a tenant in
             </Button>
@@ -142,12 +151,16 @@ export const UnitDetail = ({
             <div className="flex items-center justify-between mt-4">
               <Badge spec={RENT[rent.status]} />
               <div className="flex gap-2">
-                <Button size="sm" variant="secondary" icon={LogOut} onClick={() => onMoveOut(lease)}>
-                  Move out
-                </Button>
-                <Button size="sm" icon={Wallet} onClick={() => onPay(lease.id)}>
-                  Record payment
-                </Button>
+                {onMoveOut && (
+                  <Button size="sm" variant="secondary" icon={LogOut} onClick={() => onMoveOut(lease)}>
+                    Move out
+                  </Button>
+                )}
+                {onPay && (
+                  <Button size="sm" icon={Wallet} onClick={() => onPay(lease.id)}>
+                    Record payment
+                  </Button>
+                )}
               </div>
             </div>
           </section>
@@ -158,9 +171,11 @@ export const UnitDetail = ({
           <section>
             <div className="flex items-center justify-between mb-2">
               <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-stone-400">Tenancy documents</p>
-              <Button size="sm" variant="ghost" icon={Upload} onClick={() => setUploadOpen(true)}>
-                Upload agreement
-              </Button>
+              {p.can.write('development') && (
+                <Button size="sm" variant="ghost" icon={Upload} onClick={() => setUploadOpen(true)}>
+                  Upload agreement
+                </Button>
+              )}
             </div>
             <DocumentList
               singleColumn
