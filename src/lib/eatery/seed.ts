@@ -2,7 +2,7 @@
 // They show off how one data model carries three very different businesses.
 
 import { ALL_OPTION_TEMPLATES, optionGroupFromTemplate, presetFor } from './presets'
-import type { CategoryKey, ItemTag, Restaurant, TimeWindow, WeeklyHours } from './types'
+import type { CategoryKey, ExpenseCategory, IngredientUnit, ItemTag, Restaurant, TimeWindow, WeeklyHours } from './types'
 
 export interface DemoItem {
   name: string
@@ -21,6 +21,11 @@ export interface DemoRestaurant {
   restaurant: Omit<Restaurant, 'id' | 'ownerScope' | 'createdAt' | 'theme'> & { category: CategoryKey }
   menu: { section: string; items: DemoItem[] }[]
   promotions: { name: string; description?: string; percentOff: number; schedule: TimeWindow[]; sections: string[] }[]
+  // Owner-side costing: [name, unit, cost per unit, opening stock, warn below]
+  ingredients?: [string, IngredientUnit, number, number, number][]
+  // Item name → what one portion uses; `choices` by option choice name.
+  recipes?: Record<string, { base: [string, number][]; choices?: Record<string, [string, number][]> }>
+  expenses?: [ExpenseCategory, number, string][]
 }
 
 const daily = (open: string, close: string): WeeklyHours => Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((d) => [d, [{ open, close }]]))
@@ -204,6 +209,53 @@ export const DEMO_RESTAURANTS: DemoRestaurant[] = [
         sections: ['Signature cocktails', 'Classics'],
       },
     ],
+    ingredients: [
+      ['White rum', 'ml', 0.25, 4500, 1000],
+      ['Gin', 'ml', 0.35, 3000, 750],
+      ['Lime', 'pcs', 1, 60, 20],
+      ['Fresh mint', 'g', 0.1, 400, 100],
+      ['Sobolo (hibiscus)', 'ml', 0.03, 5000, 1000],
+      ['Mango purée', 'ml', 0.06, 2000, 500],
+      ['Simple syrup', 'ml', 0.02, 2000, 400],
+      ['Club Lager', 'bottle', 12, 72, 24],
+    ],
+    recipes: {
+      'Accra Sunset': {
+        base: [
+          ['White rum', 50],
+          ['Mango purée', 60],
+          ['Sobolo (hibiscus)', 30],
+          ['Lime', 0.5],
+        ],
+      },
+      Mojito: {
+        base: [
+          ['White rum', 50],
+          ['Fresh mint', 8],
+          ['Lime', 1],
+          ['Simple syrup', 20],
+        ],
+      },
+      'Sobolo Spritz': {
+        base: [
+          ['Sobolo (hibiscus)', 150],
+          ['Lime', 0.5],
+        ],
+      },
+      'Virgin Mojito': {
+        base: [
+          ['Fresh mint', 8],
+          ['Lime', 1],
+          ['Simple syrup', 25],
+        ],
+      },
+      'Bombay Sapphire Gin': { base: [['Gin', 35]], choices: { Double: [['Gin', 35]] } },
+      'Club Lager': { base: [['Club Lager', 1]] },
+    },
+    expenses: [
+      ['rent', 6000, 'Lounge rent'],
+      ['staff', 7200, 'Bar team'],
+    ],
   },
   {
     restaurant: {
@@ -382,6 +434,134 @@ export const DEMO_RESTAURANTS: DemoRestaurant[] = [
         sections: ['Pizzas'],
       },
     ],
+    ingredients: [
+      ['Pizza dough', 'g', 0.02, 20000, 4000],
+      ['Mozzarella', 'g', 0.12, 8000, 2000],
+      ['Tomato sauce', 'g', 0.03, 5000, 1000],
+      ['Pepperoni', 'g', 0.15, 3000, 800],
+      ['Chicken', 'g', 0.07, 9000, 2000],
+      ['Beef', 'g', 0.09, 6000, 1500],
+      ['Pita bread', 'pcs', 2.5, 120, 30],
+      ['Potatoes', 'g', 0.015, 25000, 5000],
+      ['Cooking oil', 'ml', 0.03, 10000, 2000],
+      ['Pizza box', 'pcs', 3, 80, 20],
+      ['Coca-Cola 350ml', 'bottle', 8, 48, 12],
+      ['Sprite 350ml', 'bottle', 8, 36, 12],
+      ['Malta Guinness', 'bottle', 10, 6, 12],
+      ['Coca-Cola 1.5 L', 'bottle', 18, 12, 4],
+    ],
+    recipes: {
+      Margherita: {
+        base: [
+          ['Pizza dough', 220],
+          ['Mozzarella', 110],
+          ['Tomato sauce', 70],
+          ['Pizza box', 1],
+        ],
+        choices: {
+          'Medium (12")': [
+            ['Pizza dough', 110],
+            ['Mozzarella', 60],
+          ],
+          'Large (16")': [
+            ['Pizza dough', 230],
+            ['Mozzarella', 120],
+          ],
+          'Cheese-stuffed crust': [['Mozzarella', 60]],
+          'Extra cheese': [['Mozzarella', 60]],
+          Pepperoni: [['Pepperoni', 40]],
+          Chicken: [['Chicken', 60]],
+        },
+      },
+      'Pepperoni Feast': {
+        base: [
+          ['Pizza dough', 220],
+          ['Mozzarella', 110],
+          ['Tomato sauce', 70],
+          ['Pepperoni', 90],
+          ['Pizza box', 1],
+        ],
+        choices: {
+          'Medium (12")': [
+            ['Pizza dough', 110],
+            ['Mozzarella', 60],
+            ['Pepperoni', 45],
+          ],
+          'Large (16")': [
+            ['Pizza dough', 230],
+            ['Mozzarella', 120],
+            ['Pepperoni', 90],
+          ],
+          'Cheese-stuffed crust': [['Mozzarella', 60]],
+          'Extra cheese': [['Mozzarella', 60]],
+          Pepperoni: [['Pepperoni', 40]],
+        },
+      },
+      'BBQ Chicken': {
+        base: [
+          ['Pizza dough', 220],
+          ['Mozzarella', 100],
+          ['Chicken', 100],
+          ['Pizza box', 1],
+        ],
+        choices: {
+          'Large (16")': [
+            ['Pizza dough', 230],
+            ['Chicken', 100],
+          ],
+        },
+      },
+      'Classic Shawarma': {
+        base: [
+          ['Pita bread', 1],
+          ['Chicken', 150],
+        ],
+        choices: {
+          Beef: [
+            ['Beef', 150],
+            ['Chicken', -150],
+          ],
+          'Mixed (chicken & beef)': [
+            ['Beef', 75],
+            ['Chicken', -75],
+          ],
+          'Extra meat': [['Chicken', 80]],
+          'Fries inside': [['Potatoes', 60]],
+        },
+      },
+      'Shawarma Platter': {
+        base: [
+          ['Pita bread', 2],
+          ['Chicken', 280],
+          ['Potatoes', 200],
+          ['Cooking oil', 40],
+        ],
+      },
+      Fries: {
+        base: [
+          ['Potatoes', 250],
+          ['Cooking oil', 40],
+        ],
+      },
+      'Loaded Fries': {
+        base: [
+          ['Potatoes', 250],
+          ['Cooking oil', 40],
+          ['Mozzarella', 40],
+          ['Chicken', 60],
+        ],
+      },
+      'Coca-Cola': { base: [['Coca-Cola 350ml', 1]] },
+      Sprite: { base: [['Sprite 350ml', 1]] },
+      'Malta Guinness': { base: [['Malta Guinness', 1]] },
+      'Coca-Cola 1.5 L': { base: [['Coca-Cola 1.5 L', 1]] },
+    },
+    expenses: [
+      ['rent', 3500, 'Shop rent'],
+      ['gas', 600, 'Two 14.5 kg gas refills'],
+      ['staff', 4800, 'Wages: 4 staff'],
+      ['utilities', 900, 'ECG prepaid'],
+    ],
   },
   {
     restaurant: {
@@ -516,6 +696,55 @@ export const DEMO_RESTAURANTS: DemoRestaurant[] = [
         schedule: [{ days: WEEKDAYS, from: '14:00', to: '17:00' }],
         sections: ['Iced & blended'],
       },
+    ],
+    ingredients: [
+      ['Coffee beans', 'g', 0.25, 5000, 1000],
+      ['Fresh milk', 'ml', 0.015, 12000, 3000],
+      ['Oat milk', 'ml', 0.04, 3000, 1000],
+      ['Cocoa powder', 'g', 0.08, 1500, 300],
+      ['Butter croissant (frozen)', 'pcs', 6, 40, 10],
+      ['Takeaway cup', 'pcs', 1.5, 300, 50],
+    ],
+    recipes: {
+      Espresso: { base: [['Coffee beans', 18]], choices: { 'Extra espresso shot': [['Coffee beans', 9]] } },
+      Cappuccino: {
+        base: [
+          ['Coffee beans', 18],
+          ['Fresh milk', 150],
+        ],
+        choices: {
+          Large: [['Fresh milk', 80]],
+          'Oat milk': [
+            ['Oat milk', 150],
+            ['Fresh milk', -150],
+          ],
+          'Extra espresso shot': [['Coffee beans', 9]],
+        },
+      },
+      'Flat White': {
+        base: [
+          ['Coffee beans', 18],
+          ['Fresh milk', 120],
+        ],
+      },
+      'Ghana Cocoa Mocha': {
+        base: [
+          ['Coffee beans', 18],
+          ['Fresh milk', 180],
+          ['Cocoa powder', 15],
+        ],
+      },
+      'Hot Chocolate': {
+        base: [
+          ['Fresh milk', 220],
+          ['Cocoa powder', 25],
+        ],
+      },
+      'Butter Croissant': { base: [['Butter croissant (frozen)', 1]] },
+    },
+    expenses: [
+      ['rent', 4500, 'Café rent'],
+      ['utilities', 700, 'Light & water'],
     ],
   },
 ]

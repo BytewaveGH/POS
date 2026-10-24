@@ -1,13 +1,14 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
-import { ArrowLeft, Check, MessageCircle, XCircle } from 'lucide-react'
+import { useParams, useSearchParams } from 'next/navigation'
+import { ArrowLeft, Bell, Check, MessageCircle, XCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useCart } from '@/lib/eatery/cart'
 import { useStorefront, useTrackedOrder } from '@/lib/eatery/hooks'
 import { clockLabel, formatMoney } from '@/lib/eatery/menu'
+import { askToNotify, chime, notify, notifyPermission } from '@/lib/eatery/notify'
 import type { Order, OrderStatus } from '@/lib/eatery/types'
 import { BrandMark, ThemeScope } from '@/components/eatery/theme-scope'
 
@@ -28,6 +29,15 @@ const STEPS = (o: Order): { status: OrderStatus; label: string; hint: string }[]
       },
   { status: 'completed', label: 'Done', hint: 'Enjoy!' },
 ]
+const STATUS_MESSAGE: Partial<Record<OrderStatus, (o: Order) => string>> = {
+  accepted: () => 'Your order was accepted',
+  preparing: () => 'Your order is being prepared',
+  ready: (o) => (o.fulfilment.type === 'dine-in' ? 'Your order is on its way to your table' : 'Your order is ready — come and get it!'),
+  'out-for-delivery': () => 'Your order is on the way',
+  completed: () => 'Enjoy your order!',
+  cancelled: () => 'Your order was cancelled',
+}
+
 const RANK: Record<OrderStatus, number> = {
   placed: 0,
   accepted: 1,
@@ -48,10 +58,37 @@ export default function OrderPage() {
   const locale = (params?.locale as string) || 'en'
   const slug = String(params?.slug ?? '')
   const code = String(params?.code ?? '')
+  const search = useSearchParams()
+  const addTicket = useCart((s) => s.addTicket)
   const ticket = useCart((s) => s.tickets.find((t) => t.slug === slug && t.code === code)) ?? null
   const store = useStorefront(slug)
   const { data: order, isLoading } = useTrackedOrder(ticket)
   const r = store.data?.restaurant
+
+  // The QR code on a counter receipt carries the order key: keep it on this phone.
+  const key = search?.get('k')
+  useEffect(() => {
+    if (key && !ticket) addTicket({ slug, code, accessKey: key })
+  }, [key, ticket, slug, code, addTicket])
+
+  // Tell the customer when their order moves on — sound, vibration, and a
+  // system notification if they allowed it (works while the tab is in the background).
+  const [permission, setPermission] = useState<string>('unsupported')
+  const [update, setUpdate] = useState<string | null>(null)
+  useEffect(() => setPermission(notifyPermission()), [])
+  const last = useRef<string | null>(null)
+  useEffect(() => {
+    if (!order || !r) return
+    const prev = last.current
+    last.current = order.status
+    if (prev === null || prev === order.status) return
+    const msg = STATUS_MESSAGE[order.status]?.(order)
+    if (!msg) return
+    setUpdate(msg)
+    chime(order.status === 'ready' || order.status === 'out-for-delivery' ? 'ready' : 'new')
+    notify(`${r.name} · #${order.code}`, msg, `order-${order.code}`)
+    document.title = `${msg} · ${r.name}`
+  }, [order, r])
 
   if (!r || (ticket && isLoading))
     return (
@@ -93,6 +130,20 @@ export default function OrderPage() {
       </header>
 
       <div className="mx-auto max-w-xl px-4">
+        {update && (
+          <p
+            role="status"
+            className="mb-3 flex items-center gap-2 px-4 py-3 text-sm font-extrabold e-accent"
+            style={{ borderRadius: 'var(--e-radius)' }}
+          >
+            <Bell className="h-4 w-4 flex-shrink-0" aria-hidden /> {update}
+          </p>
+        )}
+        {permission === 'default' && !['completed', 'cancelled'].includes(order.status) && (
+          <button type="button" onClick={() => void askToNotify().then((p) => setPermission(p))} className="e-btn-quiet mb-3 w-full">
+            <Bell className="h-4 w-4" /> Alert me when it’s ready
+          </button>
+        )}
         <section className="e-card p-6 text-center" aria-live="polite">
           <p className="text-xs font-bold uppercase tracking-[0.2em] e-muted">Your order code</p>
           <p className="e-display mt-1 text-6xl tracking-widest" style={{ color: 'var(--e-primary-text)' }}>
@@ -191,8 +242,14 @@ export default function OrderPage() {
             <div className="flex justify-between">
               <dt className="e-muted">Payment</dt>
               <dd className="font-semibold">
-                {order.payment.method === 'momo' ? 'Mobile money' : order.payment.method === 'cash' ? 'Cash' : 'At the table'} ·{' '}
-                {order.payment.status === 'paid' ? 'paid' : order.payment.status === 'pending' ? 'being confirmed' : 'to pay'}
+                {order.payment.method === 'momo'
+                  ? 'Mobile money'
+                  : order.payment.method === 'cash'
+                    ? 'Cash'
+                    : order.payment.method === 'card'
+                      ? 'Card'
+                      : 'At the table'}{' '}
+                · {order.payment.status === 'paid' ? 'paid' : order.payment.status === 'pending' ? 'being confirmed' : 'to pay'}
               </dd>
             </div>
           </dl>
