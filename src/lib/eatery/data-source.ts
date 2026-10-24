@@ -514,8 +514,10 @@ export const createLocalSource = (
       const f = input.fulfilment
       if (f.type === 'delivery' && !f.address?.trim()) throw httpError(422, 'Add a delivery address')
       if (f.type === 'dine-in' && !restaurant.fulfilment.dineIn.tables.includes(f.table ?? '')) throw httpError(422, 'Choose your table')
-      if (!input.customer.name.trim() || input.customer.phone.replace(/\D/g, '').length < 9)
-        throw httpError(422, 'Add your name and phone number')
+      // Name and phone are optional ("Guest"); delivery needs a reachable phone.
+      const digits = (input.customer.phone ?? '').replace(/\D/g, '').length
+      if (f.type === 'delivery' && digits === 0) throw httpError(422, 'Add a phone number so the rider can reach you')
+      if (digits > 0 && digits < 9) throw httpError(422, 'That phone number looks too short')
       const method = input.payment.method
       const pay = restaurant.payments
       if (
@@ -538,7 +540,7 @@ export const createLocalSource = (
         restaurantId: restaurant.id,
         createdAt: at,
         updatedAt: at,
-        customer: { name: input.customer.name.trim(), phone: input.customer.phone.trim() },
+        customer: { name: input.customer.name?.trim() || 'Guest', phone: input.customer.phone?.trim() ?? '' },
         fulfilment: f,
         payment: {
           method,

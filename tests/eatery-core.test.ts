@@ -234,6 +234,35 @@ describe('orders are priced by the platform, never by the customer', () => {
     ).rejects.toMatchObject({ response: { status: 409 } })
   })
 
+  it('name and phone are optional ("Guest"), except a phone for delivery', async () => {
+    const { pub, bundle } = await store()
+    const fries = pick(bundle, 'Fries')
+    const lines = [{ itemId: fries.id, quantity: 3, choices: {} }]
+    const o = await pub.placeOrder('blaze-pizza-shawarma', {
+      lines,
+      customer: { name: '  ', phone: '' },
+      fulfilment: { type: 'pickup' },
+      payment: { method: 'cash' },
+    })
+    expect(o.customer).toEqual({ name: 'Guest', phone: '' })
+    await expect(
+      pub.placeOrder('blaze-pizza-shawarma', {
+        lines,
+        customer: { name: '', phone: '' },
+        fulfilment: { type: 'delivery', address: 'House 4' },
+        payment: { method: 'cash' },
+      })
+    ).rejects.toThrow(/rider/)
+    await expect(
+      pub.placeOrder('blaze-pizza-shawarma', {
+        lines,
+        customer: { name: '', phone: '0241' },
+        fulfilment: { type: 'pickup' },
+        payment: { method: 'cash' },
+      })
+    ).rejects.toThrow(/too short/)
+  })
+
   it('only the device with the order key can follow it', async () => {
     const { pub, bundle } = await store()
     const fries = pick(bundle, 'Fries')
