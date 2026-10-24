@@ -18,6 +18,7 @@ import { DEMO_RESTAURANTS, templateGroup, type DemoRestaurant } from './seed'
 import type {
   CheckoutInput,
   CounterOrderInput,
+  DirectoryEntry,
   Ingredient,
   Order,
   OrderStatus,
@@ -44,7 +45,7 @@ export interface OrderTicket {
 export interface EaterySource {
   kind: DataSourceKind
   // ── Public (no sign-in) ──
-  directory(): Promise<Restaurant[]>
+  directory(): Promise<DirectoryEntry[]>
   storefront(slug: string): Promise<StorefrontBundle | null>
   // Priced by the source from the current menu; `input` carries no prices.
   placeOrder(slug: string, input: CheckoutInput): Promise<Order & { accessKey: string }>
@@ -483,7 +484,19 @@ export const createLocalSource = (
 
     directory: async () => {
       await ensureSeed()
-      return read('restaurants')
+      const promos = read('promotions')
+      const items = read('items')
+      const cats = read('categories')
+      return read('restaurants').map((r) => ({
+        ...r,
+        promotions: promos
+          .filter((p) => p.restaurantId === r.id && p.active)
+          .map(({ name, percentOff, schedule, active, description }) => ({ name, percentOff, schedule, active, description })),
+        menu: [
+          ...cats.filter((c) => c.restaurantId === r.id).map((c) => c.name),
+          ...items.filter((i) => i.restaurantId === r.id && i.status !== 'hidden').map((i) => i.name),
+        ],
+      }))
     },
 
     storefront: async (slug) => {

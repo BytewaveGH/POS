@@ -25,6 +25,7 @@ import { clockLabel, formatMoney, priceOrder, toMinutes } from '@/lib/eatery/men
 import type { FulfilmentType, PaymentMethod, Restaurant } from '@/lib/eatery/types'
 import { ThemeScope } from '@/components/eatery/theme-scope'
 import { orderingBlocked } from '@/components/eatery/storefront'
+import { availableModes } from '@/components/eatery/order-mode'
 
 const NETWORK: Record<Restaurant['payments']['momo']['network'], string> = {
   mtn: 'MTN MoMo',
@@ -46,9 +47,30 @@ const pickupSlots = (r: Restaurant, now: Date) => {
   return out
 }
 
-const Section = ({ title, children, id }: { title: string; children: React.ReactNode; id: string }) => (
-  <section aria-labelledby={id} className="e-card p-4 sm:p-5">
-    <h2 id={id} className="e-display text-2xl mb-3">
+const Section = ({
+  title,
+  children,
+  id,
+  step,
+  className,
+}: {
+  title: string
+  children: React.ReactNode
+  id: string
+  step?: number
+  className?: string
+}) => (
+  <section aria-labelledby={id} className={cn('e-card p-4 sm:p-6', className)}>
+    <h2 id={id} className="e-display mb-4 flex items-center gap-3 text-2xl">
+      {step && (
+        <span
+          className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-sm font-extrabold"
+          style={{ background: 'var(--e-primary)', color: 'var(--e-on-primary)', fontFamily: 'var(--e-font-body)' }}
+          aria-hidden
+        >
+          {step}
+        </span>
+      )}
       {title}
     </h2>
     {children}
@@ -92,7 +114,9 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     if (!r || way) return
-    setWay(pref.fulfilment && ways.includes(pref.fulfilment) ? pref.fulfilment : (ways[0] ?? null))
+    // Same default as the storefront's order-mode picker.
+    const first = availableModes(r, pref.table).find((m) => ways.includes(m)) ?? ways[0] ?? null
+    setWay(pref.fulfilment && ways.includes(pref.fulfilment) ? pref.fulfilment : first)
     setTable(pref.table && r.fulfilment.dineIn.tables.includes(pref.table) ? pref.table : '')
   }, [r, ways, way, pref.fulfilment, pref.table])
 
@@ -188,12 +212,12 @@ export default function CheckoutPage() {
     ) : null
 
   return (
-    <ThemeScope theme={r.theme} as="main" className="min-h-[100dvh] pb-36">
+    <ThemeScope theme={r.theme} as="main" className="min-h-[100dvh] pb-36 lg:pb-16">
       <header
         className="sticky top-0 z-30 border-b backdrop-blur-md"
         style={{ borderColor: 'var(--e-border)', background: 'color-mix(in srgb, var(--e-bg) 88%, transparent)' }}
       >
-        <div className="mx-auto flex h-16 max-w-2xl items-center gap-3 px-4">
+        <div className="mx-auto flex h-16 max-w-2xl items-center gap-3 px-4 lg:max-w-5xl">
           <Link
             href={`/${locale}/eat/${slug}`}
             className="flex h-11 w-11 items-center justify-center rounded-full e-focus"
@@ -208,7 +232,7 @@ export default function CheckoutPage() {
         </div>
       </header>
 
-      <div className="mx-auto flex max-w-2xl flex-col gap-4 px-4 pt-4">
+      <div className="mx-auto flex max-w-2xl flex-col gap-4 px-4 pt-4 lg:grid lg:max-w-5xl lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start lg:gap-6 lg:pt-6">
         {lines.length === 0 ? (
           <div className="e-card p-8 text-center">
             <ShoppingBag className="mx-auto h-10 w-10" style={{ color: 'var(--e-primary-text)' }} aria-hidden />
@@ -219,14 +243,7 @@ export default function CheckoutPage() {
           </div>
         ) : (
           <>
-            {blocked && (
-              <p role="alert" className="flex items-center gap-2 e-card px-4 py-3 text-sm font-bold">
-                <AlertTriangle className="h-4 w-4 flex-shrink-0" style={{ color: 'var(--e-primary-text)' }} /> {blocked} — you can place
-                this order once they open.
-              </p>
-            )}
-
-            <Section title="Your order" id="sec-order">
+            <Section title="Your order" id="sec-order" className="lg:col-start-2 lg:row-start-1">
               <ul className="divide-y divide-[color:var(--e-border)]">
                 {lines.map((l) => {
                   const pricedLine = priceOrder(bundle, [l], null, now).lines[0]
@@ -281,186 +298,195 @@ export default function CheckoutPage() {
               </Link>
             </Section>
 
-            <Section title="How would you like it?" id="sec-way">
-              <div
-                role="radiogroup"
-                aria-label="Pickup, delivery or dine-in"
-                className="grid grid-cols-3 gap-2"
-                data-invalid={tried && !!fieldErrors.way}
-              >
-                {ways.map((w) => {
-                  const Icon = w === 'delivery' ? Bike : w === 'dine-in' ? UtensilsCrossed : ShoppingBag
-                  return (
-                    <button
-                      key={w}
-                      type="button"
-                      role="radio"
-                      aria-checked={way === w}
-                      onClick={() => setWay(w)}
-                      className={cn(
-                        'flex flex-col items-center justify-center gap-1 py-3 text-sm font-bold e-choice !min-h-[72px]',
-                        way === w && '!border-[color:var(--e-primary-text)] e-soft'
-                      )}
-                    >
-                      <Icon className="h-5 w-5" aria-hidden />
-                      {w === 'dine-in' ? 'At my table' : w === 'delivery' ? 'Delivery' : 'Pickup'}
-                    </button>
-                  )
-                })}
-              </div>
-              {err('way')}
-              {way === 'pickup' && (
+            <div className="flex flex-col gap-4 lg:col-start-1 lg:row-span-2 lg:row-start-1">
+              {blocked && (
+                <p role="alert" className="flex items-center gap-2 e-card px-4 py-3 text-sm font-bold">
+                  <AlertTriangle className="h-4 w-4 flex-shrink-0" style={{ color: 'var(--e-primary-text)' }} /> {blocked} — you can place
+                  this order once they open.
+                </p>
+              )}
+
+              <Section title="How would you like it?" id="sec-way" step={1}>
+                <div
+                  role="radiogroup"
+                  aria-label="Pickup, delivery or dine-in"
+                  className="grid grid-cols-3 gap-2"
+                  data-invalid={tried && !!fieldErrors.way}
+                >
+                  {ways.map((w) => {
+                    const Icon = w === 'delivery' ? Bike : w === 'dine-in' ? UtensilsCrossed : ShoppingBag
+                    return (
+                      <button
+                        key={w}
+                        type="button"
+                        role="radio"
+                        aria-checked={way === w}
+                        onClick={() => setWay(w)}
+                        className={cn(
+                          'flex flex-col items-center justify-center gap-1 py-3 text-sm font-bold e-choice !min-h-[72px]',
+                          way === w && '!border-[color:var(--e-primary-text)] e-soft'
+                        )}
+                      >
+                        <Icon className="h-5 w-5" aria-hidden />
+                        {w === 'dine-in' ? 'At my table' : w === 'delivery' ? 'Delivery' : 'Pickup'}
+                      </button>
+                    )
+                  })}
+                </div>
+                {err('way')}
+                {way === 'pickup' && (
+                  <label className="mt-4 block">
+                    <span className="text-sm font-bold">Pickup time</span>
+                    <select value={pickupAt} onChange={(e) => setPickupAt(e.target.value)} className="e-input mt-1.5">
+                      <option value="asap">As soon as possible (~{r.fulfilment.pickup.prepMinutes} min)</option>
+                      {slots.map((s) => (
+                        <option key={s} value={s}>
+                          {clockLabel(s)}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="mt-1 block text-xs e-muted">
+                      {r.address}, {r.city}
+                    </span>
+                  </label>
+                )}
+                {way === 'delivery' && (
+                  <div className="mt-4 grid gap-3">
+                    <label className="block" data-invalid={tried && !!fieldErrors.address}>
+                      <span className="text-sm font-bold">Delivery address</span>
+                      <textarea
+                        value={contact.address}
+                        onChange={(e) => setContact({ address: e.target.value })}
+                        className="e-input mt-1.5"
+                        rows={2}
+                        placeholder="House number, street, area"
+                        autoComplete="street-address"
+                      />
+                      {err('address')}
+                    </label>
+                    <label className="block">
+                      <span className="text-sm font-bold">Landmark or GhanaPost GPS</span>
+                      <input
+                        value={contact.landmark}
+                        onChange={(e) => setContact({ landmark: e.target.value })}
+                        className="e-input mt-1.5"
+                        placeholder="Opposite the Total filling station · GA-123-4567"
+                      />
+                    </label>
+                    <p className="text-xs e-muted">
+                      Delivery {r.fulfilment.delivery.area ? `to ${r.fulfilment.delivery.area} ` : ''}· about{' '}
+                      {r.fulfilment.delivery.etaMinutes} min
+                      {r.fulfilment.delivery.minOrder ? ` · minimum order ${formatMoney(r.fulfilment.delivery.minOrder, currency)}` : ''}
+                    </p>
+                  </div>
+                )}
+                {way === 'dine-in' && (
+                  <label className="mt-4 block" data-invalid={tried && !!fieldErrors.table}>
+                    <span className="text-sm font-bold">Your table</span>
+                    <select value={table} onChange={(e) => setTable(e.target.value)} className="e-input mt-1.5">
+                      <option value="">Choose your table</option>
+                      {r.fulfilment.dineIn.tables.map((t) => (
+                        <option key={t} value={t}>
+                          {t}
+                        </option>
+                      ))}
+                    </select>
+                    {err('table')}
+                  </label>
+                )}
+              </Section>
+
+              <Section title="Your details" id="sec-details" step={2}>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="block" data-invalid={tried && !!fieldErrors.name}>
+                    <span className="text-sm font-bold">Name</span>
+                    <input
+                      value={contact.name}
+                      onChange={(e) => setContact({ name: e.target.value })}
+                      className="e-input mt-1.5"
+                      autoComplete="name"
+                    />
+                    {err('name')}
+                  </label>
+                  <label className="block" data-invalid={tried && !!fieldErrors.phone}>
+                    <span className="text-sm font-bold">Phone</span>
+                    <input
+                      value={contact.phone}
+                      onChange={(e) => setContact({ phone: e.target.value })}
+                      className="e-input mt-1.5"
+                      type="tel"
+                      inputMode="tel"
+                      autoComplete="tel"
+                      placeholder="024 123 4567"
+                    />
+                    {err('phone')}
+                  </label>
+                </div>
+              </Section>
+
+              <Section title="Payment" id="sec-pay" step={3}>
+                <div role="radiogroup" aria-label="Payment method" className="grid gap-2" data-invalid={tried && !!fieldErrors.method}>
+                  {methods.map((m) => {
+                    const Icon = m === 'momo' ? Smartphone : m === 'cash' ? Banknote : UtensilsCrossed
+                    return (
+                      <button
+                        key={m}
+                        type="button"
+                        role="radio"
+                        aria-checked={method === m}
+                        onClick={() => setMethod(m)}
+                        className={cn('e-choice text-left', method === m && '!border-[color:var(--e-primary-text)] e-soft')}
+                      >
+                        <Icon className="h-5 w-5 flex-shrink-0" aria-hidden />
+                        <span className="flex-1">
+                          <span className="block font-bold">
+                            {m === 'momo' ? 'Mobile money' : m === 'cash' ? cashLabel : 'Pay at the table'}
+                          </span>
+                          <span className="block text-xs e-muted">
+                            {m === 'momo'
+                              ? `${NETWORK[r.payments.momo.network]} · ${r.payments.momo.number}`
+                              : m === 'cash'
+                                ? 'Pay when you get your order'
+                                : 'Settle with your server — cash, card or MoMo'}
+                          </span>
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+                {err('method')}
+                {method === 'momo' && (
+                  <div className="mt-3 rounded-[var(--e-radius-control)] p-3 text-sm e-soft">
+                    <p>
+                      Send <strong>{formatMoney(priced.total, currency)}</strong> to <strong>{r.payments.momo.number}</strong> (
+                      {r.payments.momo.accountName}, {NETWORK[r.payments.momo.network]}). Staff confirm the payment before preparing your
+                      order.
+                    </p>
+                    <label className="mt-3 block">
+                      <span className="font-bold">Transaction ID (optional)</span>
+                      <input
+                        value={reference}
+                        onChange={(e) => setReference(e.target.value)}
+                        className="e-input mt-1.5"
+                        placeholder="From your MoMo confirmation SMS"
+                      />
+                    </label>
+                  </div>
+                )}
                 <label className="mt-4 block">
-                  <span className="text-sm font-bold">Pickup time</span>
-                  <select value={pickupAt} onChange={(e) => setPickupAt(e.target.value)} className="e-input mt-1.5">
-                    <option value="asap">As soon as possible (~{r.fulfilment.pickup.prepMinutes} min)</option>
-                    {slots.map((s) => (
-                      <option key={s} value={s}>
-                        {clockLabel(s)}
-                      </option>
-                    ))}
-                  </select>
-                  <span className="mt-1 block text-xs e-muted">
-                    {r.address}, {r.city}
-                  </span>
-                </label>
-              )}
-              {way === 'delivery' && (
-                <div className="mt-4 grid gap-3">
-                  <label className="block" data-invalid={tried && !!fieldErrors.address}>
-                    <span className="text-sm font-bold">Delivery address</span>
-                    <textarea
-                      value={contact.address}
-                      onChange={(e) => setContact({ address: e.target.value })}
-                      className="e-input mt-1.5"
-                      rows={2}
-                      placeholder="House number, street, area"
-                      autoComplete="street-address"
-                    />
-                    {err('address')}
-                  </label>
-                  <label className="block">
-                    <span className="text-sm font-bold">Landmark or GhanaPost GPS</span>
-                    <input
-                      value={contact.landmark}
-                      onChange={(e) => setContact({ landmark: e.target.value })}
-                      className="e-input mt-1.5"
-                      placeholder="Opposite the Total filling station · GA-123-4567"
-                    />
-                  </label>
-                  <p className="text-xs e-muted">
-                    Delivery {r.fulfilment.delivery.area ? `to ${r.fulfilment.delivery.area} ` : ''}· about{' '}
-                    {r.fulfilment.delivery.etaMinutes} min
-                    {r.fulfilment.delivery.minOrder ? ` · minimum order ${formatMoney(r.fulfilment.delivery.minOrder, currency)}` : ''}
-                  </p>
-                </div>
-              )}
-              {way === 'dine-in' && (
-                <label className="mt-4 block" data-invalid={tried && !!fieldErrors.table}>
-                  <span className="text-sm font-bold">Your table</span>
-                  <select value={table} onChange={(e) => setTable(e.target.value)} className="e-input mt-1.5">
-                    <option value="">Choose your table</option>
-                    {r.fulfilment.dineIn.tables.map((t) => (
-                      <option key={t} value={t}>
-                        {t}
-                      </option>
-                    ))}
-                  </select>
-                  {err('table')}
-                </label>
-              )}
-            </Section>
-
-            <Section title="Your details" id="sec-details">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="block" data-invalid={tried && !!fieldErrors.name}>
-                  <span className="text-sm font-bold">Name</span>
-                  <input
-                    value={contact.name}
-                    onChange={(e) => setContact({ name: e.target.value })}
+                  <span className="text-sm font-bold">Anything else?</span>
+                  <textarea
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value.slice(0, 300))}
                     className="e-input mt-1.5"
-                    autoComplete="name"
+                    rows={2}
+                    placeholder="Call when you’re outside, birthday candle…"
                   />
-                  {err('name')}
                 </label>
-                <label className="block" data-invalid={tried && !!fieldErrors.phone}>
-                  <span className="text-sm font-bold">Phone</span>
-                  <input
-                    value={contact.phone}
-                    onChange={(e) => setContact({ phone: e.target.value })}
-                    className="e-input mt-1.5"
-                    type="tel"
-                    inputMode="tel"
-                    autoComplete="tel"
-                    placeholder="024 123 4567"
-                  />
-                  {err('phone')}
-                </label>
-              </div>
-            </Section>
+              </Section>
+            </div>
 
-            <Section title="Payment" id="sec-pay">
-              <div role="radiogroup" aria-label="Payment method" className="grid gap-2" data-invalid={tried && !!fieldErrors.method}>
-                {methods.map((m) => {
-                  const Icon = m === 'momo' ? Smartphone : m === 'cash' ? Banknote : UtensilsCrossed
-                  return (
-                    <button
-                      key={m}
-                      type="button"
-                      role="radio"
-                      aria-checked={method === m}
-                      onClick={() => setMethod(m)}
-                      className={cn('e-choice text-left', method === m && '!border-[color:var(--e-primary-text)] e-soft')}
-                    >
-                      <Icon className="h-5 w-5 flex-shrink-0" aria-hidden />
-                      <span className="flex-1">
-                        <span className="block font-bold">
-                          {m === 'momo' ? 'Mobile money' : m === 'cash' ? cashLabel : 'Pay at the table'}
-                        </span>
-                        <span className="block text-xs e-muted">
-                          {m === 'momo'
-                            ? `${NETWORK[r.payments.momo.network]} · ${r.payments.momo.number}`
-                            : m === 'cash'
-                              ? 'Pay when you get your order'
-                              : 'Settle with your server — cash, card or MoMo'}
-                        </span>
-                      </span>
-                    </button>
-                  )
-                })}
-              </div>
-              {err('method')}
-              {method === 'momo' && (
-                <div className="mt-3 rounded-[var(--e-radius-control)] p-3 text-sm e-soft">
-                  <p>
-                    Send <strong>{formatMoney(priced.total, currency)}</strong> to <strong>{r.payments.momo.number}</strong> (
-                    {r.payments.momo.accountName}, {NETWORK[r.payments.momo.network]}). Staff confirm the payment before preparing your
-                    order.
-                  </p>
-                  <label className="mt-3 block">
-                    <span className="font-bold">Transaction ID (optional)</span>
-                    <input
-                      value={reference}
-                      onChange={(e) => setReference(e.target.value)}
-                      className="e-input mt-1.5"
-                      placeholder="From your MoMo confirmation SMS"
-                    />
-                  </label>
-                </div>
-              )}
-              <label className="mt-4 block">
-                <span className="text-sm font-bold">Anything else?</span>
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value.slice(0, 300))}
-                  className="e-input mt-1.5"
-                  rows={2}
-                  placeholder="Call when you’re outside, birthday candle…"
-                />
-              </label>
-            </Section>
-
-            <section aria-label="Total" className="e-card p-4 sm:p-5">
+            <section aria-label="Total" className="e-card p-4 sm:p-6 lg:sticky lg:top-20 lg:col-start-2 lg:row-start-2">
               <dl className="grid gap-1.5 text-[15px]">
                 <div className="flex justify-between">
                   <dt className="e-muted">Subtotal</dt>
@@ -490,6 +516,24 @@ export default function CheckoutPage() {
                   ))}
                 </ul>
               )}
+              {/* Desktop: the button sits with the total. Phones use the bar below. */}
+              <div className="hidden lg:block">
+                {serverError && (
+                  <p role="alert" className="mt-3 flex items-start gap-2 text-sm font-bold" style={{ color: 'var(--e-primary-text)' }}>
+                    <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" /> {serverError}
+                  </p>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void place()}
+                  disabled={submitting || !!blocked}
+                  className="e-btn mt-4 h-14 w-full text-base"
+                >
+                  {submitting && <Loader2 className="h-5 w-5 animate-spin" />}
+                  {blocked ? blocked : `Place order · ${formatMoney(priced.total, currency)}`}
+                </button>
+                <p className="mt-2 text-center text-[11px] e-muted">Prices are confirmed by {r.name} when you order.</p>
+              </div>
             </section>
           </>
         )}
@@ -497,7 +541,7 @@ export default function CheckoutPage() {
 
       {lines.length > 0 && (
         <div
-          className="fixed inset-x-0 bottom-0 z-40 border-t px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+          className="fixed inset-x-0 bottom-0 z-40 border-t px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:hidden"
           style={{ background: 'var(--e-surface)', borderColor: 'var(--e-border)' }}
         >
           <div className="mx-auto max-w-2xl">

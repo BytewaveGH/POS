@@ -1,9 +1,9 @@
 'use client'
 
 import React from 'react'
-import { Bike, Clock, MapPin, MessageCircle, Phone, ShoppingBag, UtensilsCrossed } from 'lucide-react'
+import { Clock, MapPin, MessageCircle, Phone } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { formatMoney, openState, todaysHoursLabel, type OpenState } from '@/lib/eatery/menu'
+import { openState, todaysHoursLabel, type OpenState } from '@/lib/eatery/menu'
 import { presetFor } from '@/lib/eatery/presets'
 import type { Restaurant } from '@/lib/eatery/types'
 import { BrandMark, Cover } from './theme-scope'
@@ -124,43 +124,49 @@ const waNumber = (p: string) => {
   return d.startsWith('0') ? `233${d.slice(1)}` : d
 }
 
-// Practical details under the hero: hours, where, how to order, contact.
+// Practical details under the hero: about, today's hours, where, contact.
 export const InfoStrip = ({ restaurant, now }: { restaurant: Restaurant; now: Date }) => {
-  const f = restaurant.fulfilment
   const items = [
     { icon: Clock, text: `Today ${todaysHoursLabel(restaurant.hours, now)}` },
     { icon: MapPin, text: `${restaurant.address}, ${restaurant.city}`, href: mapLink(restaurant) },
-    f.delivery.enabled && {
-      icon: Bike,
-      text: `Delivery ${f.delivery.fee ? `· fee ${formatMoney(f.delivery.fee, restaurant.currency)}` : '· free'}${f.delivery.area ? ` · ${f.delivery.area}` : ''}`,
-    },
-    f.pickup.enabled && { icon: ShoppingBag, text: `Pickup · ready in ~${f.pickup.prepMinutes} min` },
-    f.dineIn.enabled && { icon: UtensilsCrossed, text: 'Dine-in · scan the QR on your table' },
     restaurant.phone && { icon: Phone, text: restaurant.phone, href: `tel:${restaurant.phone.replace(/\s/g, '')}` },
     restaurant.whatsapp && { icon: MessageCircle, text: 'WhatsApp', href: `https://wa.me/${waNumber(restaurant.whatsapp)}` },
   ].filter(Boolean) as { icon: typeof Clock; text: string; href?: string }[]
   return (
-    <div className="mx-auto max-w-5xl px-4 py-4">
-      {restaurant.description && <p className="e-muted text-[15px] leading-relaxed max-w-2xl mb-3">{restaurant.description}</p>}
-      <ul className="flex flex-wrap gap-x-5 gap-y-2 text-[13px] font-semibold">
-        {items.map((i) => (
-          <li key={i.text} className="inline-flex items-center gap-1.5">
-            <i.icon className="h-4 w-4 flex-shrink-0" style={{ color: 'var(--e-primary-text)' }} aria-hidden />
-            {i.href ? (
-              <a
-                href={i.href}
-                target={i.href.startsWith('http') ? '_blank' : undefined}
-                rel="noopener noreferrer"
-                className="underline-offset-4 hover:underline"
-              >
-                {i.text}
-              </a>
-            ) : (
-              <span>{i.text}</span>
-            )}
-          </li>
-        ))}
+    <div className="mx-auto max-w-5xl px-4 pt-5">
+      {restaurant.description && <p className="max-w-2xl text-[15px] leading-relaxed e-muted">{restaurant.description}</p>}
+      <ul className="mt-3 flex flex-wrap gap-2 text-[13px] font-semibold">
+        {items.map((i) => {
+          const body = (
+            <>
+              <i.icon className="h-3.5 w-3.5 flex-shrink-0" style={{ color: 'var(--e-primary-text)' }} aria-hidden />
+              <span className="truncate">{i.text}</span>
+            </>
+          )
+          const cls = 'inline-flex max-w-full items-center gap-1.5 rounded-full border px-3 py-1.5'
+          return (
+            <li key={i.text} className="max-w-full">
+              {i.href ? (
+                <a
+                  href={i.href}
+                  target={i.href.startsWith('http') ? '_blank' : undefined}
+                  rel="noopener noreferrer"
+                  className={`${cls} e-focus hover:opacity-80`}
+                  style={{ borderColor: 'var(--e-border)' }}
+                >
+                  {body}
+                </a>
+              ) : (
+                <span className={cls} style={{ borderColor: 'var(--e-border)' }}>
+                  {body}
+                </span>
+              )}
+            </li>
+          )
+        })}
       </ul>
     </div>
   )
 }
+
+export { mapLink, waNumber }

@@ -367,7 +367,9 @@ Same four routes per resource as §6.2 (`GET /`, `POST /`, `PUT /:id`, `DELETE /
 
 ### 7.2 Public endpoints (no sign-in; never return `ownerScope`)
 
-- **`GET /public/eatery/restaurants`:** every restaurant on the platform (the directory), including `theme`, hours and fulfilment settings.
+- **`GET /public/eatery/restaurants`:** every restaurant on the platform (the directory), including `theme`, hours and fulfilment settings. Each entry also carries what the directory needs for deal badges and dish search:
+  - `promotions`: the active ones, as `{ name, percentOff, schedule, active, description }`;
+  - `menu`: the names of its sections and non-hidden items.
 - **`GET /public/eatery/restaurants/:slug`** → `{ restaurant, categories, items, promotions }`: the storefront bundle. Hidden items and inactive promotions are left out. Returns `404` for an unknown slug.
 - **`POST /public/eatery/restaurants/:slug/orders`:** the body is a `CheckoutInput` and carries **no prices**:
 

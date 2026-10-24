@@ -124,6 +124,23 @@ const readSelected = () => {
   }
 }
 
+// Say what actually went wrong — most often, in API mode, that the eatery
+// endpoints aren't on the server yet.
+export const ownerLoadMessage = (err: unknown, kind: 'api' | 'local') => {
+  const status = apiStatus(err)
+  const msg = apiErrorMessage(err, '')
+  if (kind === 'api' && (status === 404 || status === 405))
+    return 'The eatery service isn’t on the Sellix server yet. Until it is, run the eatery in this browser: set NEXT_PUBLIC_EATERY_DATA_SOURCE=local in .env.local and restart the app.'
+  if (status === 403 && /unknown tenant|tenant mismatch/i.test(msg))
+    return 'This business isn’t available right now. Please try again in a moment or contact support.'
+  if (status === 403) return 'You don’t have access to the eatery.'
+  if (status === undefined)
+    return kind === 'api'
+      ? 'Couldn’t reach the Sellix server. Check your connection and try again.'
+      : msg || 'Couldn’t read the data saved in this browser.'
+  return msg ? `${msg} (${status})` : `Couldn’t load your restaurants (error ${status}).`
+}
+
 export type OwnerData = { [R in ResourceName]: ResourceMap[R][] } & {
   isLoading: boolean
   error: string | null
@@ -176,7 +193,7 @@ export const useOwnerData = (): OwnerData => {
       stockMoves: data.stockMoves.filter((x) => x.restaurantId === rid).sort((a, b) => (a.date < b.date ? 1 : -1)),
       expenses: data.expenses.filter((x) => x.restaurantId === rid).sort((a, b) => (a.date < b.date ? 1 : -1)),
       isLoading: !ready || (!failed && results.some((r) => r.isLoading)),
-      error: failed ? apiErrorMessage(failed.error, 'Couldn’t load your restaurants.') : null,
+      error: failed ? ownerLoadMessage(failed.error, source.kind) : null,
       retry: () => results.forEach((r) => r.isError && void r.refetch()),
       restaurant,
       select,
