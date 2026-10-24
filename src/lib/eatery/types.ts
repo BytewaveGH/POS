@@ -293,6 +293,14 @@ export interface Expense {
   note?: string
 }
 
+// A directory listing: the restaurant plus what the directory needs to show
+// live deals and to match searches against dishes ("shawarma", "latte").
+export interface DirectoryEntry extends Restaurant {
+  promotions?: Pick<Promotion, 'name' | 'percentOff' | 'schedule' | 'active' | 'description'>[]
+  // Section and item names (not hidden), for search.
+  menu?: string[]
+}
+
 export interface StorefrontBundle {
   restaurant: Restaurant
   categories: MenuCategory[]

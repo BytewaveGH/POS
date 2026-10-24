@@ -8,6 +8,7 @@ import { useAxios } from '@/hooks/use-axios'
 import { publicApiClient } from '@/lib/public-axios-client'
 import { apiErrorMessage, apiStatus } from '@/lib/api-error'
 import { createApiSource, createLocalSource, DATA_SOURCE_KIND, type EaterySource, type OrderTicket } from './data-source'
+import { prepareImage, type ImageKind } from './images'
 import type { CounterOrderInput, ResourceMap, ResourceName, Restaurant } from './types'
 
 // Network errors and 5xx only, at most twice; a failed query waits for the user.
@@ -123,6 +124,23 @@ const readSelected = () => {
   }
 }
 
+// Say what actually went wrong — most often, in API mode, that the eatery
+// endpoints aren't on the server yet.
+export const ownerLoadMessage = (err: unknown, kind: 'api' | 'local') => {
+  const status = apiStatus(err)
+  const msg = apiErrorMessage(err, '')
+  if (kind === 'api' && (status === 404 || status === 405))
+    return 'The eatery service isn’t on the Sellix server yet. Until it is, run the eatery in this browser: set NEXT_PUBLIC_EATERY_DATA_SOURCE=local in .env.local and restart the app.'
+  if (status === 403 && /unknown tenant|tenant mismatch/i.test(msg))
+    return 'This business isn’t available right now. Please try again in a moment or contact support.'
+  if (status === 403) return 'You don’t have access to the eatery.'
+  if (status === undefined)
+    return kind === 'api'
+      ? 'Couldn’t reach the Sellix server. Check your connection and try again.'
+      : msg || 'Couldn’t read the data saved in this browser.'
+  return msg ? `${msg} (${status})` : `Couldn’t load your restaurants (error ${status}).`
+}
+
 export type OwnerData = { [R in ResourceName]: ResourceMap[R][] } & {
   isLoading: boolean
   error: string | null
@@ -175,7 +193,7 @@ export const useOwnerData = (): OwnerData => {
       stockMoves: data.stockMoves.filter((x) => x.restaurantId === rid).sort((a, b) => (a.date < b.date ? 1 : -1)),
       expenses: data.expenses.filter((x) => x.restaurantId === rid).sort((a, b) => (a.date < b.date ? 1 : -1)),
       isLoading: !ready || (!failed && results.some((r) => r.isLoading)),
-      error: failed ? apiErrorMessage(failed.error, 'Couldn’t load your restaurants.') : null,
+      error: failed ? ownerLoadMessage(failed.error, source.kind) : null,
       retry: () => results.forEach((r) => r.isError && void r.refetch()),
       restaurant,
       select,
@@ -215,6 +233,9 @@ export const useEateryActions = () => {
     update: <R extends ResourceName>(r: R, id: number, body: Partial<Omit<ResourceMap[R], 'id'>>) =>
       run(() => source.update(r, id, body), 'Couldn’t save changes.'),
     remove: (r: ResourceName, id: number) => run(() => source.remove(r, id), 'Couldn’t delete.'),
+    // Prepare (crop/compress) and store a logo or cover; returns its URL.
+    uploadImage: (restaurantId: number, file: File, kind: ImageKind) =>
+      run(async () => source.uploadImage(restaurantId, await prepareImage(file, kind), kind), 'Couldn’t upload the image.', true),
     // Counter (POS) order: priced by the source, accepted at once.
     createCounterOrder: (restaurantId: number, input: CounterOrderInput) =>
       run(() => source.createCounterOrder(restaurantId, input), 'Couldn’t send the order.'),

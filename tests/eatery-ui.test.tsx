@@ -14,6 +14,11 @@ vi.mock('next/navigation', () => ({
 vi.mock('next-auth/react', () => ({ useSession: () => ({ status: 'authenticated', data: { user: { tenant: 'acme' } } }) }))
 vi.mock('@/hooks/use-axios', () => ({ useAxios: () => vi.fn() }))
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+// jsdom has no canvas: skip the crop/compress step, keep the real validation.
+vi.mock('@/lib/eatery/images', async (orig) => ({
+  ...(await orig<typeof import('@/lib/eatery/images')>()),
+  prepareImage: async (f: Blob) => f,
+}))
 
 import EatDirectory from '@/app/[locale]/(eatery-public)/eat/page'
 import RestaurantPage from '@/app/[locale]/(eatery-public)/eat/[slug]/page'
@@ -61,15 +66,41 @@ describe('eatery platform (local data)', () => {
     expect(new Set(fonts).size).toBe(3)
     expect(within(cards.find((c) => c.textContent?.includes('Velvet Hour'))!).getByText(/Closed/)).toBeTruthy()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Drinks & bars' }))
+    fireEvent.click(screen.getByRole('button', { name: /^Drinks & bars/ }))
     expect(screen.getAllByRole('article')).toHaveLength(1)
     fireEvent.click(screen.getByRole('checkbox', { name: 'Open now' }))
     expect(screen.queryAllByRole('article')).toHaveLength(0)
   })
 
+  it('finds places by the dishes they serve', async () => {
+    withQuery(<EatDirectory />)
+    await screen.findAllByRole('article')
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search places and dishes' }), { target: { value: 'latte' } })
+    const cards = screen.getAllByRole('article')
+    expect(cards).toHaveLength(1)
+    expect(within(cards[0]).getByText('Serves Caramel Latte')).toBeTruthy()
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search places and dishes' }), { target: { value: 'sushi' } })
+    expect(screen.getByText('Nothing matches that')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }))
+    expect(screen.getAllByRole('article')).toHaveLength(3)
+  })
+
+  it('adds simple items in one tap and shows how many are in the order', async () => {
+    nav.params = { locale: 'en', slug: 'kofi-and-crumb' }
+    withQuery(<RestaurantPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Add Butter Croissant' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add Butter Croissant' }))
+    expect(screen.getByText('1 × Butter Croissant added')).toBeTruthy()
+    expect(screen.getAllByText('2 in your order').length).toBeGreaterThan(0)
+    expect(screen.getByRole('button', { name: /View your order.*₵44/ })).toBeTruthy()
+    // Items with required choices open the sheet instead.
+    expect(screen.queryByRole('button', { name: 'Add Cappuccino' })).toBeNull()
+  })
+
   it('orders a large pepperoni with extra cheese for pickup, paid by MoMo', async () => {
     nav.params = { locale: 'en', slug: 'blaze-pizza-shawarma' }
     const page = withQuery(<RestaurantPage />)
+    fireEvent.click(await screen.findByRole('radio', { name: /^Pickup/ }))
     fireEvent.click(await screen.findByRole('button', { name: 'Pepperoni Feast' }))
 
     const sheet = await screen.findByRole('dialog')
@@ -77,7 +108,15 @@ describe('eatery platform (local data)', () => {
     fireEvent.click(within(sheet).getByLabelText(/Extra cheese/))
     fireEvent.click(within(sheet).getByRole('button', { name: 'Add · ₵187' })) // 85 + 90 + 12
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-    expect(screen.getByRole('link', { name: /View your order.*₵187/ })).toBeTruthy()
+    // The cart bar opens a review sheet with the way to checkout.
+    fireEvent.click(screen.getByRole('button', { name: /View your order.*₵187/ }))
+    const cart = await screen.findByRole('dialog')
+    expect(within(cart).getByText('Pepperoni Feast')).toBeTruthy()
+    expect(
+      within(cart)
+        .getByRole('link', { name: /Go to checkout/ })
+        .getAttribute('href')
+    ).toBe('/en/eat/blaze-pizza-shawarma/checkout')
     page.unmount()
 
     withQuery(<CheckoutPage />)
@@ -85,7 +124,7 @@ describe('eatery platform (local data)', () => {
     fireEvent.change(screen.getByLabelText('Phone'), { target: { value: '024 123 4567' } })
     expect(screen.getByRole('radio', { name: /Mobile money/ }).getAttribute('aria-checked')).toBe('true')
     fireEvent.change(screen.getByLabelText(/Transaction ID/), { target: { value: 'MP2610' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Place order · ₵187' }))
+    fireEvent.click(screen.getAllByRole('button', { name: 'Place order · ₵187' })[0])
 
     await waitFor(() =>
       expect(nav.push).toHaveBeenCalledWith(expect.stringMatching(/^\/en\/eat\/blaze-pizza-shawarma\/order\/[A-Z2-9]{4}$/))
@@ -251,5 +290,32 @@ describe('eatery platform (local data)', () => {
       expect((await screen.findByTestId('net-profit')).textContent).toBe('−₵9,766')
       expect(screen.getByText('Loss')).toBeTruthy()
     })
+  })
+
+  it('uploads a logo and cover from the brand editor', async () => {
+    const owner = createLocalSource('acme')
+    const [velvet] = await owner.claimDemo!()
+    localStorage.setItem('sellix-eatery:selected', String(velvet.id))
+    withQuery(<BrandPage />)
+
+    const png = new File([new Uint8Array([137, 80, 78, 71])], 'logo.png', { type: 'image/png' })
+    fireEvent.change(await screen.findByLabelText('Upload logo'), { target: { files: [png] } })
+    await waitFor(() => expect((screen.getByAltText('Logo preview') as HTMLImageElement).src).toMatch(/^data:image\/png;base64,/))
+
+    const pdf = new File(['%PDF'], 'menu.pdf', { type: 'application/pdf' })
+    fireEvent.change(screen.getByLabelText('Upload cover photo'), { target: { files: [pdf] } })
+    expect(await screen.findByText(/Use a photo or image file/)).toBeTruthy()
+    const jpg = new File([new Uint8Array([255, 216, 255])], 'cover.jpg', { type: 'image/jpeg' })
+    fireEvent.change(screen.getByLabelText('Upload cover photo'), { target: { files: [jpg] } })
+    await waitFor(() => expect(screen.getByAltText('Cover photo preview')).toBeTruthy())
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save theme' }))
+    await waitFor(async () => {
+      const saved = (await owner.list('restaurants')).find((r) => r.id === velvet.id)!
+      expect(saved.theme.imagery.logoUrl).toMatch(/^data:image\/png/)
+      expect(saved.theme.imagery.coverUrl).toMatch(/^data:image\/jpeg/)
+    })
+    // The storefront shows the uploaded logo.
+    expect(screen.getAllByAltText('Velvet Hour logo').length).toBeGreaterThan(0)
   })
 })

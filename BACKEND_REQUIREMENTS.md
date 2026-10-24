@@ -367,7 +367,9 @@ Same four routes per resource as §6.2 (`GET /`, `POST /`, `PUT /:id`, `DELETE /
 
 ### 7.2 Public endpoints (no sign-in; never return `ownerScope`)
 
-- **`GET /public/eatery/restaurants`:** every restaurant on the platform (the directory), including `theme`, hours and fulfilment settings.
+- **`GET /public/eatery/restaurants`:** every restaurant on the platform (the directory), including `theme`, hours and fulfilment settings. Each entry also carries what the directory needs for deal badges and dish search:
+  - `promotions`: the active ones, as `{ name, percentOff, schedule, active, description }`;
+  - `menu`: the names of its sections and non-hidden items.
 - **`GET /public/eatery/restaurants/:slug`** → `{ restaurant, categories, items, promotions }`: the storefront bundle. Hidden items and inactive promotions are left out. Returns `404` for an unknown slug.
 - **`POST /public/eatery/restaurants/:slug/orders`:** the body is a `CheckoutInput` and carries **no prices**:
 
@@ -406,6 +408,20 @@ Same four routes per resource as §6.2 (`GET /`, `POST /`, `PUT /:id`, `DELETE /
 ### 7.3 Objects
 
 As in `src/lib/eatery/types.ts`: `Restaurant` (with `theme: ThemeConfig`, `hours`, `fulfilment`, `payments`), `MenuCategory`, `MenuItem` (with `optionGroups`, optional `combo.slots`, `status`, optional `schedule`), `Promotion` and `Order`. Store `theme`, `hours`, `fulfilment`, `payments`, `optionGroups`, `combo`, `schedule` and order `lines` as JSON. The frontend owns their shape, and the server only needs the fields used in the pricing and validation rules above. Validate `theme.version === 1` and that colours are `#rrggbb`. The frontend fixes contrast itself.
+
+### 7.4a Image uploads (logo and cover)
+
+`POST /eatery/uploads`: `multipart/form-data` with `file`, `kind` (`logo` | `cover`) and `restaurantId`. Signed in, `canManageProducts`, and the restaurant must belong to the tenant.
+
+- The frontend has already prepared the file:
+  - a logo is a 512 px square in WebP (PNG where WebP isn't supported);
+  - a cover is at most 1600 px and 600 KB, in JPEG;
+  - metadata is stripped.
+- Accept `image/webp`, `image/png` and `image/jpeg`, up to 2 MB → otherwise `415` / `413`.
+- Store it publicly readable (object storage or CDN) under an unguessable name. Return `{ data: { url } }`.
+- The URL goes into `theme.imagery.logoUrl` / `coverUrl` when the owner saves the theme. Files that never end up in a saved theme can be cleaned up after 24 h.
+
+In local mode the image is kept inline as a `data:` URL instead.
 
 ### 7.5 Counter POS, ingredients and profit
 
@@ -474,7 +490,7 @@ Purchases are money out, not a cost, until the stock is used or wasted.
 
 - Real-time order push (SSE or WebSocket) instead of polling.
 - MoMo collection through a payment gateway, with a webhook marking orders `paid`.
-- Image upload for logos, covers and items (only URLs today).
+- Image upload for menu items (logos and covers: §7.4a).
 - Per-restaurant staff assignment.
 
 ## Priority
