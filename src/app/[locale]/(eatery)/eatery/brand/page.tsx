@@ -23,6 +23,8 @@ import {
 } from '@/lib/eatery/theme'
 import type { Restaurant } from '@/lib/eatery/types'
 import { Storefront } from '@/components/eatery/storefront'
+import { BrandMark, Cover, ThemeScope } from '@/components/eatery/theme-scope'
+import { ImageField } from '../_components/image-field'
 import { EateryFrame, RestaurantSwitcher } from '../_components/frame'
 import { PresetCard } from '../_components/new-restaurant'
 import type { OwnerData } from '@/lib/eatery/hooks'
@@ -164,23 +166,32 @@ const Editor = ({ o }: { o: OwnerData & { restaurant: Restaurant } }) => {
 
           <Card className="p-5">
             <SectionTitle title="Logo & cover" />
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Logo link" htmlFor="th-logo" hint="Square image works best. Empty = your initials">
-                <Input
-                  id="th-logo"
-                  value={theme.imagery.logoUrl ?? ''}
-                  onChange={(e) => set({ imagery: { ...theme.imagery, logoUrl: e.target.value.trim() || undefined } })}
-                  placeholder="https://…"
-                />
-              </Field>
-              <Field label="Cover photo link" htmlFor="th-cover" hint="Wide photo. Empty = your pattern">
-                <Input
-                  id="th-cover"
-                  value={theme.imagery.coverUrl ?? ''}
-                  onChange={(e) => set({ imagery: { ...theme.imagery, coverUrl: e.target.value.trim() || undefined } })}
-                  placeholder="https://…"
-                />
-              </Field>
+            <div className="grid gap-5 sm:grid-cols-2">
+              <ImageField
+                kind="logo"
+                label="Logo"
+                hint="Square works best · cropped to 512 px"
+                value={theme.imagery.logoUrl}
+                onChange={(logoUrl) => set({ imagery: { ...theme.imagery, logoUrl } })}
+                upload={(file) => actions.uploadImage(r.id, file, 'logo')}
+                fallback={
+                  <ThemeScope theme={theme} className="flex h-full w-full items-center justify-center">
+                    <BrandMark
+                      restaurant={{ name: r.name, theme: { ...theme, imagery: { ...theme.imagery, logoUrl: undefined } } }}
+                      size={52}
+                    />
+                  </ThemeScope>
+                }
+              />
+              <ImageField
+                kind="cover"
+                label="Cover photo"
+                hint="Wide photo · resized to 1600 px"
+                value={theme.imagery.coverUrl}
+                onChange={(coverUrl) => set({ imagery: { ...theme.imagery, coverUrl } })}
+                upload={(file) => actions.uploadImage(r.id, file, 'cover')}
+                fallback={<Cover theme={{ ...theme, imagery: { ...theme.imagery, coverUrl: undefined } }} className="h-full w-full" />}
+              />
             </div>
             {theme.imagery.coverUrl && (
               <Field

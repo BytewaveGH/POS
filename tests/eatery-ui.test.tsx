@@ -14,6 +14,11 @@ vi.mock('next/navigation', () => ({
 vi.mock('next-auth/react', () => ({ useSession: () => ({ status: 'authenticated', data: { user: { tenant: 'acme' } } }) }))
 vi.mock('@/hooks/use-axios', () => ({ useAxios: () => vi.fn() }))
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+// jsdom has no canvas: skip the crop/compress step, keep the real validation.
+vi.mock('@/lib/eatery/images', async (orig) => ({
+  ...(await orig<typeof import('@/lib/eatery/images')>()),
+  prepareImage: async (f: Blob) => f,
+}))
 
 import EatDirectory from '@/app/[locale]/(eatery-public)/eat/page'
 import RestaurantPage from '@/app/[locale]/(eatery-public)/eat/[slug]/page'
@@ -251,5 +256,32 @@ describe('eatery platform (local data)', () => {
       expect((await screen.findByTestId('net-profit')).textContent).toBe('−₵9,766')
       expect(screen.getByText('Loss')).toBeTruthy()
     })
+  })
+
+  it('uploads a logo and cover from the brand editor', async () => {
+    const owner = createLocalSource('acme')
+    const [velvet] = await owner.claimDemo!()
+    localStorage.setItem('sellix-eatery:selected', String(velvet.id))
+    withQuery(<BrandPage />)
+
+    const png = new File([new Uint8Array([137, 80, 78, 71])], 'logo.png', { type: 'image/png' })
+    fireEvent.change(await screen.findByLabelText('Upload logo'), { target: { files: [png] } })
+    await waitFor(() => expect((screen.getByAltText('Logo preview') as HTMLImageElement).src).toMatch(/^data:image\/png;base64,/))
+
+    const pdf = new File(['%PDF'], 'menu.pdf', { type: 'application/pdf' })
+    fireEvent.change(screen.getByLabelText('Upload cover photo'), { target: { files: [pdf] } })
+    expect(await screen.findByText(/Use a photo or image file/)).toBeTruthy()
+    const jpg = new File([new Uint8Array([255, 216, 255])], 'cover.jpg', { type: 'image/jpeg' })
+    fireEvent.change(screen.getByLabelText('Upload cover photo'), { target: { files: [jpg] } })
+    await waitFor(() => expect(screen.getByAltText('Cover photo preview')).toBeTruthy())
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save theme' }))
+    await waitFor(async () => {
+      const saved = (await owner.list('restaurants')).find((r) => r.id === velvet.id)!
+      expect(saved.theme.imagery.logoUrl).toMatch(/^data:image\/png/)
+      expect(saved.theme.imagery.coverUrl).toMatch(/^data:image\/jpeg/)
+    })
+    // The storefront shows the uploaded logo.
+    expect(screen.getAllByAltText('Velvet Hour logo').length).toBeGreaterThan(0)
   })
 })

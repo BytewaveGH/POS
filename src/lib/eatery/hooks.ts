@@ -8,6 +8,7 @@ import { useAxios } from '@/hooks/use-axios'
 import { publicApiClient } from '@/lib/public-axios-client'
 import { apiErrorMessage, apiStatus } from '@/lib/api-error'
 import { createApiSource, createLocalSource, DATA_SOURCE_KIND, type EaterySource, type OrderTicket } from './data-source'
+import { prepareImage, type ImageKind } from './images'
 import type { CounterOrderInput, ResourceMap, ResourceName, Restaurant } from './types'
 
 // Network errors and 5xx only, at most twice; a failed query waits for the user.
@@ -215,6 +216,9 @@ export const useEateryActions = () => {
     update: <R extends ResourceName>(r: R, id: number, body: Partial<Omit<ResourceMap[R], 'id'>>) =>
       run(() => source.update(r, id, body), 'Couldn’t save changes.'),
     remove: (r: ResourceName, id: number) => run(() => source.remove(r, id), 'Couldn’t delete.'),
+    // Prepare (crop/compress) and store a logo or cover; returns its URL.
+    uploadImage: (restaurantId: number, file: File, kind: ImageKind) =>
+      run(async () => source.uploadImage(restaurantId, await prepareImage(file, kind), kind), 'Couldn’t upload the image.', true),
     // Counter (POS) order: priced by the source, accepted at once.
     createCounterOrder: (restaurantId: number, input: CounterOrderInput) =>
       run(() => source.createCounterOrder(restaurantId, input), 'Couldn’t send the order.'),

@@ -11,6 +11,7 @@
 
 import type { AxiosRequestConfig } from 'axios'
 import { averageCost, lineUsage, usageCost } from './costing'
+import { blobToDataUrl } from './images'
 import { openState, priceOrder } from './menu'
 import { presetFor } from './presets'
 import { DEMO_RESTAURANTS, templateGroup, type DemoRestaurant } from './seed'
@@ -56,6 +57,8 @@ export interface EaterySource {
   // Staff ring up an order at the counter (POS). Priced like online orders;
   // accepted straight away, so its ingredients leave stock at once.
   createCounterOrder(restaurantId: number, input: CounterOrderInput): Promise<Order & { accessKey: string }>
+  // Stores a prepared logo/cover image (images.ts) and returns its URL.
+  uploadImage(restaurantId: number, image: Blob, kind: 'logo' | 'cover'): Promise<string>
   // Local only: hand the example restaurants shown in the directory to this business.
   claimDemo?(): Promise<Restaurant[]>
 }
@@ -83,6 +86,13 @@ export const EateryServices = {
   Create: (r: ResourceName, data: unknown): AxiosRequestConfig => ({ method: 'POST', url: `/eatery/${PATHS[r]}/`, data }),
   Update: (r: ResourceName, id: number, data: unknown): AxiosRequestConfig => ({ method: 'PUT', url: `/eatery/${PATHS[r]}/${id}`, data }),
   Delete: (r: ResourceName, id: number): AxiosRequestConfig => ({ method: 'DELETE', url: `/eatery/${PATHS[r]}/${id}` }),
+  UploadImage: (restaurantId: number, image: Blob, kind: 'logo' | 'cover'): AxiosRequestConfig => {
+    const form = new FormData()
+    form.append('file', image, `${kind}.${image.type === 'image/webp' ? 'webp' : image.type === 'image/png' ? 'png' : 'jpg'}`)
+    form.append('kind', kind)
+    form.append('restaurantId', String(restaurantId))
+    return { method: 'POST', url: '/eatery/uploads', data: form }
+  },
   CounterOrder: (restaurantId: number, data: CounterOrderInput): AxiosRequestConfig => ({
     method: 'POST',
     url: '/eatery/orders/counter',
@@ -135,6 +145,11 @@ export const createApiSource = (
     await owner(EateryServices.Delete(r, id))
   },
   createCounterOrder: async (restaurantId, input) => unwrap(await owner(EateryServices.CounterOrder(restaurantId, input))),
+  uploadImage: async (restaurantId, image, kind) => {
+    const url = unwrap(await owner(EateryServices.UploadImage(restaurantId, image, kind)))?.url
+    if (!url) throw httpError(502, 'The upload didn’t return a link')
+    return url
+  },
 })
 
 // ── Demo data (built through `create`, so it works against any source) ─────
@@ -259,7 +274,14 @@ export const createLocalSource = (
       return []
     }
   }
-  const write = (r: ResourceName, rows: unknown[]) => storage?.setItem(key(r), JSON.stringify(rows))
+  const write = (r: ResourceName, rows: unknown[]) => {
+    try {
+      storage?.setItem(key(r), JSON.stringify(rows))
+    } catch {
+      // Usually the browser's storage quota (photos are the big items).
+      throw httpError(507, 'This browser is out of space for Sellix data — use smaller photos or image links instead of uploads')
+    }
+  }
   const nextId = (rows: { id: number }[]) => rows.reduce((m, x) => Math.max(m, x.id), 0) + 1
 
   // Raw insert, no ownership checks (seeding).
@@ -522,6 +544,14 @@ export const createLocalSource = (
       }
       write('orders', [...orders, order])
       return order
+    },
+
+    // Local mode keeps the (already small) image inline as a data URL.
+    uploadImage: async (restaurantId, image) => {
+      requireOwner()
+      if (!owned().has(restaurantId)) throw httpError(404, 'not found')
+      if (image.size > 900 * 1024) throw httpError(413, 'That image is too large to keep in this browser')
+      return blobToDataUrl(image)
     },
 
     createCounterOrder: async (restaurantId, input) => {
