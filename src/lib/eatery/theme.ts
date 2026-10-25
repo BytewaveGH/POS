@@ -9,7 +9,20 @@ import type { CategoryKey } from './types'
 
 // ── Fonts (self-hosted, see app/[locale]/(eatery-public)/eat/layout.tsx) ──
 
-export type FontKey = 'playfair' | 'fraunces' | 'oswald' | 'bebas' | 'pacifico' | 'outfit' | 'dm-sans' | 'nunito' | 'mulish'
+export type FontKey =
+  | 'playfair'
+  | 'fraunces'
+  | 'instrument'
+  | 'syne'
+  | 'space-grotesk'
+  | 'oswald'
+  | 'bebas'
+  | 'pacifico'
+  | 'outfit'
+  | 'inter'
+  | 'dm-sans'
+  | 'nunito'
+  | 'mulish'
 
 export const FONTS: Record<FontKey, { label: string; family: string; use: 'display' | 'body' | 'both'; feel: string }> = {
   playfair: {
@@ -19,10 +32,19 @@ export const FONTS: Record<FontKey, { label: string; family: string; use: 'displ
     feel: 'Elegant, high-contrast serif',
   },
   fraunces: { label: 'Fraunces', family: "'Fraunces Variable', Georgia, serif", use: 'display', feel: 'Warm, soft serif' },
+  instrument: { label: 'Instrument Serif', family: "'Instrument Serif', Georgia, serif", use: 'display', feel: 'Refined editorial serif' },
+  syne: { label: 'Syne', family: "'Syne Variable', system-ui, sans-serif", use: 'display', feel: 'Wide, avant-garde' },
+  'space-grotesk': {
+    label: 'Space Grotesk',
+    family: "'Space Grotesk Variable', system-ui, sans-serif",
+    use: 'both',
+    feel: 'Technical, modern grotesk',
+  },
   oswald: { label: 'Oswald', family: "'Oswald Variable', 'Arial Narrow', sans-serif", use: 'display', feel: 'Bold, condensed' },
   bebas: { label: 'Bebas Neue', family: "'Bebas Neue', Impact, sans-serif", use: 'display', feel: 'Poster capitals' },
   pacifico: { label: 'Pacifico', family: "'Pacifico', 'Brush Script MT', cursive", use: 'display', feel: 'Playful script' },
   outfit: { label: 'Outfit', family: "'Outfit Variable', system-ui, sans-serif", use: 'both', feel: 'Clean geometric' },
+  inter: { label: 'Inter', family: "'Inter Variable', system-ui, sans-serif", use: 'both', feel: 'Crisp interface sans' },
   'dm-sans': { label: 'DM Sans', family: "'DM Sans Variable', system-ui, sans-serif", use: 'both', feel: 'Neutral, very legible' },
   nunito: { label: 'Nunito', family: "'Nunito Variable', system-ui, sans-serif", use: 'both', feel: 'Rounded, friendly' },
   mulish: { label: 'Mulish', family: 'var(--font-mulish), system-ui, sans-serif', use: 'both', feel: 'Sellix default' },
@@ -37,7 +59,28 @@ export const BODY_FONTS = (Object.keys(FONTS) as FontKey[]).filter((k) => FONTS[
 export type HeroStyle = 'cinematic' | 'poster' | 'cozy' | 'minimal'
 export type MenuLayout = 'elegant-list' | 'bold-grid' | 'cozy-cards' | 'compact-list'
 export type Shape = 'sharp' | 'soft' | 'rounded' | 'pill'
-export type Pattern = 'none' | 'deco' | 'halftone' | 'steam' | 'kente' | 'ember' | 'sprinkles' | 'citrus' | 'dots'
+export type Pattern = 'none' | 'deco' | 'halftone' | 'steam' | 'kente' | 'ember' | 'sprinkles' | 'citrus' | 'dots' | 'grid' | 'waves'
+
+// How cards sit on the page.
+//   outlined  hairline border (the original look)
+//   elevated  no border, soft layered shadow
+//   glass     frosted, translucent over the backdrop
+//   brutal    thick ink border with a hard offset shadow
+export type SurfaceStyle = 'outlined' | 'elevated' | 'glass' | 'brutal'
+// The page behind the cards.
+export type Backdrop = 'solid' | 'gradient' | 'mesh'
+
+export const SURFACES: { value: SurfaceStyle; label: string }[] = [
+  { value: 'outlined', label: 'Outlined' },
+  { value: 'elevated', label: 'Elevated' },
+  { value: 'glass', label: 'Glass' },
+  { value: 'brutal', label: 'Bold ink' },
+]
+export const BACKDROPS: { value: Backdrop; label: string }[] = [
+  { value: 'solid', label: 'Solid' },
+  { value: 'gradient', label: 'Gradient' },
+  { value: 'mesh', label: 'Colour mesh' },
+]
 
 export const HERO_STYLES: { value: HeroStyle; label: string; hint: string }[] = [
   { value: 'cinematic', label: 'Cinematic', hint: 'Full-bleed, moody, centred name' },
@@ -67,6 +110,8 @@ export const PATTERNS: { value: Pattern; label: string }[] = [
   { value: 'sprinkles', label: 'Sprinkles' },
   { value: 'citrus', label: 'Citrus' },
   { value: 'dots', label: 'Dots' },
+  { value: 'grid', label: 'Grid' },
+  { value: 'waves', label: 'Waves' },
 ]
 
 // ── The stored format ──
@@ -98,6 +143,9 @@ export interface ThemeConfig {
   hero: HeroStyle
   menuLayout: MenuLayout
   pattern: Pattern
+  // Optional (older themes): default 'outlined' and 'solid'.
+  surface?: SurfaceStyle
+  backdrop?: Backdrop
   imagery: {
     logoUrl?: string
     coverUrl?: string
@@ -194,11 +242,29 @@ export const resolveTheme = (config: ThemeConfig): ResolvedTheme => {
     '--e-font-display': (FONTS[config.fonts.display] ?? FONTS.mulish).family,
     '--e-font-body': (FONTS[config.fonts.body] ?? FONTS.mulish).family,
     '--e-heading-case': config.uppercaseHeadings ? 'uppercase' : 'none',
+    '--e-ink': text,
     backgroundColor: background,
+    ...backdropStyle(config.backdrop ?? 'solid', background, primary, accent),
     color: text,
     fontFamily: 'var(--e-font-body)',
   } as React.CSSProperties
   return { config, checks, palette, style }
+}
+
+// Washes stay faint (≤ 16% colour) so text contrast, checked against the solid
+// background, still holds.
+const backdropStyle = (b: Backdrop, bg: string, primary: string, accent: string): React.CSSProperties => {
+  if (b === 'gradient')
+    return {
+      backgroundImage: `linear-gradient(180deg, ${bg} 0%, ${mix(bg, accent, 0.1)} 55%, ${mix(bg, primary, 0.12)} 100%)`,
+      backgroundAttachment: 'fixed',
+    }
+  if (b === 'mesh')
+    return {
+      backgroundImage: `radial-gradient(60% 50% at 0% 0%, ${withAlpha(primary, 0.16)}, transparent 70%), radial-gradient(50% 45% at 100% 10%, ${withAlpha(accent, 0.16)}, transparent 70%), radial-gradient(60% 50% at 50% 100%, ${withAlpha(primary, 0.1)}, transparent 70%)`,
+      backgroundAttachment: 'fixed',
+    }
+  return {}
 }
 
 const luminance01 = (hex: string) => {
@@ -266,6 +332,18 @@ export const patternStyle = (pattern: Pattern, color: string, opacity = 0.18): R
         backgroundImage: svg(
           `<g fill='none' stroke='${c}' stroke-width='1.4'><circle cx='24' cy='24' r='14'/><path d='M24 10v28M10 24h28M14 14l20 20M34 14 14 34'/></g>`,
           56
+        ),
+      }
+    case 'grid':
+      return {
+        backgroundImage: `linear-gradient(${c} 1px, transparent 1px), linear-gradient(90deg, ${c} 1px, transparent 1px)`,
+        backgroundSize: '28px 28px',
+      }
+    case 'waves':
+      return {
+        backgroundImage: svg(
+          `<path d='M0 20 Q 15 8 30 20 T 60 20' fill='none' stroke='${c}' stroke-width='1.6'/><path d='M0 44 Q 15 32 30 44 T 60 44' fill='none' stroke='${c}' stroke-width='1.6'/>`,
+          60
         ),
       }
     default:

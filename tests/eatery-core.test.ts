@@ -1,6 +1,7 @@
 import { contrast, ensureContrast } from '@/lib/eatery/color'
 import { fixContrast, resolveTheme } from '@/lib/eatery/theme'
 import { PRESETS, presetFor } from '@/lib/eatery/presets'
+import { DESIGN_STYLES, applyStyle, matchingStyle } from '@/lib/eatery/styles'
 import { bestPromotion, choiceProblems, inWindow, itemAvailability, linePrice, openState, priceOrder } from '@/lib/eatery/menu'
 import { createLocalSource, DEMO_SCOPE } from '@/lib/eatery/data-source'
 import type { MenuItem, Promotion, StorefrontBundle } from '@/lib/eatery/types'
@@ -16,6 +17,36 @@ describe('themes stay readable', () => {
   it.each(PRESETS.map((p) => [p.key]))('preset %s passes WCAG AA as shipped', (key) => {
     const r = resolveTheme(presetFor(key).theme)
     expect(r.checks.filter((c) => !c.pass).map((c) => `${c.label} ${c.ratio.toFixed(2)}`)).toEqual([])
+  })
+
+  it.each(DESIGN_STYLES.map((st) => [st.key]))('modern style %s passes WCAG AA as shipped', (key) => {
+    const st = DESIGN_STYLES.find((x) => x.key === key)!
+    const r = resolveTheme(applyStyle(presetFor('general').theme, st))
+    expect(r.checks.filter((c) => !c.pass).map((c) => `${c.label} ${c.ratio.toFixed(2)}`)).toEqual([])
+  })
+
+  it('a style changes the look but keeps logo, cover, wording and kind of place', () => {
+    const mine = {
+      ...presetFor('cocktail-bar').theme,
+      imagery: { logoUrl: 'data:image/png;base64,AA', coverOverlay: 0.5 },
+      copy: { add: 'Pour it', cart: 'My tab' },
+    }
+    const styled = applyStyle(mine, DESIGN_STYLES.find((x) => x.key === 'aurora')!)
+    expect(styled).toMatchObject({
+      preset: 'cocktail-bar',
+      imagery: mine.imagery,
+      copy: mine.copy,
+      surface: 'glass',
+      backdrop: 'mesh',
+      fonts: { display: 'syne' },
+    })
+    expect(matchingStyle(styled)).toBe('aurora')
+    expect(matchingStyle(mine)).toBeNull()
+    // Every style looks different from every other.
+    expect(
+      new Set(DESIGN_STYLES.map((x) => JSON.stringify([x.theme.colors.background, x.theme.fonts.display, x.theme.hero, x.theme.surface])))
+        .size
+    ).toBe(DESIGN_STYLES.length)
   })
 
   it('bad owner colours are corrected when rendering, and "Fix contrast" stores the fix', () => {

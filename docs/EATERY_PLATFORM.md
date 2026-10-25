@@ -131,22 +131,45 @@ The theme is stored as JSON on `restaurant.theme` (`ThemeConfig` in `src/lib/eat
   "hero": "cinematic",
   "menuLayout": "elegant-list",
   "pattern": "deco",
+  "surface": "outlined",
+  "backdrop": "solid",
   "imagery": { "logoUrl": "https://…", "coverUrl": "https://…", "coverOverlay": 0.6 },
   "copy": { "add": "Add to tab", "cart": "Your tab" }
 }
 ```
 
-| Field                  | Values                                                                                         |
-| ---------------------- | ---------------------------------------------------------------------------------------------- |
-| `fonts.display`        | `playfair`, `fraunces`, `oswald`, `bebas`, `pacifico`, `outfit`, `dm-sans`, `nunito`, `mulish` |
-| `fonts.body`           | `outfit`, `dm-sans`, `nunito`, `mulish` (script and poster faces are headings only)            |
-| `shape`                | `sharp`, `soft`, `rounded`, `pill`                                                             |
-| `hero`                 | `cinematic`, `poster`, `cozy`, `minimal`                                                       |
-| `menuLayout`           | `elegant-list`, `bold-grid`, `cozy-cards`, `compact-list`                                      |
-| `pattern`              | `none`, `deco`, `halftone`, `steam`, `kente`, `ember`, `sprinkles`, `citrus`, `dots`           |
-| `imagery.coverOverlay` | 0–0.85; the storefront never uses less than 0.35 over a photo, so the name stays readable      |
+| Field                  | Values                                                                                                                                                                                               |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fonts.display`        | `playfair`, `fraunces`, `instrument`, `syne`, `space-grotesk`, `oswald`, `bebas`, `pacifico`, `outfit`, `inter`, `dm-sans`, `nunito`, `mulish`                                                       |
+| `fonts.body`           | `space-grotesk`, `outfit`, `inter`, `dm-sans`, `nunito`, `mulish` (script, poster and editorial faces are headings only)                                                                             |
+| `shape`                | `sharp`, `soft`, `rounded`, `pill`                                                                                                                                                                   |
+| `hero`                 | `cinematic`, `poster`, `cozy`, `minimal`                                                                                                                                                             |
+| `menuLayout`           | `elegant-list`, `bold-grid`, `cozy-cards`, `compact-list`                                                                                                                                            |
+| `pattern`              | `none`, `deco`, `halftone`, `steam`, `kente`, `ember`, `sprinkles`, `citrus`, `dots`, `grid`, `waves`                                                                                                |
+| `surface` (optional)   | `outlined` (default), `elevated` (soft shadow), `glass` (frosted over the backdrop; solid where blur isn't supported or reduced transparency is requested), `brutal` (thick ink border, hard shadow) |
+| `backdrop` (optional)  | `solid` (default), `gradient`, `mesh`; colour washes stay at 16% or less so the contrast checks still hold                                                                                           |
+| `imagery.coverOverlay` | 0–0.85; the storefront never uses less than 0.35 over a photo, so the name stays readable                                                                                                            |
 
 At render time, `<ThemeScope theme>` turns the config into CSS custom properties: `--e-bg`, `--e-surface`, `--e-text`, `--e-muted`, `--e-primary`, `--e-on-primary`, `--e-primary-text`, `--e-accent`, `--e-on-accent`, `--e-border`, `--e-radius`, `--e-radius-control`, `--e-font-display`, `--e-font-body` and `--e-heading-case`. The contrast-safe values are already applied. Every storefront component reads only these variables (`src/components/eatery/storefront.css`), which is why one set of components renders every brand.
+
+### Modern styles
+
+Next to the eight presets by kind of place, `src/lib/eatery/styles.ts` defines ten styles by taste. Any restaurant can wear any of them:
+
+| Style        | Look                                    | Type                       | Surface / backdrop             |
+| ------------ | --------------------------------------- | -------------------------- | ------------------------------ |
+| Noir         | Monochrome luxury, dark                 | Instrument Serif + Inter   | Outlined / solid               |
+| Swiss        | Strict grid, signal red                 | Space Grotesk + Inter      | Outlined / solid, grid pattern |
+| Aurora Glass | Frosted cards over a colour mesh, dark  | Syne + Inter               | Glass / mesh                   |
+| Neo-brutal   | Ink outlines, hard shadows, loud colour | Space Grotesk (caps)       | Bold ink / solid               |
+| Editorial    | Food-magazine spread                    | Instrument Serif + DM Sans | Elevated / solid               |
+| Soft Clay    | Pastel, rounded, tactile                | Outfit + Inter             | Elevated / gradient            |
+| Sage & Stone | Muted greens, natural, calm             | Fraunces + Inter           | Elevated / solid               |
+| Night Market | Neon street food after dark             | Bebas Neue + Space Grotesk | Outlined / mesh                |
+| Citrus Pop   | Electric blue and lime on white         | Syne + Space Grotesk       | Elevated / solid               |
+| Champagne    | Ivory and bronze, daylight luxury       | Playfair + Inter           | Elevated / solid, art deco     |
+
+`applyStyle()` changes every visual setting and keeps the restaurant's logo, cover photo, wording and kind of place. The editor shows each style as a live miniature of the restaurant's own storefront, with its name and dishes. All ten pass WCAG AA as shipped.
 
 ## 4. Counter, ingredients and profit
 
