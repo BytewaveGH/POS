@@ -319,6 +319,31 @@ describe('eatery platform (local data)', () => {
     })
   })
 
+  it('applies a modern style in one tap and saves it', async () => {
+    const owner = createLocalSource('acme')
+    const mine = await owner.claimDemo!()
+    const blaze = mine.find((r) => r.slug === 'blaze-pizza-shawarma')!
+    localStorage.setItem('sellix-eatery:selected', String(blaze.id))
+    withQuery(<BrandPage />)
+    const neo = await screen.findByRole('button', { name: /^Neo-brutal style/ })
+    // The preview is the restaurant's own storefront in that style.
+    expect(within(neo).getByText('Blaze Pizza & Shawarma')).toBeTruthy()
+    expect(within(neo).getAllByText(/₵/).length).toBe(2)
+    fireEvent.click(neo)
+    expect(neo.getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByTestId('theme-preview').querySelector('[data-surface="brutal"]')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Save theme' }))
+    await waitFor(async () => {
+      const saved = (await owner.list('restaurants')).find((r) => r.id === blaze.id)!
+      expect(saved.theme).toMatchObject({
+        surface: 'brutal',
+        fonts: { display: 'space-grotesk' },
+        preset: 'fast-food',
+        copy: blaze.theme.copy,
+      })
+    })
+  })
+
   it('uploads a logo and cover from the brand editor', async () => {
     const owner = createLocalSource('acme')
     const [velvet] = await owner.claimDemo!()

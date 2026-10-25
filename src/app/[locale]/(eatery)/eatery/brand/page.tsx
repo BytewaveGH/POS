@@ -15,6 +15,8 @@ import {
   HERO_STYLES,
   MENU_LAYOUTS,
   PATTERNS,
+  SURFACES,
+  BACKDROPS,
   SHAPES,
   fixContrast,
   resolveTheme,
@@ -27,6 +29,8 @@ import { BrandMark, Cover, ThemeScope } from '@/components/eatery/theme-scope'
 import { ImageField } from '../_components/image-field'
 import { EateryFrame, RestaurantSwitcher } from '../_components/frame'
 import { PresetCard } from '../_components/new-restaurant'
+import { StyleCard } from '../_components/style-card'
+import { DESIGN_STYLES, applyStyle, matchingStyle } from '@/lib/eatery/styles'
 import type { OwnerData } from '@/lib/eatery/hooks'
 
 const COLOR_FIELDS: { key: keyof ThemeColors; label: string; hint: string }[] = [
@@ -103,6 +107,8 @@ const Editor = ({ o }: { o: OwnerData & { restaurant: Restaurant } }) => {
   const [saving, setSaving] = useState(false)
   useEffect(() => setTheme(r.theme), [r.id, r.theme])
   const dirty = JSON.stringify(theme) !== JSON.stringify(r.theme)
+  const current = matchingStyle(theme)
+  const [styleTab, setStyleTab] = useState<'modern' | 'kind'>('modern')
   const resolved = useMemo(() => resolveTheme(theme), [theme])
   const failing = resolved.checks.filter((c) => !c.pass)
   const set = (p: Partial<ThemeConfig>) => setTheme((t) => ({ ...t, ...p }))
@@ -150,18 +156,48 @@ const Editor = ({ o }: { o: OwnerData & { restaurant: Restaurant } }) => {
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_400px]">
         <div className="flex flex-col gap-4 min-w-0">
           <Card className="p-5">
-            <SectionTitle title="Start from a style" hint="Keeps your logo and cover photo" />
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              {PRESETS.map((p) => (
-                <PresetCard
-                  key={p.key}
-                  category={p.key}
-                  name={r.name}
-                  selected={theme.preset === p.key}
-                  onSelect={() => setTheme({ ...JSON.parse(JSON.stringify(presetFor(p.key).theme)), imagery: theme.imagery })}
-                />
-              ))}
+            <SectionTitle title="Start from a style" hint="Keeps your logo, cover photo and wording — fine-tune anything below" />
+            <div className="mb-4 max-w-sm">
+              <Segmented
+                ariaLabel="Kind of style"
+                value={styleTab}
+                onChange={setStyleTab}
+                options={[
+                  { value: 'modern', label: `Modern styles · ${DESIGN_STYLES.length}` },
+                  { value: 'kind', label: 'By kind of place' },
+                ]}
+              />
             </div>
+            {styleTab === 'modern' ? (
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 2xl:grid-cols-5">
+                {DESIGN_STYLES.map((st) => (
+                  <StyleCard
+                    key={st.key}
+                    style={st}
+                    base={theme}
+                    name={r.name}
+                    dishes={o.items.filter((i) => i.status !== 'hidden').slice(0, 2)}
+                    currency={r.currency}
+                    selected={current === st.key}
+                    onSelect={() => setTheme(applyStyle(theme, st))}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                {PRESETS.map((p) => (
+                  <PresetCard
+                    key={p.key}
+                    category={p.key}
+                    name={r.name}
+                    selected={!current && theme.preset === p.key}
+                    onSelect={() =>
+                      setTheme({ ...JSON.parse(JSON.stringify(presetFor(p.key).theme)), imagery: theme.imagery, copy: theme.copy })
+                    }
+                  />
+                ))}
+              </div>
+            )}
           </Card>
 
           <Card className="p-5">
@@ -352,7 +388,21 @@ const Editor = ({ o }: { o: OwnerData & { restaurant: Restaurant } }) => {
                 <Segmented ariaLabel="Corners" value={theme.shape} onChange={(shape) => set({ shape })} options={SHAPES} />
               </div>
               <div>
-                <p className="text-[13px] font-semibold text-stone-700 mb-2">Pattern</p>
+                <p className="text-[13px] font-semibold text-stone-700 mb-2">Cards</p>
+                <Segmented
+                  ariaLabel="Card surface"
+                  value={theme.surface ?? 'outlined'}
+                  onChange={(surface) => set({ surface })}
+                  options={SURFACES}
+                />
+                <p className="text-[13px] font-semibold text-stone-700 mb-2 mt-4">Page background</p>
+                <Segmented
+                  ariaLabel="Page background"
+                  value={theme.backdrop ?? 'solid'}
+                  onChange={(backdrop) => set({ backdrop })}
+                  options={BACKDROPS}
+                />
+                <p className="text-[13px] font-semibold text-stone-700 mb-2 mt-4">Pattern</p>
                 <div className="flex flex-wrap gap-1.5">
                   {PATTERNS.map((p) => (
                     <button

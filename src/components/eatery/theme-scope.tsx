@@ -32,6 +32,7 @@ export const ThemeScope = ({
         style={resolved.style}
         data-shape={theme.shape}
         data-case={theme.uppercaseHeadings ? 'upper' : 'normal'}
+        data-surface={theme.surface ?? 'outlined'}
       >
         {children}
       </Tag>

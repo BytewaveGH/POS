@@ -50,8 +50,7 @@ export const RestaurantCard = ({
     <ThemeScope theme={t} as="article" className="group h-full rounded-[var(--e-radius)] !bg-transparent">
       <Link
         href={href}
-        className="flex h-full flex-col overflow-hidden e-focus shadow-[0_1px_2px_rgba(0,0,0,0.06),0_8px_24px_-16px_rgba(0,0,0,0.35)] transition-[transform,box-shadow] duration-200 hover:-translate-y-1 hover:shadow-[0_2px_4px_rgba(0,0,0,0.06),0_18px_40px_-18px_rgba(0,0,0,0.45)]"
-        style={{ borderRadius: 'var(--e-radius)', border: '1px solid var(--e-border)', background: 'var(--e-surface)' }}
+        className="e-card flex h-full flex-col overflow-hidden e-focus shadow-[0_1px_2px_rgba(0,0,0,0.06),0_8px_24px_-16px_rgba(0,0,0,0.35)] transition-transform duration-200 hover:-translate-y-1"
       >
         <Cover theme={t} className={cn(size === 'lg' ? 'aspect-[16/9]' : 'aspect-[16/10]', !open && 'saturate-[0.6]')}>
           <div
