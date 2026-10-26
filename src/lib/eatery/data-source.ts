@@ -11,7 +11,7 @@
 
 import type { AxiosRequestConfig } from 'axios'
 import { averageCost, lineUsage, usageCost } from './costing'
-import { blobToDataUrl } from './images'
+import { blobToDataUrl, type ImageKind } from './images'
 import { openState, priceOrder } from './menu'
 import { presetFor } from './presets'
 import { DEMO_RESTAURANTS, templateGroup, type DemoRestaurant } from './seed'
@@ -59,7 +59,7 @@ export interface EaterySource {
   // accepted straight away, so its ingredients leave stock at once.
   createCounterOrder(restaurantId: number, input: CounterOrderInput): Promise<Order & { accessKey: string }>
   // Stores a prepared logo/cover image (images.ts) and returns its URL.
-  uploadImage(restaurantId: number, image: Blob, kind: 'logo' | 'cover'): Promise<string>
+  uploadImage(restaurantId: number, image: Blob, kind: ImageKind): Promise<string>
   // Local only: hand the example restaurants shown in the directory to this business.
   claimDemo?(): Promise<Restaurant[]>
 }
@@ -87,7 +87,7 @@ export const EateryServices = {
   Create: (r: ResourceName, data: unknown): AxiosRequestConfig => ({ method: 'POST', url: `/eatery/${PATHS[r]}/`, data }),
   Update: (r: ResourceName, id: number, data: unknown): AxiosRequestConfig => ({ method: 'PUT', url: `/eatery/${PATHS[r]}/${id}`, data }),
   Delete: (r: ResourceName, id: number): AxiosRequestConfig => ({ method: 'DELETE', url: `/eatery/${PATHS[r]}/${id}` }),
-  UploadImage: (restaurantId: number, image: Blob, kind: 'logo' | 'cover'): AxiosRequestConfig => {
+  UploadImage: (restaurantId: number, image: Blob, kind: ImageKind): AxiosRequestConfig => {
     const form = new FormData()
     form.append('file', image, `${kind}.${image.type === 'image/webp' ? 'webp' : image.type === 'image/png' ? 'png' : 'jpg'}`)
     form.append('kind', kind)

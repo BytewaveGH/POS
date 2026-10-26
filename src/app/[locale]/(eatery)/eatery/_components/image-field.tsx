@@ -73,7 +73,7 @@ export const ImageField = ({
         <div
           className={cn(
             'relative flex-shrink-0 overflow-hidden bg-stone-100',
-            kind === 'logo' ? 'h-16 w-16 rounded-2xl' : 'h-16 w-28 rounded-xl'
+            kind === 'logo' ? 'h-16 w-16 rounded-2xl' : kind === 'item' ? 'h-20 w-20 rounded-xl' : 'h-16 w-28 rounded-xl'
           )}
         >
           {value ? <img src={value} alt={`${label} preview`} className="h-full w-full object-cover" /> : fallback}

@@ -19,7 +19,8 @@ import type {
   Restaurant,
   TimeWindow,
 } from '@/lib/eatery/types'
-import { TAGS } from '@/components/eatery/theme-scope'
+import { ItemArt, TAGS, ThemeScope } from '@/components/eatery/theme-scope'
+import { ImageField } from './image-field'
 import { fromPrice } from '@/components/eatery/menu-view'
 
 // ── Time windows ──
@@ -552,10 +553,20 @@ export const ItemForm = ({
                 options={categories.map((c) => ({ value: c.id, label: c.name }))}
               />
             </Field>
-            <Field label="Photo link" htmlFor="it-img" hint="Optional — otherwise a branded tile is shown">
-              <Input id="it-img" value={draft.imageUrl ?? ''} onChange={(e) => set({ imageUrl: e.target.value })} placeholder="https://…" />
-            </Field>
           </FormGrid>
+          <ImageField
+            kind="item"
+            label="Photo"
+            hint="Optional · cropped square, 720 px"
+            value={draft.imageUrl}
+            onChange={(imageUrl) => set({ imageUrl })}
+            upload={(file) => actions.uploadImage(restaurant.id, file, 'item')}
+            fallback={
+              <ThemeScope theme={restaurant.theme} className="h-full w-full">
+                <ItemArt name={draft.name || 'New item'} theme={restaurant.theme} size="sm" className="h-full w-full" />
+              </ThemeScope>
+            }
+          />
           <Field label="Description" htmlFor="it-desc">
             <Textarea
               id="it-desc"
