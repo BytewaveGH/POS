@@ -28,6 +28,7 @@ import BrandPage from '@/app/[locale]/(eatery)/eatery/brand/page'
 import PosPage from '@/app/[locale]/(eatery)/eatery/pos/page'
 import StockPage from '@/app/[locale]/(eatery)/eatery/stock/page'
 import EateryOverview from '@/app/[locale]/(eatery)/eatery/page'
+import { ItemForm } from '@/app/[locale]/(eatery)/eatery/_components/menu-forms'
 import { createLocalSource } from '@/lib/eatery/data-source'
 import { useCart } from '@/lib/eatery/cart'
 import type { StorefrontBundle } from '@/lib/eatery/types'
@@ -342,6 +343,30 @@ describe('eatery platform (local data)', () => {
         copy: blaze.theme.copy,
       })
     })
+  })
+
+  it('uploads a photo for a new menu item', async () => {
+    const owner = createLocalSource('acme')
+    const mine = await owner.claimDemo!()
+    const cafe = mine.find((r) => r.slug === 'kofi-and-crumb')!
+    const categories = (await owner.list('categories')).filter((c) => c.restaurantId === cafe.id)
+    const items = (await owner.list('items')).filter((i) => i.restaurantId === cafe.id)
+    withQuery(<ItemForm open onOpenChange={() => {}} restaurant={cafe} categories={categories} items={items} item={null} />)
+
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Mango Cheesecake' } })
+    fireEvent.change(screen.getByLabelText(/^Price/), { target: { value: '42' } })
+    const jpg = new File([new Uint8Array([255, 216, 255])], 'cake.jpg', { type: 'image/jpeg' })
+    fireEvent.change(screen.getByLabelText('Upload photo'), { target: { files: [jpg] } })
+    await waitFor(() => expect((screen.getByAltText('Photo preview') as HTMLImageElement).src).toMatch(/^data:image\/jpeg;base64,/))
+    fireEvent.click(screen.getByRole('button', { name: 'Add to menu' }))
+
+    await waitFor(async () => {
+      const saved = (await owner.list('items')).find((i) => i.name === 'Mango Cheesecake')!
+      expect(saved.imageUrl).toMatch(/^data:image\/jpeg/)
+    })
+    // Customers see it on the storefront.
+    const bundle = (await createLocalSource(null).storefront('kofi-and-crumb')) as StorefrontBundle
+    expect(bundle.items.find((i) => i.name === 'Mango Cheesecake')?.imageUrl).toMatch(/^data:image/)
   })
 
   it('uploads a logo and cover from the brand editor', async () => {
