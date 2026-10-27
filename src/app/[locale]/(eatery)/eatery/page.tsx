@@ -12,6 +12,7 @@ import { BrandMark, Cover, ThemeScope } from '@/components/eatery/theme-scope'
 import { EateryFrame, RestaurantSwitcher, useLocalePath } from './_components/frame'
 import { LIVE, OrderCard } from './_components/order-bits'
 import { ProfitPanel } from './_components/profit'
+import { SalesPatterns } from './_components/patterns'
 
 export default function EateryOverview() {
   const now = useNow()
@@ -76,6 +77,7 @@ export default function EateryOverview() {
             </div>
 
             <ProfitPanel o={o} now={now} href={path} />
+            <SalesPatterns o={o} now={now} />
 
             <div className="grid gap-4 lg:grid-cols-3">
               <Card className="p-5 lg:col-span-2">

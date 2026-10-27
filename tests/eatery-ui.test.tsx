@@ -525,6 +525,25 @@ describe('eatery platform (local data)', () => {
       await waitFor(async () => expect((await owner.list('orders')).find((o) => o.id === b.id)!.payment.status).toBe('paid'))
     })
 
+    it('the overview shows sales patterns by day and hour, with a table view', async () => {
+      await seedSales()
+      withQuery(<EateryOverview />)
+      expect((await screen.findByTestId('patterns-total')).textContent).toBe('₵95')
+      // Today is Wednesday 21 Oct and the counter orders were at 1pm. Over 30 days
+      // that's averaged across five Wednesdays; over 7 days, just today.
+      expect(screen.getByRole('gridcell', { name: 'Wednesday 1pm–2pm: ₵19 on average' })).toBeTruthy()
+      fireEvent.click(screen.getByRole('radio', { name: '7 days' }))
+      expect(screen.getByRole('gridcell', { name: 'Wednesday 1pm–2pm: ₵95 on average' })).toBeTruthy()
+      expect(screen.getByRole('img', { name: 'Average sales by day of the week' })).toBeTruthy()
+
+      fireEvent.click(screen.getByRole('radio', { name: 'Orders' }))
+      expect(screen.getByTestId('patterns-total').textContent).toBe('2')
+
+      fireEvent.click(screen.getByRole('button', { name: 'View as table' }))
+      const table = screen.getByRole('table', { name: 'Daily orders' })
+      expect(within(table).getByText('BEST')).toBeTruthy()
+    })
+
     it('the counter shows today’s takings for staff without reports', async () => {
       await seedSales()
       withQuery(<PosPage />)
