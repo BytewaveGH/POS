@@ -446,21 +446,35 @@ In local mode the image is kept inline as a `data:` URL instead.
 
 **Owner-only resources** (same four routes, `canManageStock`; never exposed by public endpoints):
 
-| Resource    | Path                   |
-| ----------- | ---------------------- |
-| Ingredients | `/eatery/ingredients/` |
-| Recipes     | `/eatery/recipes/`     |
-| Stock moves | `/eatery/stock-moves/` |
-| Expenses    | `/eatery/expenses/`    |
+| Resource    | Path                       |
+| ----------- | -------------------------- |
+| Ingredients | `/eatery/ingredients/`     |
+| Recipes     | `/eatery/recipes/`         |
+| Stock moves | `/eatery/stock-moves/`     |
+| Expenses    | `/eatery/expenses/`        |
+| Packaging   | `/eatery/packaging-rules/` |
 
 ```
-Ingredient { id, restaurantId, name, unit, costPerUnit, stock, lowStockAt, supplier? }
-            unit: "g" | "kg" | "ml" | "l" | "pcs" | "bag" | "crate" | "bottle" | "tin" | "pack"
-            name unique per restaurant → 409; delete while used in a recipe → 409
-Recipe     { id, restaurantId, itemId, ingredients: [{ ingredientId, quantity }], choices: { [choiceId]: [{ ingredientId, quantity }] } }
-            one per item → 409; quantities in the ingredient's unit, per portion; a negative
-            quantity under a choice swaps an ingredient (Beef: chicken −150 g, beef +150 g)
-StockMove  { id, restaurantId, ingredientId, type, quantity, totalCost, date, orderId?, supplier?, note? }
+Ingredient { id, restaurantId, name, unit, costPerUnit, stock, lowStockAt, supplier?, purchaseUnit?, perPurchase? }
+            unit: the unit recipes use and stock is counted in:
+                  "g" | "kg" | "ml" | "l" | "pcs" | "bottle" | "tin" | "cup" | "sachet" | "bag" | "crate" | "pack"
+            purchaseUnit / perPurchase: how it's bought when that differs ("pack" of 50 "pcs",
+                  "crate" of 24 "bottle", "bag" of 25 "kg"). Free text, plus a number > 0.
+                  Display only: costPerUnit, stock and lowStockAt are always per `unit`.
+            name unique per restaurant → 409; delete while used in a recipe or packaging rule → 409
+            PUT may carry `rescale` (number, not stored): the counting unit changed (packs → pieces,
+                  kg → g). Multiply stock, and the quantity of every recipe and packaging line using
+                  this ingredient, by it — in the same transaction.
+Recipe     { id, restaurantId, itemId, ingredients: [RecipeLine], choices: { [choiceId]: [RecipeLine] } }
+            RecipeLine { ingredientId, quantity, unit? }: quantity is always in the ingredient's own
+                  `unit`; `unit` ("g", "purchase"…) is only how the owner typed it — store, don't use.
+            one per item → 409; quantities per serving; a negative quantity under a choice swaps an
+                  ingredient (Beef: chicken −150 g, beef +150 g)
+PackagingRule { id, restaurantId, name, when, per, ingredients: [RecipeLine], active }
+            when: "all" | "takeaway" (pickup + delivery, incl. counter take-away) | "dine-in"
+            per: "order" | "item" — once per order, or × the total item quantity
+StockMove  { id, restaurantId, ingredientId, type, quantity, totalCost, date, orderId?, supplier?, note?, entered? }
+            quantity in the ingredient's unit; `entered` is how the owner typed it ("3 packs") — store as given
             type: "purchase" | "usage" | "return" | "waste" | "count"; never edited or deleted (422)
 Expense    { id, restaurantId, category, amount, date, note? }
             category: "rent" | "staff" | "utilities" | "gas" | "transport" | "packaging" | "marketing" | "repairs" | "other"
@@ -474,11 +488,18 @@ Expense    { id, restaurantId, category, amount, date, note? }
 - **`POST /stock-moves/` with `waste`** (`quantity` > 0): `stock −= quantity`. The server stores the move with `quantity: −q` and `totalCost: q × costPerUnit`.
 - **`POST /stock-moves/` with `count`** (`quantity` = what was counted): `stock` is set to that amount. The server stores the difference and its cost.
 - **When an order first reaches an active status** (`accepted`, `preparing`, `ready`, `out-for-delivery`, `completed`), or when a counter order is created:
-  - For each line, work out usage = item recipe + recipes of the chosen options + recipes of combo picks, times quantity. Write one `usage` move per ingredient: `quantity: −q`, `totalCost: q × costPerUnit`, `orderId`.
+  - For each line, work out usage = item recipe + recipes of the chosen options + recipes of combo picks, times quantity.
+  - Add each active packaging rule whose `when` matches the order's fulfilment: its lines once (`per: "order"`) or × the order's total item quantity (`per: "item"`).
+  - Write one `usage` move per ingredient: `quantity: −q`, `totalCost: q × costPerUnit`, `orderId`.
   - Decrease `stock`, and allow it to go negative.
-  - Set `order.lines[].unitCost`, `order.costOfGoods` and `order.stockDeducted = true`.
+  - Set `order.lines[].unitCost` (recipes only), `order.costOfGoods` (recipes + packaging) and `order.stockDeducted = true`.
   - Do this only once per order.
 - **When a deducted order is cancelled:** write a `return` move for each usage move and give the stock back. Set `stockDeducted` to false.
+
+**Sales history** (the Sales page, CSV export and the printed day report). Computed in the frontend from the order list today. With real volumes, the server should help:
+
+- `GET /eatery/orders/?restaurantId&from&to&channel&method&payment&status&fulfilment&q&page&pageSize`: `from` and `to` are ISO datetimes (to is exclusive); `q` matches code, customer name, phone or item name; newest first. Return `{ data: Order[], total, page }`.
+- `GET /eatery/reports/daily?restaurantId&from&to` → `{ data: [{ day, orders, cancelled, items, gross, discounts, delivery, net, average, byMethod: { cash, momo, card, "pay-at-table" }, byChannel: { counter, online }, byFulfilment: { pickup, delivery, "dine-in" }, unpaid, unpaidCount, costOfGoods }] }`, with days in the restaurant's local time zone. Cancelled orders are counted only in `cancelled`, never in money. Definitions: `src/lib/eatery/sales.ts`.
 
 **Profit** (computed in the frontend today; a `GET /eatery/reports/profit?from&to` endpoint later would be welcome):
 

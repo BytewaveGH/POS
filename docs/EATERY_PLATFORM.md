@@ -2,19 +2,20 @@
 
 Sellix Eats lets many different food and drink businesses each sell under their own brand. They share one data model, one backend and one set of components. Only a per-restaurant **theme config** changes how a storefront looks.
 
-| Where                                                | Who                   | What                                                                                               |
-| ---------------------------------------------------- | --------------------- | -------------------------------------------------------------------------------------------------- |
-| `/eat`                                               | Customers, no sign-in | Directory of every restaurant. Each card is styled with that restaurant's theme.                   |
-| `/eat/<slug>` (`?table=<name>` from a table QR code) | Customers             | Branded storefront: menu, options, deals, ordering.                                                |
-| `/eat/<slug>/checkout`                               | Customers             | Cart, pickup / delivery / at my table, details, payment (cash, MoMo, pay at table).                |
-| `/eat/<slug>/order/<code>`                           | Customers             | Live order status. Updates every 10 s.                                                             |
-| `/eatery`                                            | Owners and staff      | Overview, plus onboarding for a business with no restaurant yet.                                   |
-| `/eatery/pos`                                        | `canManageSales`      | Counter POS: tap to ring up dine-in or take-away orders; accept or decline incoming online orders. |
-| `/eatery/orders`                                     | `canManageSales`      | Live board: New → In the kitchen → Ready / on the way → Done.                                      |
-| `/eatery/stock`                                      | `canManageStock`      | Ingredients and stock, recipes and margins, expenses, stock history.                               |
-| `/eatery/menu`                                       | `canManageProducts`   | Sections, items, option groups, combos, availability, time-based deals.                            |
-| `/eatery/brand`                                      | `canManageProducts`   | Theme editor with presets, a contrast checker and a live phone preview.                            |
-| `/eatery/settings`                                   | `canManageOperations` | Details, hours, ways to order, payments, table QR codes.                                           |
+| Where                                                | Who                   | What                                                                                                                                                    |
+| ---------------------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/eat`                                               | Customers, no sign-in | Directory of every restaurant. Each card is styled with that restaurant's theme.                                                                        |
+| `/eat/<slug>` (`?table=<name>` from a table QR code) | Customers             | Branded storefront: menu, options, deals, ordering.                                                                                                     |
+| `/eat/<slug>/checkout`                               | Customers             | Cart, pickup / delivery / at my table, details, payment (cash, MoMo, pay at table).                                                                     |
+| `/eat/<slug>/order/<code>`                           | Customers             | Live order status. Updates every 10 s.                                                                                                                  |
+| `/eatery`                                            | Owners and staff      | Overview, plus onboarding for a business with no restaurant yet.                                                                                        |
+| `/eatery/sales`                                      | `canViewReports`      | Sales: transactions (search, filters, detail, reprint, mark paid, cancel), daily totals, by-hour/by-day chart, CSV export, printable end-of-day report. |
+| `/eatery/pos`                                        | `canManageSales`      | Counter POS: tap to ring up dine-in or take-away orders; accept or decline incoming online orders.                                                      |
+| `/eatery/orders`                                     | `canManageSales`      | Live board: New → In the kitchen → Ready / on the way → Done.                                                                                           |
+| `/eatery/stock`                                      | `canManageStock`      | Ingredients and stock, recipes and margins, expenses, stock history.                                                                                    |
+| `/eatery/menu`                                       | `canManageProducts`   | Sections, items, option groups, combos, availability, time-based deals.                                                                                 |
+| `/eatery/brand`                                      | `canManageProducts`   | Theme editor with presets, a contrast checker and a live phone preview.                                                                                 |
+| `/eatery/settings`                                   | `canManageOperations` | Details, hours, ways to order, payments, table QR codes.                                                                                                |
 
 One business (tenant) can own several restaurants. A switcher on each owner page selects which one is being managed.
 
@@ -181,6 +182,14 @@ Next to the eight presets by kind of place, `src/lib/eatery/styles.ts` defines t
 - The printed receipt carries a QR code. Scanning it opens the customer's own order page, which pings them when the order is ready.
 - Online orders waiting for a decision appear at the top of the POS and on the orders board, with a chime and a system notification. Accepting one updates the customer's page within 10 seconds. The customer gets a sound, a vibration and, if they allowed it, a system notification.
 
+**Sales** (`/eatery/sales`):
+
+- Periods (today, yesterday, this week, this month, 30 days, custom) with net sales, a trend against the previous period, orders and average, how it was paid, and what's still unpaid.
+- **Transactions:** search by code, customer, phone or item, and filter by channel, type, payment method, payment status and order status. Each order opens a full record: items with options, payment and change, timeline and profit, with reprint, mark paid and cancel.
+- **Daily totals:** one row per day (orders, net sales, cash, MoMo, card, at table, unpaid, average) with a totals row. Tap a day to see its transactions.
+- **Export CSV** for either view, opening cleanly in Excel. **Day report** prints an end-of-day (Z) report with a cash-count line.
+- On the POS, **Today** shows the cashier today's takings and orders (reprint, collect), since cashiers often can't see reports.
+
 **Ingredients** (`/eatery/stock`):
 
 - Each ingredient has a unit, an average cost and a stock level.
@@ -197,7 +206,20 @@ Next to the eight presets by kind of place, `src/lib/eatery/styles.ts` defines t
 - Net profit, with a breakdown bar and the best earners by profit.
 - Warnings when sold items have no recipe (cost understated) and when ingredients are running low.
 
-Rules: `src/lib/eatery/costing.ts`. Contract: `BACKEND_REQUIREMENTS.md` §7.5.
+**Buying units vs using units** (`src/lib/eatery/units.ts`):
+
+- Each ingredient has a _use_ unit (what recipes and stock count in) and, optionally, how it's bought: tissue bought by the **pack of 50 pieces** at ₵7 is ₵0.14 a piece. Stock shows as "2 packs + 34 pieces"; purchases, waste and counts are entered as packs and pieces.
+- kg↔g and l↔ml convert automatically, so a recipe can say "250 g" of rice bought in 25 kg bags. Recipe lines are always stored in the ingredient's own unit; the unit the owner typed is kept only to show it back.
+- About 30 ready-made items (tissue, takeaway boxes, Coke by the crate, rice by the bag, gas by the cylinder…) fill in units and pack sizes; the owner only checks the price.
+- Changing how an ingredient is counted (e.g. fixing tissue from "pack" to "pieces, 50 a pack") converts its stock and every recipe using it.
+
+**Recipes** say what _one serving_ uses (a plate, cup, glass or slice). Each line shows its cost; the footer shows cost, price, profit and margin. A new ingredient can be created without leaving the recipe.
+
+**Packaging & extras** (tissue, boxes, bags, straws) are set once — for every order, take-away only or dine-in only, once per order or per item — instead of being added to every recipe. They leave stock and count in the order's cost.
+
+**Guard rails:** half a pack/crate/bag or more per serving with no pack size set gets a warning with a one-tap **Set pack size** fix; any line over half the price, or a dish costing more than it sells for, is flagged.
+
+Rules: `src/lib/eatery/costing.ts` and `units.ts`. Contract: `BACKEND_REQUIREMENTS.md` §7.5.
 
 ## 5. Code map
 

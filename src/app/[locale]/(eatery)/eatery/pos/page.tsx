@@ -31,6 +31,7 @@ import { EateryFrame } from '../_components/frame'
 import { SoundToggle, useNewOrderAlert } from '../_components/alerts'
 import { ago, fulfilmentLabel } from '../_components/order-bits'
 import { printReceipt, trackingUrl } from '../_components/receipt'
+import { RecentSales } from '../_components/recent-sales'
 
 type Method = 'cash' | 'momo' | 'card'
 
@@ -437,6 +438,7 @@ const PosScreen = ({ o }: { o: OwnerData & { restaurant: Restaurant } }) => {
           <h1 className="mr-auto text-2xl font-extrabold tracking-tight text-stone-900">
             Counter <span className="text-base font-semibold text-stone-400">· {r.name}</span>
           </h1>
+          <RecentSales orders={o.orders} restaurant={r} now={now} locale={locale} />
           <SoundToggle sound={sound} onToggle={() => void toggle()} />
         </div>
         <Incoming

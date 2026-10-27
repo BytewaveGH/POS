@@ -2,6 +2,7 @@
 
 import QRCode from 'qrcode'
 import { formatMoney } from '@/lib/eatery/menu'
+import { dayFromKey, dayKey, topItems, totalsOf } from '@/lib/eatery/sales'
 import type { Order, Restaurant } from '@/lib/eatery/types'
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
@@ -50,6 +51,41 @@ export const printReceipt = async (order: Order, restaurant: Restaurant, trackUr
     <table>${order.discount > 0 ? `<tr><td>Deals</td><td class="r">−${m(order.discount)}</td></tr>` : ''}<tr class="t"><td>Total</td><td class="r">${m(order.total)}</td></tr>${change}<tr><td>${paid}</td><td></td></tr></table>
     ${qr ? `<hr><p class="c">Scan to follow your order<br>— we’ll tell you when it’s ready</p><div class="qr">${qr}</div>` : ''}
     <hr><p class="c">Thank you!</p>
+    <script>window.onload=()=>{window.print()}</script></body></html>`)
+  w.document.close()
+  return true
+}
+
+// End-of-day (Z) report for one day: totals, how it was paid, where it came
+// from, cancellations and what still needs collecting. Thermal-printer sized.
+export const printDayReport = (day: string, orders: Order[], restaurant: Restaurant) => {
+  const w = window.open('', '_blank', 'width=420,height=760')
+  if (!w) return false
+  const list = orders.filter((o) => dayKey(o.createdAt) === day)
+  const t = totalsOf(list)
+  const m = (n: number) => esc(formatMoney(n, restaurant.currency))
+  const row = (label: string, value: string, strong = false) =>
+    `<tr${strong ? ' class="t"' : ''}><td>${esc(label)}</td><td class="r">${value}</td></tr>`
+  const date = dayFromKey(day).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+  const top = topItems(list, 8)
+    .map((i) => row(`${i.qty}× ${i.name}`, m(i.sales)))
+    .join('')
+  const unpaid = list.filter((o) => o.status !== 'cancelled' && o.payment.status !== 'paid')
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Day report ${esc(day)}</title><style>
+    body{font-family:ui-monospace,Menlo,Consolas,monospace;width:72mm;margin:4mm auto;color:#000;font-size:12px}
+    h1{font-size:16px;text-align:center;margin:0}h2{font-size:12px;margin:8px 0 2px;text-transform:uppercase;letter-spacing:.08em}.c{text-align:center}
+    table{width:100%;border-collapse:collapse}td{padding:1px 0;vertical-align:top}.r{text-align:right;white-space:nowrap;padding-left:8px}
+    hr{border:0;border-top:1px dashed #000;margin:6px 0}.t td{font-weight:800;font-size:14px}
+  </style></head><body>
+    <h1>${esc(restaurant.name)}</h1><p class="c">DAY REPORT<br>${esc(date)}</p><hr>
+    <table>${row('Orders', String(t.orders))}${row('Items sold', String(t.items))}${row('Cancelled', String(t.cancelled))}${row('Average order', m(t.average))}</table><hr>
+    <table>${row('Gross sales', m(t.gross))}${row('Deals', `−${m(t.discounts)}`)}${row('Delivery fees', m(t.delivery))}${row('Net sales', m(t.net), true)}</table>
+    <h2>Payments</h2><table>${row('Cash', m(t.byMethod.cash))}${row('MoMo', m(t.byMethod.momo))}${row('Card', m(t.byMethod.card))}${row('At table', m(t.byMethod['pay-at-table']))}${row(`Not paid yet (${t.unpaidCount})`, m(t.unpaid))}</table>
+    <h2>Where from</h2><table>${row('Counter', m(t.byChannel.counter))}${row('Online', m(t.byChannel.online))}${row('Dine-in', m(t.byFulfilment['dine-in']))}${row('Take-away', m(t.byFulfilment.pickup))}${row('Delivery', m(t.byFulfilment.delivery))}</table>
+    ${top ? `<h2>Best sellers</h2><table>${top}</table>` : ''}
+    ${unpaid.length ? `<h2>To collect</h2><table>${unpaid.map((o) => row(`#${o.code} ${o.customer.name}`, m(o.total))).join('')}</table>` : ''}
+    <hr><table>${row('Counted cash', '______________')}${row('Difference', '______________')}${row('Signed', '______________')}</table>
+    <p class="c">Printed ${esc(new Date().toLocaleString())}</p>
     <script>window.onload=()=>{window.print()}</script></body></html>`)
   w.document.close()
   return true

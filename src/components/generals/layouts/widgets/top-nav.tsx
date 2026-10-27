@@ -4,7 +4,8 @@ import React, { Fragment } from 'react'
 import ProfileAvatar from './profile-avatar'
 import { cn } from '@/lib/utils'
 import AvatarTemplate from '@/components/templates/avatar'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
+import { dashboardAppType } from '@/lib/app-type'
 import { useSession } from 'next-auth/react'
 
 interface TopNavProps {
@@ -13,12 +14,15 @@ interface TopNavProps {
 
 const TopNav = ({ trigger }: TopNavProps) => {
   const router = useRouter()
-  const { data: session } = useSession()
+  const { data: session, status } = useSession()
+  const pathname = usePathname()
 
   const username = session?.user?.username ?? ''
   const email = session?.user?.email ?? ''
   const initial = username[0]?.toUpperCase() ?? 'U'
-  const appType = (session?.user as any)?.appType ?? 'retail'
+  // Only once known: on a slow network the retail "Access POS" button must not
+  // flash up inside the eatery, real-estate or amusement dashboards.
+  const appType = dashboardAppType(pathname, (session?.user as any)?.appType, status === 'loading')
 
   const navItems = [
     ...(appType === 'retail'
