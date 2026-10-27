@@ -28,3 +28,21 @@ export const lookupTenantAppType = async (slug: string, fetchImpl: typeof fetch 
     return normalizeAppType(undefined, `tenant lookup for "${slug}"`)
   }
 }
+
+// The module a dashboard URL belongs to: /en/eatery/… → eatery. Shared pages
+// under /stores (e.g. Employees, used by every vertical) are ambiguous → null,
+// so the session's appType decides there.
+const PATH_MODULES: Record<string, AppType> = { eatery: 'eatery', 'real-estate': 'real-estate', amusement: 'amusement' }
+export const appTypeFromPath = (pathname: string | null | undefined): AppType | null => {
+  const seg = (pathname ?? '').replace(/^\/(en|fr)(?=\/|$)/, '').split('/')[1] ?? ''
+  return PATH_MODULES[seg] ?? null
+}
+
+// Which menu the dashboard shows. Null while the session is still loading and
+// the address doesn't say: show a neutral placeholder, never another module's menu.
+export const dashboardAppType = (pathname: string | null | undefined, sessionAppType: unknown, sessionLoading: boolean): AppType | null => {
+  const fromPath = appTypeFromPath(pathname)
+  if (fromPath) return fromPath
+  if (sessionLoading) return null
+  return isAppType(sessionAppType) ? sessionAppType : 'retail'
+}

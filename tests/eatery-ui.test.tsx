@@ -28,7 +28,9 @@ import BrandPage from '@/app/[locale]/(eatery)/eatery/brand/page'
 import PosPage from '@/app/[locale]/(eatery)/eatery/pos/page'
 import StockPage from '@/app/[locale]/(eatery)/eatery/stock/page'
 import EateryOverview from '@/app/[locale]/(eatery)/eatery/page'
+import SalesPage from '@/app/[locale]/(eatery)/eatery/sales/page'
 import { ItemForm } from '@/app/[locale]/(eatery)/eatery/_components/menu-forms'
+import { IngredientForm, PackagingForm, RecipeForm } from '@/app/[locale]/(eatery)/eatery/_components/stock-forms'
 import { createLocalSource } from '@/lib/eatery/data-source'
 import { useCart } from '@/lib/eatery/cart'
 import type { StorefrontBundle } from '@/lib/eatery/types'
@@ -291,9 +293,9 @@ describe('eatery platform (local data)', () => {
       const { owner } = await ownBlaze()
       withQuery(<StockPage />)
       fireEvent.click(within(await screen.findByRole('group', { name: 'Mozzarella' })).getByRole('button', { name: 'Bought' }))
-      fireEvent.change(await screen.findByLabelText('Quantity (g)'), { target: { value: '2000' } })
+      fireEvent.change(await screen.findByLabelText('How many did you buy?'), { target: { value: '2000' } })
       fireEvent.change(screen.getByLabelText('Total paid'), { target: { value: '320' } })
-      expect(screen.getByText(/New average cost/)).toBeTruthy()
+      expect(screen.getByText(/Cost now/)).toBeTruthy()
       fireEvent.click(screen.getByRole('button', { name: 'Add to stock' }))
       await waitFor(async () =>
         expect((await owner.list('ingredients')).find((i) => i.name === 'Mozzarella')).toMatchObject({ stock: 10000, costPerUnit: 0.128 })
@@ -394,5 +396,142 @@ describe('eatery platform (local data)', () => {
     })
     // The storefront shows the uploaded logo.
     expect(screen.getAllByAltText('Velvet Hour logo').length).toBeGreaterThan(0)
+  })
+
+  describe('ingredients bought in packs', () => {
+    const blazeOwner = async () => {
+      const owner = createLocalSource('acme')
+      const blaze = (await owner.claimDemo!()).find((r) => r.slug === 'blaze-pizza-shawarma')!
+      return { owner, blaze }
+    }
+
+    it('adds tissue from a ready-made item: a pack of 50 at ₵7 is ₵0.14 a piece', async () => {
+      const { owner, blaze } = await blazeOwner()
+      withQuery(<IngredientForm open onOpenChange={() => {}} restaurant={blaze} ingredient={null} />)
+      fireEvent.change(screen.getByLabelText('Search common items'), { target: { value: 'tiss' } })
+      fireEvent.click(screen.getByRole('button', { name: /^Tissue/ }))
+      expect((screen.getByLabelText(/^Price per pack/) as HTMLInputElement).value).toBe('7')
+      expect((screen.getByLabelText('Each pack has') as HTMLInputElement).value).toBe('50')
+      expect(screen.getByText(/1 pack = 50 pieces/)).toBeTruthy()
+      fireEvent.change(screen.getByLabelText('In stock now: packs'), { target: { value: '3' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Add ingredient' }))
+      await waitFor(async () => {
+        const t = (await owner.list('ingredients')).find((i) => i.restaurantId === blaze.id && i.name === 'Tissue')!
+        expect(t).toMatchObject({ unit: 'pcs', purchaseUnit: 'pack', perPurchase: 50, costPerUnit: 0.14, stock: 150 })
+      })
+    })
+
+    it('warns when a whole pack is counted per serving, and shows each line’s cost', async () => {
+      const { owner, blaze } = await blazeOwner()
+      const t = await owner.create('ingredients', {
+        restaurantId: blaze.id,
+        name: 'Tissue',
+        unit: 'pack',
+        costPerUnit: 7,
+        stock: 3,
+        lowStockAt: 0,
+      })
+      const items = (await owner.list('items')).filter((i) => i.restaurantId === blaze.id)
+      const fries = items.find((i) => i.name === 'Fries')!
+      const ingredients = (await owner.list('ingredients')).filter((i) => i.restaurantId === blaze.id)
+      const recipe = (await owner.list('recipes')).find((x) => x.itemId === fries.id)!
+      const withTissue = { ...recipe, ingredients: [...recipe.ingredients, { ingredientId: t.id, quantity: 1 }] }
+      withQuery(
+        <RecipeForm
+          open
+          onOpenChange={() => {}}
+          restaurant={blaze}
+          item={fries}
+          recipe={withTissue}
+          recipes={[]}
+          ingredients={ingredients}
+        />
+      )
+      expect(screen.getByText(/One serving uses/)).toBeTruthy()
+      expect(screen.getByLabelText('Tissue cost').textContent).toBe('₵7')
+      expect(screen.getByText(/Tissue costs ₵7 per serving — is one pack several pieces/)).toBeTruthy()
+
+      // One tap to fix it: a pack of 50, used in pieces.
+      fireEvent.click(screen.getByRole('button', { name: 'Set pack size' }))
+      const edit = await screen.findByRole('dialog', { name: 'Edit Tissue' })
+      fireEvent.change(within(edit).getByLabelText('You buy it by the'), { target: { value: 'pack' } })
+      fireEvent.change(within(edit).getByLabelText('Each pack has'), { target: { value: '50' } })
+      fireEvent.change(within(edit).getByLabelText(/^of \(what recipes use\)/), { target: { value: 'pcs' } })
+      expect(within(edit).getAllByText(/1 pack = 50 pieces/)).toHaveLength(2) // the price line and the conversion note
+      expect(within(edit).getByText(/will be converted/)).toBeTruthy()
+      fireEvent.click(within(edit).getByRole('button', { name: 'Save' }))
+      await waitFor(async () => {
+        const fixed = (await owner.list('ingredients')).find((i) => i.id === t.id)!
+        expect(fixed).toMatchObject({ unit: 'pcs', perPurchase: 50, costPerUnit: 0.14, stock: 150 })
+      })
+    })
+
+    it('sets up take-away packaging once', async () => {
+      const { owner, blaze } = await blazeOwner()
+      const ingredients = (await owner.list('ingredients')).filter((i) => i.restaurantId === blaze.id)
+      withQuery(<PackagingForm open onOpenChange={() => {}} restaurant={blaze} rule={null} ingredients={ingredients} />)
+      fireEvent.click(screen.getByRole('radio', { name: 'For every item' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Add ingredient' }))
+      fireEvent.change(screen.getByLabelText('Packaging ingredient 1'), {
+        target: { value: String(ingredients.find((i) => i.name === 'Pizza box')!.id) },
+      })
+      fireEvent.click(screen.getByRole('button', { name: 'Add' }))
+      await waitFor(async () => {
+        const [rule] = (await owner.list('packaging')).filter((x) => x.restaurantId === blaze.id)
+        expect(rule).toMatchObject({ name: 'Take-away packaging', when: 'takeaway', per: 'item', active: true })
+        expect(rule.ingredients).toHaveLength(1)
+      })
+    })
+  })
+
+  describe('sales history', () => {
+    const seedSales = async () => {
+      const owner = createLocalSource('acme')
+      const blaze = (await owner.claimDemo!()).find((r) => r.slug === 'blaze-pizza-shawarma')!
+      localStorage.setItem('sellix-eatery:selected', String(blaze.id))
+      const items = (await owner.list('items')).filter((i) => i.restaurantId === blaze.id)
+      const id = (n: string) => items.find((i) => i.name === n)!.id
+      const counter = (n: string, qty: number, payment: { method: 'cash' | 'momo' | 'card'; paid: boolean }) =>
+        owner.createCounterOrder(blaze.id, {
+          lines: [{ itemId: id(n), quantity: qty, choices: {} }],
+          fulfilment: { type: 'pickup' },
+          payment,
+        })
+      const a = await counter('Fries', 2, { method: 'cash', paid: true }) // ₵50
+      const b = await counter('Coca-Cola', 3, { method: 'momo', paid: false }) // ₵45, unpaid
+      const c = await counter('Fries', 1, { method: 'card', paid: true }) // ₵25 then cancelled
+      await owner.update('orders', c.id, { status: 'cancelled' })
+      return { owner, blaze, a, b, c }
+    }
+
+    it('shows today’s net sales, daily totals and transactions, and collects an unpaid bill', async () => {
+      const { owner, b } = await seedSales()
+      withQuery(<SalesPage />)
+      expect((await screen.findByTestId('net-sales')).textContent).toBe('₵95')
+      expect(screen.getByText(/1 order · tap to see/)).toBeTruthy()
+
+      fireEvent.click(screen.getByRole('radio', { name: 'Daily totals' }))
+      expect(screen.getByTestId('daily-total').textContent).toBe('₵95')
+
+      fireEvent.click(screen.getByRole('radio', { name: /^Transactions/ }))
+      fireEvent.change(screen.getByLabelText('Payment status'), { target: { value: 'unpaid' } })
+      const rows = screen.getAllByRole('button', { name: /^Order / })
+      expect(rows.map((r) => r.textContent)).toEqual([`#${b.code}`])
+
+      fireEvent.click(rows[0])
+      const detail = await screen.findByRole('dialog', { name: `Order #${b.code}` })
+      expect(within(detail).getByText('3× Coca-Cola')).toBeTruthy()
+      fireEvent.click(within(detail).getByRole('button', { name: 'Mark paid' }))
+      await waitFor(async () => expect((await owner.list('orders')).find((o) => o.id === b.id)!.payment.status).toBe('paid'))
+    })
+
+    it('the counter shows today’s takings for staff without reports', async () => {
+      await seedSales()
+      withQuery(<PosPage />)
+      fireEvent.click(await screen.findByRole('button', { name: /Today · ₵95/ }))
+      const panel = await screen.findByRole('dialog', { name: 'Today’s sales' })
+      expect(within(panel).getAllByRole('button', { name: /^Order / })).toHaveLength(3)
+      expect(within(panel).getByText('cancelled')).toBeTruthy()
+    })
   })
 })

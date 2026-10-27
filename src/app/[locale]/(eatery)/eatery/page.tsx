@@ -60,6 +60,11 @@ export default function EateryOverview() {
                 hint={today.length ? `Avg ${formatMoney(revenue / today.length, r.currency)}` : undefined}
                 icon={Wallet}
                 tone="green"
+                footer={
+                  <Link href={path('/eatery/sales')} className="text-xs font-semibold text-endeavour hover:underline">
+                    Sales history & daily totals →
+                  </Link>
+                }
               />
               <StatCard
                 label="Menu"

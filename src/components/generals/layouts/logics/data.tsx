@@ -25,6 +25,7 @@ import {
   ClipboardList,
   UtensilsCrossed,
   Palette,
+  Receipt,
 } from 'lucide-react'
 import { ITopNavItems } from './interface'
 
@@ -150,7 +151,10 @@ const realEstateSidebarItems = [
 const eaterySidebarItems = [
   {
     title: 'Dashboard',
-    items: [{ label: 'Overview', href: '/en/eatery', icon: LayoutDashboard, requiredPermission: 'canViewReports' }],
+    items: [
+      { label: 'Overview', href: '/en/eatery', icon: LayoutDashboard, requiredPermission: 'canViewReports' },
+      { label: 'Sales', href: '/en/eatery/sales', icon: Receipt, requiredPermission: 'canViewReports' },
+    ],
   },
   {
     title: 'Restaurant',

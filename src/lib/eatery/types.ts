@@ -232,26 +232,50 @@ export interface CounterOrderInput {
 
 // ── Ingredients, recipes and costs (owner-only) ─────────────────────────────
 
-export type IngredientUnit = 'g' | 'kg' | 'ml' | 'l' | 'pcs' | 'bag' | 'crate' | 'bottle' | 'tin' | 'pack'
+export type IngredientUnit = 'g' | 'kg' | 'ml' | 'l' | 'pcs' | 'bag' | 'crate' | 'bottle' | 'tin' | 'pack' | 'cup' | 'sachet'
 
 export interface Ingredient {
   id: number
   restaurantId: number
   name: string
+  // The unit recipes use and stock is counted in ("pcs" for tissue).
   unit: IngredientUnit
-  // Average cost of one unit, updated by every purchase (weighted average).
+  // Average cost of one `unit`, updated by every purchase (weighted average).
   costPerUnit: number
   // Current quantity in `unit`. Can go negative if sales outrun recorded purchases.
   stock: number
-  // Warn when stock falls to this level.
+  // Warn when stock falls to this level (in `unit`).
   lowStockAt: number
   supplier?: string
+  // How it's bought, when that differs from how it's used: a "pack" holding
+  // 50 pcs, a "crate" of 24 bottles, a 25 kg "bag". Missing = bought in `unit`.
+  purchaseUnit?: string
+  // How many `unit` are in one purchaseUnit (50, 24, 25…). Missing = 1.
+  perPurchase?: number
 }
 
 export interface RecipeLine {
   ingredientId: number
-  // In the ingredient's unit, per one item sold.
+  // Always in the ingredient's own `unit`, per one serving — so stock and cost
+  // maths never convert.
   quantity: number
+  // How the owner typed it ("g" for a kg ingredient, "purchase" for whole
+  // packs), only to show it back the same way.
+  unit?: IngredientUnit | 'purchase'
+}
+
+// Extras used per order or per item that don't belong to one recipe:
+// tissue, takeaway boxes, straws, bags.
+export interface PackagingRule {
+  id: number
+  restaurantId: number
+  name: string
+  // Which orders: all, take-away (pickup and delivery, incl. counter take-away) or dine-in only.
+  when: 'all' | 'takeaway' | 'dine-in'
+  // Once per order, or once per item (quantity) in it.
+  per: 'order' | 'item'
+  ingredients: RecipeLine[]
+  active: boolean
 }
 
 // What one menu item uses. `choices` adds ingredients for options:
@@ -279,6 +303,8 @@ export interface StockMove {
   orderId?: number
   supplier?: string
   note?: string
+  // As the owner entered it, e.g. "3 packs" (quantity is always in the ingredient's unit).
+  entered?: string
 }
 
 export type ExpenseCategory = 'rent' | 'staff' | 'utilities' | 'gas' | 'transport' | 'packaging' | 'marketing' | 'repairs' | 'other'
@@ -318,5 +344,6 @@ export interface ResourceMap {
   recipes: Recipe
   stockMoves: StockMove
   expenses: Expense
+  packaging: PackagingRule
 }
 export type ResourceName = keyof ResourceMap

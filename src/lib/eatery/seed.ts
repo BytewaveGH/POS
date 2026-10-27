@@ -21,8 +21,10 @@ export interface DemoRestaurant {
   restaurant: Omit<Restaurant, 'id' | 'ownerScope' | 'createdAt' | 'theme'> & { category: CategoryKey }
   menu: { section: string; items: DemoItem[] }[]
   promotions: { name: string; description?: string; percentOff: number; schedule: TimeWindow[]; sections: string[] }[]
-  // Owner-side costing: [name, unit, cost per unit, opening stock, warn below]
-  ingredients?: [string, IngredientUnit, number, number, number][]
+  // Owner-side costing: [name, unit, cost per unit, opening stock, warn below, bought by?, how many per?]
+  ingredients?: [string, IngredientUnit, number, number, number, string?, number?][]
+  // Packaging & extras: lines by ingredient name.
+  packaging?: { name: string; when: 'all' | 'takeaway' | 'dine-in'; per: 'order' | 'item'; lines: [string, number][] }[]
   // Item name → what one portion uses; `choices` by option choice name.
   recipes?: Record<string, { base: [string, number][]; choices?: Record<string, [string, number][]> }>
   expenses?: [ExpenseCategory, number, string][]
@@ -217,7 +219,7 @@ export const DEMO_RESTAURANTS: DemoRestaurant[] = [
       ['Sobolo (hibiscus)', 'ml', 0.03, 5000, 1000],
       ['Mango purée', 'ml', 0.06, 2000, 500],
       ['Simple syrup', 'ml', 0.02, 2000, 400],
-      ['Club Lager', 'bottle', 12, 72, 24],
+      ['Club Lager', 'bottle', 12, 72, 24, 'crate', 12],
     ],
     recipes: {
       'Accra Sunset': {
@@ -441,12 +443,12 @@ export const DEMO_RESTAURANTS: DemoRestaurant[] = [
       ['Pepperoni', 'g', 0.15, 3000, 800],
       ['Chicken', 'g', 0.07, 9000, 2000],
       ['Beef', 'g', 0.09, 6000, 1500],
-      ['Pita bread', 'pcs', 2.5, 120, 30],
+      ['Pita bread', 'pcs', 2.5, 120, 30, 'pack', 10],
       ['Potatoes', 'g', 0.015, 25000, 5000],
       ['Cooking oil', 'ml', 0.03, 10000, 2000],
-      ['Pizza box', 'pcs', 3, 80, 20],
-      ['Coca-Cola 350ml', 'bottle', 8, 48, 12],
-      ['Sprite 350ml', 'bottle', 8, 36, 12],
+      ['Pizza box', 'pcs', 3, 80, 20, 'pack', 50],
+      ['Coca-Cola 350ml', 'bottle', 8, 48, 12, 'crate', 24],
+      ['Sprite 350ml', 'bottle', 8, 36, 12, 'crate', 24],
       ['Malta Guinness', 'bottle', 10, 6, 12],
       ['Coca-Cola 1.5 L', 'bottle', 18, 12, 4],
     ],
@@ -702,8 +704,10 @@ export const DEMO_RESTAURANTS: DemoRestaurant[] = [
       ['Fresh milk', 'ml', 0.015, 12000, 3000],
       ['Oat milk', 'ml', 0.04, 3000, 1000],
       ['Cocoa powder', 'g', 0.08, 1500, 300],
-      ['Butter croissant (frozen)', 'pcs', 6, 40, 10],
-      ['Takeaway cup', 'pcs', 1.5, 300, 50],
+      ['Butter croissant (frozen)', 'pcs', 6, 40, 10, 'box', 20],
+      ['Takeaway cup', 'pcs', 1.5, 300, 50, 'sleeve', 50],
+      ['Paper napkins', 'pcs', 0.12, 400, 100, 'pack', 100],
+      ['Takeaway bag', 'pcs', 0.35, 200, 50, 'pack', 100],
     ],
     recipes: {
       Espresso: { base: [['Coffee beans', 18]], choices: { 'Extra espresso shot': [['Coffee beans', 9]] } },
@@ -742,6 +746,17 @@ export const DEMO_RESTAURANTS: DemoRestaurant[] = [
       },
       'Butter Croissant': { base: [['Butter croissant (frozen)', 1]] },
     },
+    packaging: [
+      {
+        name: 'Take-away bag & napkins',
+        when: 'takeaway',
+        per: 'order',
+        lines: [
+          ['Takeaway bag', 1],
+          ['Paper napkins', 2],
+        ],
+      },
+    ],
     expenses: [
       ['rent', 4500, 'Café rent'],
       ['utilities', 700, 'Light & water'],

@@ -10,7 +10,7 @@
 // Selected with NEXT_PUBLIC_EATERY_DATA_SOURCE (default 'api').
 
 import type { AxiosRequestConfig } from 'axios'
-import { averageCost, lineUsage, usageCost } from './costing'
+import { averageCost, lineUsage, packagingUsage, usageCost } from './costing'
 import { blobToDataUrl, type ImageKind } from './images'
 import { openState, priceOrder } from './menu'
 import { presetFor } from './presets'
@@ -22,6 +22,7 @@ import type {
   Ingredient,
   Order,
   OrderStatus,
+  RecipeLine,
   ResourceMap,
   ResourceName,
   Restaurant,
@@ -80,6 +81,7 @@ const PATHS: Record<ResourceName, string> = {
   recipes: 'recipes',
   stockMoves: 'stock-moves',
   expenses: 'expenses',
+  packaging: 'packaging-rules',
 }
 
 export const EateryServices = {
@@ -210,8 +212,17 @@ export const materializeDemo = async (def: DemoRestaurant, create: Creator, slug
   for (const s of def.menu) for (let i = 0; i < s.items.length; i++) if (s.items[i].combo) await make(s.section, s.items[i], i)
   // Costing: ingredients, recipes (option choices matched by name) and running costs.
   const ingIds = new Map<string, number>()
-  for (const [name, unit, costPerUnit, stock, lowStockAt] of def.ingredients ?? []) {
-    const ing = await create('ingredients', { restaurantId: restaurant.id, name, unit, costPerUnit, stock, lowStockAt })
+  for (const [name, unit, costPerUnit, stock, lowStockAt, purchaseUnit, perPurchase] of def.ingredients ?? []) {
+    const ing = await create('ingredients', {
+      restaurantId: restaurant.id,
+      name,
+      unit,
+      costPerUnit,
+      stock,
+      lowStockAt,
+      purchaseUnit,
+      perPurchase,
+    })
     ingIds.set(name, ing.id)
   }
   const lines = (ls: [string, number][]) =>
@@ -226,6 +237,16 @@ export const materializeDemo = async (def: DemoRestaurant, create: Creator, slug
       if (id) choices[id] = lines(ls)
     }
     await create('recipes', { restaurantId: restaurant.id, itemId: item.id, ingredients: lines(rec.base), choices })
+  }
+  for (const pk of def.packaging ?? []) {
+    await create('packaging', {
+      restaurantId: restaurant.id,
+      name: pk.name,
+      when: pk.when,
+      per: pk.per,
+      ingredients: lines(pk.lines),
+      active: true,
+    })
   }
   const monthStart = new Date()
   for (const [category, amount, note] of def.expenses ?? []) {
@@ -355,6 +376,13 @@ export const createLocalSource = (
       per.forEach((q, id) => total.set(id, (total.get(id) ?? 0) + q * l.quantity))
       return { ...l, unitCost: usageCost(per, byId) }
     })
+    // Tissue, boxes, bags… from packaging rules: counted on the order, not a line.
+    const packaging = packagingUsage(
+      order,
+      read('packaging').filter((x) => x.restaurantId === order.restaurantId)
+    )
+    packaging.forEach((q, id) => total.set(id, (total.get(id) ?? 0) + q))
+    const packagingCost = usageCost(packaging, byId)
     const at = clock().toISOString()
     const moves = read('stockMoves')
     let mid = nextId(moves)
@@ -375,7 +403,11 @@ export const createLocalSource = (
     })
     write('ingredients', ings)
     write('stockMoves', moves)
-    return { lines, stockDeducted: true, costOfGoods: round2(lines.reduce((s, l) => s + (l.unitCost ?? 0) * l.quantity, 0)) }
+    return {
+      lines,
+      stockDeducted: true,
+      costOfGoods: round2(lines.reduce((s, l) => s + (l.unitCost ?? 0) * l.quantity, 0) + packagingCost),
+    }
   }
 
   // A cancelled order puts its ingredients back.
@@ -440,7 +472,17 @@ export const createLocalSource = (
   // Mirrors what the backend does on delete (BACKEND_REQUIREMENTS §7).
   const cascade = (r: ResourceName, id: number) => {
     if (r === 'restaurants') {
-      for (const res of ['categories', 'items', 'promotions', 'orders', 'ingredients', 'recipes', 'stockMoves', 'expenses'] as const)
+      for (const res of [
+        'categories',
+        'items',
+        'promotions',
+        'orders',
+        'ingredients',
+        'recipes',
+        'stockMoves',
+        'expenses',
+        'packaging',
+      ] as const)
         write(
           res,
           read(res).filter((x: any) => x.restaurantId !== id)
@@ -668,7 +710,28 @@ export const createLocalSource = (
         if (slug && read('restaurants').some((x) => x.slug === slug && x.id !== id))
           throw httpError(409, `The address /eat/${slug} is taken — try another`)
       }
-      const row = { ...rows[idx], ...(body as object), id } as ResourceMap[typeof r]
+      // Changing how an ingredient is counted (packs → pieces, kg → g): `rescale`
+      // converts its stock and every recipe/packaging quantity using it.
+      const { rescale, ...patch } = body as { rescale?: number }
+      const row = { ...rows[idx], ...(patch as object), id } as ResourceMap[typeof r]
+      if (r === 'ingredients' && rescale && rescale !== 1) {
+        const ing = row as Ingredient
+        ing.stock = round4((rows[idx] as Ingredient).stock * rescale)
+        const scaleLines = (ls: RecipeLine[]) =>
+          ls.map((l) => (l.ingredientId === id ? { ...l, quantity: round4(l.quantity * rescale) } : l))
+        write(
+          'recipes',
+          read('recipes').map((x) => ({
+            ...x,
+            ingredients: scaleLines(x.ingredients),
+            choices: Object.fromEntries(Object.entries(x.choices).map(([k, ls]) => [k, scaleLines(ls)])),
+          }))
+        )
+        write(
+          'packaging',
+          read('packaging').map((x) => ({ ...x, ingredients: scaleLines(x.ingredients) }))
+        )
+      }
       if (r === 'restaurants') (row as Restaurant).ownerScope = scope!
       if (r === 'stockMoves') throw httpError(422, 'Stock movements can’t be edited — record a count instead')
       if (r === 'orders') {
@@ -696,6 +759,8 @@ export const createLocalSource = (
             x.ingredients.some((l) => l.ingredientId === id) || Object.values(x.choices).some((ls) => ls.some((l) => l.ingredientId === id))
         )
         if (used.length) throw httpError(409, `Used in ${used.length} recipe${used.length === 1 ? '' : 's'} — take it out of them first`)
+        const packs = read('packaging').filter((x) => x.ingredients.some((l) => l.ingredientId === id))
+        if (packs.length) throw httpError(409, `Used in packaging (“${packs[0].name}”) — take it out first`)
       }
       write(
         r,

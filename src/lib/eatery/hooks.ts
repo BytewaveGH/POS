@@ -113,6 +113,7 @@ const OWNER_RESOURCES: ResourceName[] = [
   'recipes',
   'stockMoves',
   'expenses',
+  'packaging',
 ]
 const SELECTED_KEY = 'sellix-eatery:selected'
 
@@ -192,6 +193,7 @@ export const useOwnerData = (): OwnerData => {
       recipes: data.recipes.filter((x) => x.restaurantId === rid),
       stockMoves: data.stockMoves.filter((x) => x.restaurantId === rid).sort((a, b) => (a.date < b.date ? 1 : -1)),
       expenses: data.expenses.filter((x) => x.restaurantId === rid).sort((a, b) => (a.date < b.date ? 1 : -1)),
+      packaging: data.packaging.filter((x) => x.restaurantId === rid),
       isLoading: !ready || (!failed && results.some((r) => r.isLoading)),
       error: failed ? ownerLoadMessage(failed.error, source.kind) : null,
       retry: () => results.forEach((r) => r.isError && void r.refetch()),

@@ -19,6 +19,8 @@ import byteLogo from '@/assets/images/byte.png'
 interface SidebarProps {
   isGrouped?: boolean
   groupedItems?: any[]
+  // Session still loading: a neutral placeholder instead of any module's menu.
+  loading?: boolean
 }
 // Menu items.
 const items = [
@@ -49,13 +51,27 @@ const items = [
   },
 ]
 
-export function AppSidebar({ isGrouped, groupedItems = [] }: SidebarProps) {
+export function AppSidebar({ isGrouped, groupedItems = [], loading }: SidebarProps) {
   return (
     <Sidebar>
       <SidebarContent>
         <Image src={byteLogo} alt="" width={300} height={50} />
         <SidebarGroup>
-          {isGrouped ? (
+          {loading ? (
+            <div className="flex flex-col gap-5 px-2 pt-2" aria-busy="true" aria-label="Loading menu" data-testid="sidebar-loading">
+              {[3, 4, 2].map((n, g) => (
+                <div key={g} className="flex flex-col gap-2.5">
+                  <span className="h-2.5 w-16 animate-pulse rounded bg-stone-200/80" />
+                  {Array.from({ length: n }).map((_, i) => (
+                    <span key={i} className="flex items-center gap-2.5">
+                      <span className="h-4 w-4 animate-pulse rounded bg-stone-200/80" />
+                      <span className="h-3 animate-pulse rounded bg-stone-100" style={{ width: `${55 + ((i * 17 + g * 11) % 35)}%` }} />
+                    </span>
+                  ))}
+                </div>
+              ))}
+            </div>
+          ) : isGrouped ? (
             <>
               {groupedItems.map((group: { title: string; items: { label: string; href: string; icon: React.ReactNode | any }[] }) => {
                 return (

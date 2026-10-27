@@ -10,16 +10,18 @@
 
 import type {
   CategoryKey,
+  Expense,
   ExpenseCategory,
+  FulfilmentType,
   Ingredient,
   IngredientUnit,
   MenuItem,
   Order,
   OrderLineInput,
+  PackagingRule,
   Recipe,
   RecipeLine,
   StockMove,
-  Expense,
 } from './types'
 
 const round2 = (n: number) => Math.round(n * 100) / 100
@@ -251,4 +253,68 @@ export const periodRange = (p: Period, now: Date): { from: Date; to: Date; label
   }
   if (p === 'month') return { from: new Date(now.getFullYear(), now.getMonth(), 1), to, label: 'This month' }
   return { from: new Date(start.getTime() - 29 * 86_400_000), to, label: 'Last 30 days' }
+}
+
+// ── Packaging & extras (per order / per item) ──
+
+export const packagingApplies = (rule: Pick<PackagingRule, 'active' | 'when'>, type: FulfilmentType) =>
+  rule.active && (rule.when === 'all' || (rule.when === 'takeaway' ? type !== 'dine-in' : type === 'dine-in'))
+
+// Ingredients an order's packaging rules use: once per order or once per item.
+export const packagingUsage = (order: Pick<Order, 'fulfilment' | 'lines'>, rules: PackagingRule[]) => {
+  const m = new Map<number, number>()
+  const items = order.lines.reduce((s, l) => s + l.quantity, 0)
+  for (const r of rules) {
+    if (!packagingApplies(r, order.fulfilment.type)) continue
+    const times = r.per === 'order' ? 1 : items
+    for (const l of r.ingredients) m.set(l.ingredientId, (m.get(l.ingredientId) ?? 0) + l.quantity * times)
+  }
+  return m
+}
+
+// ── Guard rails ──
+
+const CONTAINERS = ['pack', 'crate', 'bag', 'box', 'carton', 'sack', 'tray', 'dozen', 'sleeve', 'roll', 'gallon', 'block', 'cylinder']
+
+export interface RecipeWarning {
+  ingredientId?: number
+  message: string
+  // Suggest setting a pack size on this ingredient.
+  fixPackSize?: boolean
+}
+
+// Catches the classic mistakes: a whole pack counted per plate, one line
+// costing most of the price, or a dish that costs more than it sells for.
+export const recipeWarnings = (
+  price: number,
+  lines: RecipeLine[],
+  ingredientById: Map<number, Ingredient>,
+  money: (n: number) => string
+): RecipeWarning[] => {
+  const out: RecipeWarning[] = []
+  let total = 0
+  for (const l of lines) {
+    const ing = ingredientById.get(l.ingredientId)
+    if (!ing || !(l.quantity > 0)) continue
+    const cost = l.quantity * ing.costPerUnit
+    total += cost
+    // Half a pack/crate/bag or more per serving, with no pack size set: almost
+    // always a pack counted where a piece was meant (₵7 of tissue per plate).
+    const bulkUnit = CONTAINERS.includes(ing.unit) && !(ing.perPurchase && ing.perPurchase > 1)
+    if (bulkUnit && l.quantity >= 0.5) {
+      out.push({
+        ingredientId: ing.id,
+        fixPackSize: true,
+        message: `${ing.name} costs ${money(Math.round(cost * 100) / 100)} per serving — is one ${ing.unit} several pieces? Set how many are in a ${ing.unit}.`,
+      })
+    } else if (price > 0 && cost >= price * 0.5) {
+      out.push({
+        ingredientId: ing.id,
+        message: `${ing.name} alone is ${Math.round((cost / price) * 100)}% of the price — check the quantity.`,
+      })
+    }
+  }
+  if (price > 0 && total > price)
+    out.push({ message: `This costs ${money(Math.round(total * 100) / 100)} to make but sells for ${money(price)}.` })
+  return out
 }

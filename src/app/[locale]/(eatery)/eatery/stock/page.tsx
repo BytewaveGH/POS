@@ -1,22 +1,23 @@
 'use client'
 
 import React, { useMemo, useState } from 'react'
-import { AlertTriangle, ChefHat, Coins, History, Package, Pencil, Plus, Receipt, ShoppingCart, Trash2, Wallet } from 'lucide-react'
+import { AlertTriangle, Boxes, ChefHat, Coins, History, Package, Pencil, Plus, Receipt, ShoppingCart, Trash2, Wallet } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button, Card, EmptyState, PageHeader, StatCard } from '@/components/kit/ui'
 import { ConfirmDialog } from '@/components/kit/form'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useEateryActions, useNow, type OwnerData } from '@/lib/eatery/hooks'
-import { INGREDIENT_SUGGESTIONS, expenseLabel, itemCost, margin, periodRange, stockStatus } from '@/lib/eatery/costing'
+import { expenseLabel, itemCost, margin, periodRange, stockStatus } from '@/lib/eatery/costing'
+import { amount, costLabels, fromTemplate, stockLabel, templatesFor } from '@/lib/eatery/units'
 import { formatMoney } from '@/lib/eatery/menu'
-import type { Expense, Ingredient, MenuItem, Restaurant, StockMoveType } from '@/lib/eatery/types'
+import type { Expense, Ingredient, MenuItem, PackagingRule, Restaurant, StockMoveType } from '@/lib/eatery/types'
 import { EateryFrame, RestaurantSwitcher } from '../_components/frame'
 import {
   ExpenseForm,
   IngredientForm,
+  PackagingForm,
   RecipeForm,
   StockMoveForm,
-  costPerUnitLabel,
   qtyLabel,
   type StockAction,
 } from '../_components/stock-forms'
@@ -70,7 +71,8 @@ const StockScreen = ({ o }: { o: OwnerData & { restaurant: Restaurant } }) => {
   const [move, setMove] = useState<{ ingredient: Ingredient; action: StockAction } | null>(null)
   const [recipeFor, setRecipeFor] = useState<MenuItem | null>(null)
   const [expenseForm, setExpenseForm] = useState<{ expense: Expense | null } | null>(null)
-  const [confirm, setConfirm] = useState<{ kind: 'ingredients' | 'expenses'; id: number; label: string } | null>(null)
+  const [confirm, setConfirm] = useState<{ kind: 'ingredients' | 'expenses' | 'packaging'; id: number; label: string } | null>(null)
+  const [packForm, setPackForm] = useState<{ rule: PackagingRule | null } | null>(null)
   const [historyType, setHistoryType] = useState<StockMoveType | 'all'>('all')
   const [adding, setAdding] = useState(false)
 
@@ -82,9 +84,8 @@ const StockScreen = ({ o }: { o: OwnerData & { restaurant: Restaurant } }) => {
   const alerts = o.ingredients.filter((i) => stockStatus(i) !== 'ok')
   const boughtThisMonth = o.stockMoves.filter((m) => m.type === 'purchase' && inMonth(m.date)).reduce((s, m) => s + m.totalCost, 0)
   const expensesThisMonth = o.expenses.filter((e) => inMonth(e.date)).reduce((s, e) => s + e.amount, 0)
-  const suggestions = (INGREDIENT_SUGGESTIONS[r.category] ?? INGREDIENT_SUGGESTIONS['fast-food']!).filter(
-    ([n]) => !o.ingredients.some((i) => i.name.toLowerCase() === n.toLowerCase())
-  )
+  const suggestions = templatesFor(r.category).filter((t) => !o.ingredients.some((i) => i.name.toLowerCase() === t.name.toLowerCase()))
+  const money = (n: number) => formatMoney(n, r.currency)
   const sellable = o.items.filter((i) => i.status !== 'hidden')
   const orderCode = new Map(o.orders.map((x) => [x.id, x.code]))
 
@@ -93,7 +94,7 @@ const StockScreen = ({ o }: { o: OwnerData & { restaurant: Restaurant } }) => {
     try {
       await actions.createMany(
         'ingredients',
-        suggestions.map(([name, unit, cost]) => ({ restaurantId: r.id, name, unit, costPerUnit: cost, stock: 0, lowStockAt: 0 }))
+        suggestions.map((t) => fromTemplate(t, r.id))
       )
     } catch {
       // toast shown
@@ -141,6 +142,7 @@ const StockScreen = ({ o }: { o: OwnerData & { restaurant: Restaurant } }) => {
         <TabsList className="h-auto p-1 rounded-xl bg-stone-100 flex-wrap justify-start">
           <Tab value="ingredients" icon={Package} label="Ingredients" count={o.ingredients.length} />
           <Tab value="recipes" icon={ChefHat} label="Recipes & margins" />
+          <Tab value="packaging" icon={Boxes} label="Packaging & extras" count={o.packaging.length} />
           <Tab value="expenses" icon={Receipt} label="Expenses" count={o.expenses.length} />
           <Tab value="history" icon={History} label="Stock history" />
         </TabsList>
@@ -183,14 +185,15 @@ const StockScreen = ({ o }: { o: OwnerData & { restaurant: Restaurant } }) => {
                         )}
                       </p>
                       <p className="text-xs text-stone-500">
-                        {costPerUnitLabel(i.costPerUnit, i.unit, r.currency)}
+                        {(() => {
+                          const c = costLabels(i, money)
+                          return c.purchase ? `${c.use} · ${c.purchase}` : c.use
+                        })()}
                         {i.supplier ? ` · ${i.supplier}` : ''}
                       </p>
                     </div>
                     <div className="text-left sm:text-right sm:w-36">
-                      <p className={cn('font-extrabold tabular-nums', i.stock < 0 ? 'text-rose-700' : 'text-stone-900')}>
-                        {qtyLabel(i.stock, i.unit)}
-                      </p>
+                      <p className={cn('font-extrabold tabular-nums', i.stock < 0 ? 'text-rose-700' : 'text-stone-900')}>{stockLabel(i)}</p>
                       <p className="text-[11px] text-stone-400 tabular-nums">
                         worth {formatMoney(Math.round(Math.max(0, i.stock) * i.costPerUnit * 100) / 100, r.currency)}
                       </p>
@@ -269,6 +272,63 @@ const StockScreen = ({ o }: { o: OwnerData & { restaurant: Restaurant } }) => {
               )
             })}
           </Card>
+        </TabsContent>
+
+        <TabsContent value="packaging" className="mt-4">
+          <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="max-w-xl text-sm text-stone-500">
+              Tissue, take-away boxes, bags, straws… Set them once here instead of adding them to every recipe. They’re taken out of stock
+              and counted in profit on every matching order.
+            </p>
+            <Button icon={Plus} onClick={() => setPackForm({ rule: null })}>
+              Add packaging
+            </Button>
+          </div>
+          {o.packaging.length === 0 ? (
+            <EmptyState
+              icon={Boxes}
+              title="No packaging set up"
+              description="e.g. “Take-away packaging: 1 box per item, 1 bag and 2 tissues per order”."
+            />
+          ) : (
+            <Card className="divide-y divide-stone-100">
+              {o.packaging.map((p) => {
+                const cost = p.ingredients.reduce((s2, l) => s2 + l.quantity * (ingById.get(l.ingredientId)?.costPerUnit ?? 0), 0)
+                return (
+                  <div key={p.id} className="flex items-center gap-3 px-4 py-3">
+                    <button type="button" onClick={() => setPackForm({ rule: p })} className="min-w-0 flex-1 text-left">
+                      <p className="font-semibold text-stone-900">
+                        {p.name}
+                        {!p.active && (
+                          <span className="ml-2 rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-bold text-stone-500 align-middle">
+                            Off
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-xs text-stone-500">
+                        {p.when === 'all' ? 'Every order' : p.when === 'takeaway' ? 'Take-away & delivery' : 'Dine-in'} · per {p.per} ·{' '}
+                        {p.ingredients
+                          .map(
+                            (l) =>
+                              `${amount(l.quantity, ingById.get(l.ingredientId)?.unit ?? 'pcs')} ${ingById.get(l.ingredientId)?.name ?? '?'}`
+                          )
+                          .join(', ')}
+                      </p>
+                    </button>
+                    <p className="font-extrabold tabular-nums text-stone-900">{money(Math.round(cost * 100) / 100)}</p>
+                    <button
+                      type="button"
+                      aria-label={`Delete ${p.name}`}
+                      onClick={() => setConfirm({ kind: 'packaging', id: p.id, label: p.name })}
+                      className="h-9 w-9 flex items-center justify-center rounded-lg text-stone-400 hover:bg-rose-50 hover:text-rose-600"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                )
+              })}
+            </Card>
+          )}
         </TabsContent>
 
         <TabsContent value="expenses" className="mt-4">
@@ -356,7 +416,7 @@ const StockScreen = ({ o }: { o: OwnerData & { restaurant: Restaurant } }) => {
                     </span>
                     <span className={cn('tabular-nums font-semibold', m.quantity >= 0 ? 'text-emerald-700' : 'text-stone-700')}>
                       {m.quantity >= 0 ? '+' : '−'}
-                      {ing ? qtyLabel(Math.abs(m.quantity), ing.unit) : Math.abs(m.quantity)}
+                      {m.entered && m.type !== 'count' ? m.entered : ing ? amount(Math.abs(m.quantity), ing.unit) : Math.abs(m.quantity)}
                     </span>
                     <span className="w-24 text-right tabular-nums text-stone-500">{formatMoney(Math.abs(m.totalCost), r.currency)}</span>
                   </div>
@@ -387,6 +447,14 @@ const StockScreen = ({ o }: { o: OwnerData & { restaurant: Restaurant } }) => {
         recipe={recipeFor ? (recipeByItem.get(recipeFor.id) ?? null) : null}
         recipes={o.recipes}
         ingredients={o.ingredients}
+        packaging={o.packaging}
+      />
+      <PackagingForm
+        open={!!packForm}
+        onOpenChange={(v) => !v && setPackForm(null)}
+        restaurant={r}
+        rule={packForm?.rule ?? null}
+        ingredients={o.ingredients}
       />
       <ExpenseForm
         open={!!expenseForm}
@@ -398,7 +466,13 @@ const StockScreen = ({ o }: { o: OwnerData & { restaurant: Restaurant } }) => {
         open={!!confirm}
         onOpenChange={(v) => !v && setConfirm(null)}
         title={`Delete ${confirm?.label ?? ''}?`}
-        description={confirm?.kind === 'ingredients' ? 'Its stock history stays for your records.' : 'It no longer counts against profit.'}
+        description={
+          confirm?.kind === 'ingredients'
+            ? 'Its stock history stays for your records.'
+            : confirm?.kind === 'packaging'
+              ? 'It stops being counted on new orders.'
+              : 'It no longer counts against profit.'
+        }
         onConfirm={() => (confirm ? actions.remove(confirm.kind, confirm.id) : undefined)}
       />
     </>
