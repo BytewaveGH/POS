@@ -182,6 +182,18 @@ Next to the eight presets by kind of place, `src/lib/eatery/styles.ts` defines t
 - The printed receipt carries a QR code. Scanning it opens the customer's own order page, which pings them when the order is ready.
 - Online orders waiting for a decision appear at the top of the POS and on the orders board, with a chime and a system notification. Accepting one updates the customer's page within 10 seconds. The customer gets a sound, a vibration and, if they allowed it, a system notification.
 
+**Sales patterns** (overview), for the last 7, 30 or 90 days, measured in sales or orders:
+
+- **Summary tiles:** total with the change against the previous period, average open day with the best day, strongest weekday and peak hour, and quietest weekday and hour.
+- **Plain-language insights,** e.g. "Fridays are your strongest day — 32% above an average day", "12pm–2pm brings 41% of sales", "Tuesdays run 25% below average — a good day for a deal".
+- **Charts:**
+
+  - daily trend, with a 7-day average and the best and slowest days marked;
+  - weekday × hour heatmap of averages, in a single blue that deepens with sales;
+  - average by weekday and by hour.
+
+  Every chart has hover/focus details and a **View as table** option. Cancelled orders and closed days aren't counted as lows. Rules: `src/lib/eatery/patterns.ts`.
+
 **Sales** (`/eatery/sales`):
 
 - Periods (today, yesterday, this week, this month, 30 days, custom) with net sales, a trend against the previous period, orders and average, how it was paid, and what's still unpaid.
