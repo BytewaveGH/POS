@@ -1,5 +1,6 @@
 import React from 'react'
-import { render, screen } from '@testing-library/react'
+import { render as rtlRender, screen } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 const auth = vi.hoisted(() => ({ session: { status: 'loading', data: null } as { status: string; data: unknown } }))
 vi.mock('next-auth/react', () => ({ useSession: () => auth.session, signOut: vi.fn() }))
@@ -12,6 +13,10 @@ vi.mock('next/navigation', () => ({
 
 import ILayout from '@/components/generals/layouts'
 import { appTypeFromPath, dashboardAppType } from '@/lib/app-type'
+
+// The shell reads billing through React Query, as under the app's root providers.
+const render = (ui: React.ReactElement) =>
+  rtlRender(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>{ui}</QueryClientProvider>)
 
 beforeAll(() => {
   window.matchMedia ??= ((q: string) => ({

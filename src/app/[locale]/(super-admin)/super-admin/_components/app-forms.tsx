@@ -14,10 +14,14 @@ import {
   RefreshCw,
   XCircle,
 } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
 import { ROOT_DOMAIN, slugify } from '@/lib/tenant'
 import { Button } from '@/components/kit/ui'
-import { Drawer, Field, FormGrid, Input, Segmented } from '@/components/kit/form'
+import { Drawer, Field, FormGrid, Input, Segmented, Toggle, toNum } from '@/components/kit/form'
+import { cedis, cycleLabel, priceFor } from '@/lib/subscription/access'
+import type { BillingCycle } from '@/lib/subscription/types'
+import { billingApi, useCatalog } from '../_logics/billing'
 import { generatePassword, passwordStrength, tenantHost, tenantUrl } from '../_logics/insights'
 import { platformApi, usePlatformActions } from '../_logics/api'
 import { VERTICALS, verticalMeta } from '../_logics/verticals'
@@ -114,7 +118,7 @@ const VerticalPicker = ({ value, onChange }: { value: string; onChange: (v: stri
 
 // ── Register (wizard) ────────────────────────────────────────────────────────
 
-const STEPS = ['Business', 'Type', 'Owner', 'Review'] as const
+const STEPS = ['Business', 'Type', 'Owner', 'Plan', 'Review'] as const
 
 export const RegisterAppWizard = ({
   open,
@@ -139,6 +143,16 @@ export const RegisterAppWizard = ({
   const [error, setError] = useState('')
   const [created, setCreated] = useState<TenantRecord | null>(null)
   const slugState = useSlugAvailability(slug)
+  const qc = useQueryClient()
+  const catalog = useCatalog()
+  const offered = (catalog.data?.plans ?? []).filter((p) => !p.archived)
+  // '' = register without a plan (free, full access).
+  const [planId, setPlanId] = useState('')
+  const [cycle, setCycle] = useState<BillingCycle>('monthly')
+  const [trial, setTrial] = useState(true)
+  const [trialDays, setTrialDays] = useState('14')
+  const [planWarning, setPlanWarning] = useState('')
+  const plan = offered.find((p) => p.id === planId)
 
   useEffect(() => {
     if (!open) return
@@ -153,15 +167,28 @@ export const RegisterAppWizard = ({
     setShowPw(false)
     setError('')
     setCreated(null)
+    setCycle('monthly')
+    setTrial(true)
+    setPlanWarning('')
   }, [open])
+  // Default to the highlighted plan and its trial once the catalog is in.
+  useEffect(() => {
+    if (!open) return
+    const initial = offered.find((p) => p.highlighted) ?? offered[0]
+    setPlanId(initial?.id ?? '')
+    setTrialDays(String(initial?.trialDays || 14))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, catalog.data])
 
   const strength = passwordStrength(password)
   const stepValid = [
     name.trim().length > 1 && !!slug && !['invalid', 'reserved', 'taken', 'checking'].includes(slugState),
     !!appType,
     ownerName.trim().length > 1 && EMAIL.test(ownerEmail.trim()) && password.length >= 8,
+    !planId || !trial || toNum(trialDays) >= 1,
     true,
   ]
+  const days = Math.max(0, Math.round(toNum(trialDays)))
 
   const submit = async () => {
     setSaving(true)
@@ -175,6 +202,17 @@ export const RegisterAppWizard = ({
         ownerEmail: ownerEmail.trim(),
         password,
       })
+      // The business exists either way; a failed plan is a warning to fix from its Billing tab.
+      if (t?.id && plan) {
+        try {
+          await billingApi.act(t.id, { type: 'assign', planId: plan.id, cycle, trialDays: trial ? days : 0 })
+          await qc.invalidateQueries({ queryKey: ['platform', 'billing'] })
+        } catch (err) {
+          setPlanWarning(
+            `Registered, but the plan wasn’t set (${err instanceof Error ? err.message : 'billing unavailable'}). Set it from the app’s Billing tab.`
+          )
+        }
+      }
       setCreated(
         t ?? ({ id: 0, name, slug, appType, status: 'active', createdAt: new Date().toISOString(), ownerName, ownerEmail } as TenantRecord)
       )
@@ -206,6 +244,11 @@ export const RegisterAppWizard = ({
             Share these sign-in details with {ownerName.trim() || 'the owner'}. The password isn’t shown again.
           </p>
         </div>
+        {planWarning && (
+          <div role="alert" className="mt-4 flex gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" /> {planWarning}
+          </div>
+        )}
         <div className="mt-6 rounded-2xl border border-stone-200 bg-stone-50 p-4 flex flex-col gap-3">
           {[
             { label: 'Sign-in link', value: url },
@@ -396,12 +439,90 @@ export const RegisterAppWizard = ({
 
       {step === 3 && (
         <div className="flex flex-col gap-4">
+          {catalog.isLoading ? (
+            <p className="text-sm text-stone-500 inline-flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading plans…
+            </p>
+          ) : !catalog.data ? (
+            <div role="alert" className="flex gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" /> Plans can’t be loaded, so this app will be registered without one. You
+              can set it later.
+            </div>
+          ) : (
+            <>
+              <Segmented
+                ariaLabel="Billing cycle"
+                value={cycle}
+                onChange={setCycle}
+                options={[
+                  { value: 'monthly', label: 'Monthly' },
+                  { value: 'yearly', label: 'Yearly' },
+                ]}
+              />
+              <div role="radiogroup" aria-label="Plan" className="flex flex-col gap-2">
+                {[
+                  ...offered.map((p) => ({ id: p.id, title: p.name, body: p.tagline, price: `${cedis(priceFor(p, cycle))}/${cycleLabel(cycle)}` })),
+                  { id: '', title: 'No plan', body: 'Free, full access — for partners or internal use', price: '' },
+                ].map((o) => {
+                  const on = planId === o.id
+                  return (
+                    <button
+                      key={o.id || 'none'}
+                      type="button"
+                      role="radio"
+                      aria-checked={on}
+                      onClick={() => {
+                        setPlanId(o.id)
+                        const p = offered.find((x) => x.id === o.id)
+                        if (p) setTrialDays(String(p.trialDays || 14))
+                      }}
+                      className={cn(
+                        'flex items-center gap-3 rounded-2xl border p-3.5 text-left transition-all',
+                        on ? 'border-endeavour bg-endeavour/[0.04] ring-2 ring-endeavour/15' : 'border-stone-200 hover:border-stone-300'
+                      )}
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-bold text-stone-900">{o.title}</span>
+                        <span className="block text-xs text-stone-500">{o.body}</span>
+                      </span>
+                      {o.price && <span className="text-sm font-extrabold text-stone-900 tabular-nums">{o.price}</span>}
+                      {on && <Check className="h-4 w-4 text-endeavour flex-shrink-0" />}
+                    </button>
+                  )
+                })}
+              </div>
+              {plan && (
+                <div className="rounded-2xl border border-stone-200 p-4 flex flex-col gap-3">
+                  <Toggle checked={trial} onChange={setTrial} label="Start with a free trial" hint="Full access, no payment until it ends" />
+                  {trial ? (
+                    <Field label="Trial length (days)" htmlFor="ra-trial">
+                      <Input id="ra-trial" type="number" min={1} max={365} value={trialDays} onChange={(e) => setTrialDays(e.target.value)} />
+                    </Field>
+                  ) : (
+                    <p className="text-xs text-stone-500">Payment is due now — record it from the app’s Billing tab.</p>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {step === 4 && (
+        <div className="flex flex-col gap-4">
           <div className="rounded-2xl border border-stone-200 divide-y divide-stone-100">
             {[
               { label: 'Business', value: name.trim(), to: 0 },
               { label: 'Address', value: tenantHost(slug, ROOT_DOMAIN), to: 0 },
               { label: 'Type', value: verticalMeta(appType).label, to: 1 },
               { label: 'Owner', value: `${ownerName.trim()} · ${ownerEmail.trim()}`, to: 2 },
+              {
+                label: 'Plan',
+                value: plan
+                  ? `${plan.name} (${cycle})${trial && days > 0 ? ` · ${days}-day free trial` : ' · payment due now'}`
+                  : 'No plan — full access',
+                to: 3,
+              },
             ].map((r) => (
               <div key={r.label} className="flex items-center justify-between gap-3 px-4 py-3">
                 <div className="min-w-0">

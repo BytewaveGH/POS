@@ -32,6 +32,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# local billing store (BILLING_STORE=file)
+/.data/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

@@ -5,12 +5,14 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import { useParams, usePathname } from 'next/navigation'
-import { LayoutDashboard, LogOut, Menu, Plus, Search, Store } from 'lucide-react'
+import { Layers, LayoutDashboard, LogOut, Menu, Plus, Search, Store, Wallet } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import ToastTemplate from '@/components/templates/toast'
 import { Avatar } from '@/components/kit/ui'
 import { useTenants } from './super-admin/_logics/api'
+import { useBillingBook } from './super-admin/_logics/billing'
+import { attentionCount } from '@/lib/subscription/insights'
 import { CommandPalette, openCommandPalette } from './super-admin/_components/command-palette'
 import { RegisterAppWizard } from './super-admin/_components/app-forms'
 import { ConsoleContext } from './super-admin/_components/console-context'
@@ -34,10 +36,14 @@ const Sidebar = ({ base, onNavigate, onRegister }: { base: string; onNavigate?: 
   const params = useParams()
   const locale = (params?.locale as string) || 'en'
   const suspended = tenants.filter((t) => t.status === 'suspended').length
+  const { view: billing } = useBillingBook()
+  const billingAlerts = billing ? attentionCount(billing.attention) : 0
 
-  const nav = [
+  const nav: { label: string; href: string; icon: typeof Store; active?: boolean; count?: number; alert?: number }[] = [
     { label: 'Overview', href: base, icon: LayoutDashboard, active: pathname === base },
     { label: 'Apps', href: `${base}/apps`, icon: Store, active: pathname?.startsWith(`${base}/apps`), count: tenants.length },
+    { label: 'Billing', href: `${base}/billing`, icon: Wallet, active: pathname?.startsWith(`${base}/billing`), alert: billingAlerts },
+    { label: 'Plans', href: `${base}/plans`, icon: Layers, active: pathname?.startsWith(`${base}/plans`) },
   ]
   const email = session?.user?.email ?? 'Super admin'
 
@@ -72,6 +78,14 @@ const Sidebar = ({ base, onNavigate, onRegister }: { base: string; onNavigate?: 
           >
             <item.icon className="h-4 w-4" />
             <span className="flex-1">{item.label}</span>
+            {!!item.alert && (
+              <span
+                className={cn('text-[11px] font-bold tabular-nums rounded-md px-1.5', item.active ? 'bg-white/20' : 'bg-amber-100 text-amber-800')}
+                aria-label={`${item.alert} need attention`}
+              >
+                {item.alert}
+              </span>
+            )}
             {item.count !== undefined && (
               <span
                 className={cn(

@@ -516,6 +516,67 @@ Purchases are money out, not a cost, until the stock is used or wasted.
 - MoMo collection through a payment gateway, with a webhook marking orders `paid`.
 - Per-restaurant staff assignment.
 
+## 8. Subscriptions and billing (new) — frontend built, backend needed
+
+Every business (tenant) is on a **plan**. A plan sets the price, how many staff accounts the business can have, and which extra features it unlocks in its module. The super admin manages plans and each business's subscription. That includes recording payments by hand: MoMo, bank, cash. There's no payment gateway yet. Owners see their plan, payments and how to pay, and can ask for a plan change. Types: `src/lib/subscription/types.ts`. Rules: `src/lib/subscription/access.ts` and `billing.ts` (pure and tested; please match them).
+
+Until this ships, the Next.js server keeps billing in a JSON file (`BILLING_STORE=file`, `.data/billing.json`). Setting `BILLING_STORE=api` switches to the endpoints below with no other frontend change.
+
+### 8.1 Objects
+
+- **Plan**: `{ id, name, tagline, monthlyPrice, yearlyPrice, limits: { staff: number | null }, features: string[], trialDays, highlighted?, archived? }`. Prices are whole cedis. `staff: null` = unlimited. `features` holds keys from `src/lib/subscription/features.ts` (e.g. `retail.analytics`, `eatery.costing`). Pages not listed there are on every plan.
+- **Catalog**: `{ plans: Plan[], settings: { currency: "GHS", graceDays, paymentInstructions, supportContact } }`. One per platform.
+- **Subscription**: one per tenant. `{ tenantId, planId, cycle: "monthly"|"yearly", status: "trialing"|"active"|"canceled", trialEndsAt?, currentPeriodStart, currentPeriodEnd, cancelAtPeriodEnd, canceledAt?, request?, payments: Payment[], events: BillingEvent[], updatedAt }`.
+- **Payment**: `{ id, amount, method: "momo"|"bank"|"cash"|"card"|"other", reference?, paidAt, periodStart, periodEnd, planId, cycle }`.
+- **BillingEvent**: `{ at, type, summary, actor: "platform"|"owner" }`. This is the audit trail shown in the console. Keep the latest 200.
+
+**Only intent is stored.** "Past due" and "expired" are **derived** from dates, never stored, so nothing needs a scheduled job:
+
+| Derived state | When                                                                    | Access |
+| ------------- | ----------------------------------------------------------------------- | ------ |
+| `none`        | no subscription record (registered before billing)                     | full   |
+| `trialing`    | `status: trialing` and now < `trialEndsAt`                              | full   |
+| `active`      | `status: active` and now < `currentPeriodEnd`                           | full   |
+| `past_due`    | period over, now < end + `graceDays`, not canceling                     | full   |
+| `canceled`    | `status: canceled`, or `cancelAtPeriodEnd` and the period is over      | none   |
+| `expired`     | period over and grace used up                                           | none   |
+
+### 8.2 Platform endpoints (`X-Platform-Key`, like §1/§3)
+
+- `GET /platform/billing/catalog` → `{ data: Catalog }`. Seed with `src/lib/subscription/plans.ts` when empty.
+- `PUT /platform/billing/catalog`: replaces the catalog. Validate as `parseCatalog` does: unique plan ids, at least one plan not archived, only known feature keys. Return **409** if a plan that subscriptions use is missing (archive it instead).
+- `GET /platform/subscriptions` → `{ data: Subscription[] }` (all tenants).
+- `GET /platform/tenants/:id/subscription` → `{ data: Subscription | null }`.
+- `POST /platform/tenants/:id/subscription/actions` takes one action and returns the updated `Subscription`.
+
+| Action                                                                                    | Effect                                                                                                                                                                                                                     |
+| ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `{ type: "assign", planId, cycle, trialDays }`                                            | Start or restart. `trialDays > 0` → trialing to now + days. `0` → active with the period ending now (payment due). Keeps earlier payments and events.                                                                     |
+| `{ type: "change-plan", planId, cycle? }`                                                 | Switch plan; dates unchanged; clears any request. 409 if nothing changes.                                                                                                                                                  |
+| `{ type: "record-payment", amount, method, reference?, periods (1–24), paidAt? }`         | Paid time continues from the current end when trialing, active or past due. After a lapse or a cancellation it starts now. Adds `periods` × cycle. Sets `active`, clears trial and cancellation, appends a Payment. |
+| `{ type: "extend", days }`                                                                | Adds days to the later of the current end and now (the trial end while trialing).                                                                                                                                          |
+| `{ type: "cancel", atPeriodEnd }`                                                         | `true` → `cancelAtPeriodEnd`. `false` → `status: canceled` now. 409 if already canceled.                                                                                                                                   |
+| `{ type: "resume" }`                                                                      | Undo either kind of cancellation. 409 if there's nothing to undo.                                                                                                                                                          |
+| `{ type: "approve-request" }` / `{ type: "clear-request" }`                               | Apply or decline the owner's request. 409 if there's none.                                                                                                                                                                 |
+
+Errors: 400 for a malformed action, 404 for an unknown plan or a tenant with no subscription, 409 as above. The frontend shows `error` verbatim, so write it for an operator. Archived plans can't be assigned or requested, but a business already on one can stay on it.
+
+Deleting a tenant (§1) should delete its subscription.
+
+### 8.3 Tenant endpoints (owner or staff token + `X-Tenant-Domain`)
+
+- `GET /billing` → `{ data: { subscription: Subscription | null, catalog: Catalog } }`. Staff can read it too, because the dashboard gates pages on it.
+- `POST /billing/actions`: owners only (**403** for employees), and only `request-plan` (`{ type, planId, cycle, note? }`) or `clear-request`. Log the event with `actor: "owner"`.
+
+### 8.4 Enforcement (the important part)
+
+The frontend gates the dashboard. If billing can't be loaded it **fails open**, so an outage never locks out a paying business. Real enforcement has to be on the server:
+
+- **No access** (`canceled` / `expired`): return **402** `{ status: false, error: "subscription_inactive" }` on every tenant-scoped endpoint except `/auth/*` and `/billing*`. Keep all data. Logins should still succeed, so the owner can reach the billing page.
+- **Feature not on the plan**: 402 `"feature_not_in_plan"` on that feature's endpoints. For example, `retail.analytics` → the analytics/report endpoints, and `real-estate.short-stays` → `/real-estate/bookings`. Map them from `features.ts`.
+- **Staff limit**: `POST /employees/` returns 402 `"staff_limit"` once the tenant has `limits.staff` employees. Editing and deleting stay allowed.
+- Public routes (eatery storefronts, the amusement board) are up to product. We suggest an expired eatery's storefront stops taking orders but keeps showing its menu.
+
 ## Priority
 
 1. Tenant CRUD + owner-account creation (§1) — unblocks the whole "register a new business" flow for real, replaces the local JSON-file placeholder entirely.
@@ -523,7 +584,8 @@ Purchases are money out, not a cost, until the stock is used or wasted.
 3. Platform-level stats/employees (§3) — lower priority, purely additive to the super admin dashboard; the mock data is clearly labeled as such and isn't blocking anything else.
 4. Real estate vertical (§6) — frontend is live on browser-only storage; these endpoints make it multi-device and durable.
 5. Eatery platform (§7) — owner dashboard and public storefronts are live on browser-only storage; customers' orders only reach the owner once these exist.
-6. ~~Camera product recognition (§5)~~ — ✅ done; open points resolved, one pending backend change (SKU 409).
-7. ~~Attractions/tickets/bookings/leaderboard (§4)~~ — ✅ done, confirmed live and matching the frontend's contract exactly (2026-08-29).
+6. Subscriptions and billing (§8) — plans, payments and gating work today on a server-side JSON file. These endpoints make billing durable, and §8.4 makes access limits enforceable instead of only shown in the UI.
+7. ~~Camera product recognition (§5)~~ — ✅ done; open points resolved, one pending backend change (SKU 409).
+8. ~~Attractions/tickets/bookings/leaderboard (§4)~~ — ✅ done, confirmed live and matching the frontend's contract exactly (2026-08-29).
 
 Happy to hop on a call to go through response shapes/edge cases once you've had a look.

@@ -1,6 +1,6 @@
 'use client'
 
-import { Calendar, Home, Inbox, Search, Settings } from 'lucide-react'
+import { Calendar, Home, Inbox, Lock, Search, Settings } from 'lucide-react'
 
 import {
   Sidebar,
@@ -73,7 +73,7 @@ export function AppSidebar({ isGrouped, groupedItems = [], loading }: SidebarPro
             </div>
           ) : isGrouped ? (
             <>
-              {groupedItems.map((group: { title: string; items: { label: string; href: string; icon: React.ReactNode | any }[] }) => {
+              {groupedItems.map((group: { title: string; items: { label: string; href: string; icon: React.ReactNode | any; locked?: boolean }[] }) => {
                 return (
                   <>
                     <SidebarGroupLabel>{group.title}</SidebarGroupLabel>
@@ -85,6 +85,9 @@ export function AppSidebar({ isGrouped, groupedItems = [], loading }: SidebarPro
                               <a href={item.href}>
                                 <item.icon />
                                 <span>{item.label}</span>
+                                {item.locked && (
+                                  <Lock className="ml-auto !h-3.5 !w-3.5 text-stone-400" aria-label="Not on your plan" />
+                                )}
                               </a>
                             </SidebarMenuButton>
                           </SidebarMenuItem>

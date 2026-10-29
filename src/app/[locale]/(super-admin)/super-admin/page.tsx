@@ -4,13 +4,15 @@ import React, { useMemo } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { addMonths, startOfMonth, subDays } from 'date-fns'
-import { ArrowRight, Ban, Building2, CheckCircle2, Info, Plus, Sparkles, TrendingUp, Users } from 'lucide-react'
+import { AlertTriangle, ArrowRight, Ban, Building2, CheckCircle2, Inbox, Info, Plus, Sparkles, TrendingUp, Users } from 'lucide-react'
 import { BarChart, Button, Card, EmptyState, ErrorNote, LoadingGrid, PageHeader, Ring, SectionTitle, StatCard } from '@/components/kit/ui'
 import { useTenants, useTenantsStats, usePlatformActions } from './_logics/api'
 import { registeredBetween, registrationsByMonth, verticalBreakdown } from './_logics/insights'
 import { verticalMeta } from './_logics/verticals'
 import { AppAvatar, StatusPill, VerticalBadge, fullDate, timeAgo } from './_components/bits'
 import { useConsole } from './_components/console-context'
+import { useBillingBook } from './_logics/billing'
+import { accessLine } from '@/components/billing/bits'
 
 const pct = (n: number) => `${Math.round(n * 100)}%`
 const cedis = (n: number, opts?: { compact?: boolean }) =>
@@ -24,6 +26,14 @@ export default function SuperAdminOverview() {
   const actions = usePlatformActions()
   const { data: tenants = [], isLoading, error } = useTenants()
   const statsResults = useTenantsStats(tenants.map((t) => t.id))
+  const { view: billing } = useBillingBook()
+  const billingItems = billing
+    ? [
+        ...billing.attention.requests.map((r) => ({ r, kind: 'request' as const })),
+        ...billing.attention.pastDue.map((r) => ({ r, kind: 'due' as const })),
+        ...billing.attention.expired.map((r) => ({ r, kind: 'due' as const })),
+      ].slice(0, 4)
+    : []
 
   const view = useMemo(() => {
     const now = new Date()
@@ -237,13 +247,41 @@ export default function SuperAdminOverview() {
 
             <Card className="p-5">
               <SectionTitle title="Needs attention" />
-              {view.suspendedList.length === 0 && view.newThisWeek.length === 0 ? (
+              {view.suspendedList.length === 0 && view.newThisWeek.length === 0 && billingItems.length === 0 ? (
                 <div className="py-8 text-center">
                   <p className="text-sm font-semibold text-stone-900">All clear</p>
-                  <p className="text-xs text-stone-500 mt-1">No suspended apps or new sign-ups to check on.</p>
+                  <p className="text-xs text-stone-500 mt-1">No suspended apps, overdue payments or new sign-ups to check on.</p>
                 </div>
               ) : (
                 <div className="flex flex-col gap-2">
+                  {billingItems.map(({ r, kind }) => (
+                    <Link
+                      key={`billing-${r.tenant.id}`}
+                      href={`${base}/apps/${r.tenant.id}?tab=billing`}
+                      className={
+                        kind === 'request'
+                          ? 'flex items-center gap-3 rounded-xl border border-sky-100 bg-sky-50/50 p-2.5 hover:bg-sky-50'
+                          : 'flex items-center gap-3 rounded-xl border border-amber-100 bg-amber-50/50 p-2.5 hover:bg-amber-50'
+                      }
+                    >
+                      <span
+                        className={
+                          kind === 'request'
+                            ? 'h-8 w-8 rounded-lg bg-sky-100 text-sky-700 flex items-center justify-center flex-shrink-0'
+                            : 'h-8 w-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center flex-shrink-0'
+                        }
+                      >
+                        {kind === 'request' ? <Inbox className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-semibold text-stone-900 truncate">{r.tenant.name}</span>
+                        <span className="block text-[11px] text-stone-600 truncate">
+                          {kind === 'request' ? 'Asked for a plan change' : accessLine(r.access, r.sub)}
+                        </span>
+                      </span>
+                      <ArrowRight className="h-4 w-4 text-stone-300" />
+                    </Link>
+                  ))}
                   {view.suspendedList.slice(0, 4).map((t) => (
                     <div key={t.id} className="flex items-center gap-3 rounded-xl border border-rose-100 bg-rose-50/50 p-2.5">
                       <AppAvatar name={t.name} appType={t.appType} status={t.status} size="sm" />
