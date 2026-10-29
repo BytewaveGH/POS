@@ -26,6 +26,7 @@ import {
   UtensilsCrossed,
   Palette,
   Receipt,
+  Gem,
 } from 'lucide-react'
 import { ITopNavItems } from './interface'
 
@@ -173,7 +174,7 @@ const eaterySidebarItems = [
   },
 ]
 
-type SidebarGroup = {
+export type SidebarGroup = {
   title: string
   // One permission key, or a list of which any one is enough.
   items: {
@@ -181,7 +182,17 @@ type SidebarGroup = {
     href: string
     icon: (typeof retailSidebarItems)[number]['items'][number]['icon']
     requiredPermission?: string | string[]
+    // Hidden from staff whatever their permissions.
+    ownerOnly?: boolean
+    // Set by the layout: the page's feature isn't on the business's plan.
+    locked?: boolean
   }[]
+}
+
+// Every module ends with the owner's account section.
+const accountGroup: SidebarGroup = {
+  title: 'Account',
+  items: [{ label: 'Plan & billing', href: '/en/billing', icon: Gem, ownerOnly: true }],
 }
 
 const sidebarItemsByAppType: Record<string, SidebarGroup[]> = {
@@ -191,8 +202,10 @@ const sidebarItemsByAppType: Record<string, SidebarGroup[]> = {
   'real-estate': realEstateSidebarItems,
 }
 
-export const getSidebarItems = (appType: string | undefined | null): SidebarGroup[] =>
-  sidebarItemsByAppType[appType ?? 'retail'] ?? retailSidebarItems
+export const getSidebarItems = (appType: string | undefined | null): SidebarGroup[] => [
+  ...(sidebarItemsByAppType[appType ?? 'retail'] ?? retailSidebarItems),
+  accountGroup,
+]
 
 // Retail is still the default vertical — keep this export for anything importing the flat list directly.
 export const sidebarItems = retailSidebarItems

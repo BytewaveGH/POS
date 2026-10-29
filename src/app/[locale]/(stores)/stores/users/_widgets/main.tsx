@@ -10,6 +10,9 @@ import { useAxios } from '@/hooks/use-axios'
 import { EmployeeServices } from '../_logics/services'
 import CreateEmployee, { PERMISSIONS } from './_forms/create-employee'
 import { IGeneric } from '@/types/interfaces'
+import Link from 'next/link'
+import { canAddStaff, staffLimit } from '@/lib/subscription/access'
+import { useBilling } from '@/lib/subscription/client'
 
 const AVATAR_COLORS = ['bg-endeavour', 'bg-green-500', 'bg-purple-500', 'bg-amber-500', 'bg-rose-500', 'bg-cyan-600']
 
@@ -146,6 +149,11 @@ const Main = () => {
   const totalPerms = employees.reduce((s, e) => s + PERMISSIONS.filter((p) => e[p.key]).length, 0)
   const avgPerms = employees.length > 0 ? (totalPerms / employees.length).toFixed(1) : '—'
 
+  // Staff seats come with the plan; editing existing staff is always allowed.
+  const { access, isOwner } = useBilling()
+  const seatLimit = staffLimit(access)
+  const seatsFull = !isLoading && !canAddStaff(access, employees.length)
+
   const openCreate = () => {
     setSelected(null)
     setModalOpen(true)
@@ -200,10 +208,25 @@ const Main = () => {
         <ButtonTemplate
           isText
           text="Add Employee"
-          classname="px-4 py-2 bg-endeavour text-white rounded-xl w-fit text-sm"
+          classname="px-4 py-2 bg-endeavour text-white rounded-xl w-fit text-sm disabled:opacity-50"
           handleClick={openCreate}
+          isDisabled={seatsFull}
         />
       </div>
+
+      {seatsFull && (
+        <div role="status" className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <span className="flex-1">
+            All {seatLimit} staff seats on the {access.plan?.name} plan are in use.{' '}
+            {isOwner ? 'Upgrade to add more people.' : 'Ask the owner to upgrade to add more people.'}
+          </span>
+          {isOwner && (
+            <Link href="/en/billing" className="font-semibold hover:underline whitespace-nowrap">
+              See plans
+            </Link>
+          )}
+        </div>
+      )}
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
@@ -214,8 +237,11 @@ const Main = () => {
               <Users className="h-3.5 w-3.5 text-white" />
             </div>
           </div>
-          <p className="bytewave-heading text-2xl text-stone-800">{isLoading ? '—' : employees.length}</p>
-          <p className="bytewave-paragraph text-xs text-gray-400">Active accounts</p>
+          <p className="bytewave-heading text-2xl text-stone-800">
+            {isLoading ? '—' : employees.length}
+            {seatLimit !== null && <span className="text-base text-gray-400"> / {seatLimit}</span>}
+          </p>
+          <p className="bytewave-paragraph text-xs text-gray-400">{seatLimit !== null ? 'Seats on your plan' : 'Active accounts'}</p>
         </div>
 
         <div className="bg-white rounded-xl border border-gray-200 p-4 flex flex-col gap-2">

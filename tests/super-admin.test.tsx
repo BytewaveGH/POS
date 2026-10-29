@@ -19,10 +19,15 @@ import {
   verticalBreakdown,
 } from '@/app/[locale]/(super-admin)/super-admin/_logics/insights'
 import type { TenantRecord } from '@/app/[locale]/(super-admin)/super-admin/_logics/types'
+import { applyAction } from '@/lib/subscription/billing'
+import { DEFAULT_CATALOG } from '@/lib/subscription/plans'
+import type { Subscription } from '@/lib/subscription/types'
 import AppsPage from '@/app/[locale]/(super-admin)/super-admin/apps/page'
 import OverviewPage from '@/app/[locale]/(super-admin)/super-admin/page'
 import AppDetailPage from '@/app/[locale]/(super-admin)/super-admin/apps/[id]/page'
 import { RegisterAppWizard } from '@/app/[locale]/(super-admin)/super-admin/_components/app-forms'
+import BillingPage from '@/app/[locale]/(super-admin)/super-admin/billing/page'
+import PlansPage from '@/app/[locale]/(super-admin)/super-admin/plans/page'
 
 const t = (id: number, over: Partial<TenantRecord> = {}): TenantRecord => ({
   id,
@@ -104,10 +109,12 @@ describe('console insights', () => {
 // ── Screens against a mocked platform API ────────────────────────────────────
 
 let db: TenantRecord[] = []
+let billing: Record<number, Subscription> = {}
 const calls: { method: string; url: string; body?: any }[] = []
 
 beforeEach(() => {
   db = TENANTS.map((x) => ({ ...x }))
+  billing = {}
   calls.length = 0
   vi.stubGlobal(
     'fetch',
@@ -117,6 +124,19 @@ beforeEach(() => {
       calls.push({ method, url, body })
       const ok = (data: unknown, status = 200) => new Response(JSON.stringify({ data }), { status })
       if (url === '/api/platform/tenants' && method === 'GET') return ok(db)
+      // Billing, backed by the real rules.
+      if (url === '/api/platform/billing/catalog') return ok(method === 'PUT' ? body : DEFAULT_CATALOG)
+      if (url === '/api/platform/subscriptions') return ok(Object.values(billing))
+      const sb = /^\/api\/platform\/tenants\/(\d+)\/subscription$/.exec(url)
+      if (sb && method === 'POST') {
+        const id = Number(sb[1])
+        try {
+          billing[id] = applyAction(billing[id] ?? null, id, body, DEFAULT_CATALOG, { now: new Date(), actor: 'platform' })
+          return ok(billing[id])
+        } catch (e: any) {
+          return new Response(JSON.stringify({ message: e.message }), { status: e.status ?? 500 })
+        }
+      }
       const st = /^\/api\/platform\/tenants\/(\d+)\/stats$/.exec(url)
       if (st) return ok({ employeeCount: 3, productCount: 40, salesVolume: Number(st[1]) * 1000 })
       const em = /^\/api\/platform\/tenants\/(\d+)\/employees(?:\/(\d+))?$/.exec(url)
@@ -197,7 +217,7 @@ describe('Apps page', () => {
 })
 
 describe('Register app wizard', () => {
-  it('walks business → type → owner → review, checks the subdomain, and shows shareable credentials', async () => {
+  it('walks business → type → owner → plan → review, checks the subdomain, and shows shareable credentials', async () => {
     withQuery(<RegisterAppWizard open onOpenChange={() => {}} />)
     const next = () => screen.getByRole('button', { name: /Continue/ })
 
@@ -225,6 +245,12 @@ describe('Register app wizard', () => {
     expect(password).toHaveLength(14)
     fireEvent.click(next())
 
+    // Plan: the highlighted plan and its trial are preselected; pick Pro, yearly.
+    expect(await screen.findByRole('radio', { name: /Growth/, checked: true })).toBeTruthy()
+    fireEvent.click(screen.getByRole('radio', { name: 'Yearly' }))
+    fireEvent.click(screen.getByRole('radio', { name: /^Pro/ }))
+    fireEvent.click(next())
+
     // Review → register
     expect(screen.getByText('asokwa-homes-ltd.localhost:3000')).toBeTruthy()
     expect(screen.getByText('Real Estate')).toBeTruthy()
@@ -241,6 +267,15 @@ describe('Register app wizard', () => {
       password,
     })
 
+    // The new business starts its trial.
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'POST' && c.url === '/api/platform/tenants/99/subscription')?.body).toEqual({
+        type: 'assign',
+        planId: 'pro',
+        cycle: 'yearly',
+        trialDays: 14,
+      })
+    )
     expect(await screen.findByText('Asokwa Homes Ltd is live')).toBeTruthy()
     expect(screen.getByText('http://asokwa-homes-ltd.localhost:3000/en')).toBeTruthy()
     expect(screen.getByText(password)).toBeTruthy()
@@ -287,5 +322,79 @@ describe('Overview & app detail', () => {
         calls.some((c) => c.method === 'PATCH' && c.url === '/api/platform/tenants/3/employees/7' && c.body.status === 'suspended')
       ).toBe(true)
     )
+  })
+})
+
+describe('Billing', () => {
+  beforeAll(() => {
+    globalThis.ResizeObserver ??= class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    } as any
+  })
+
+  const sub = (tenantId: number, action: Parameters<typeof applyAction>[2], when = new Date()) =>
+    (billing[tenantId] = applyAction(billing[tenantId] ?? null, tenantId, action, DEFAULT_CATALOG, { now: when, actor: 'platform' }))
+
+  it('app detail: assigns a plan with payment due, then records the payment', async () => {
+    nav.params = { locale: 'en', id: '3' }
+    withQuery(<AppDetailPage />)
+    expect(await screen.findByRole('heading', { name: 'Nabest' })).toBeTruthy()
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Billing' }))
+    expect(await screen.findByText('Not on a plan')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Assign a plan' }))
+    fireEvent.click(await screen.findByRole('radio', { name: /^Starter/ }))
+    fireEvent.click(screen.getByRole('switch', { name: /free trial/ }))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Assign plan' }))
+    })
+    await waitFor(() => expect(billing[3]).toMatchObject({ planId: 'starter', status: 'active' }))
+
+    // Payment due → the payment drawer opens next, priced from the plan.
+    const amount = (await screen.findByLabelText('Amount received')) as HTMLInputElement
+    expect(amount.value).toBe('150')
+    fireEvent.click(screen.getByRole('radio', { name: '3' }))
+    expect(amount.value).toBe('450')
+    fireEvent.change(screen.getByLabelText('Reference'), { target: { value: 'MOMO-123' } })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Record payment' }))
+    })
+    await waitFor(() => expect(billing[3].payments).toHaveLength(1))
+    expect(billing[3].payments[0]).toMatchObject({ amount: 450, method: 'momo', reference: 'MOMO-123' })
+    expect(await screen.findByText('MOMO-123')).toBeTruthy()
+  })
+
+  it('dashboard: shows MRR and approves an owner’s plan request', async () => {
+    nav.params = { locale: 'en' }
+    sub(1, { type: 'assign', planId: 'growth', cycle: 'monthly' })
+    sub(1, { type: 'record-payment', amount: 350, method: 'momo' })
+    sub(1, { type: 'request-plan', planId: 'pro', cycle: 'monthly' })
+    sub(3, { type: 'assign', planId: 'starter', cycle: 'monthly' }, new Date(Date.now() - 40 * 86_400_000)) // lapsed
+    withQuery(<BillingPage />)
+    const mrrCard = (await screen.findByText('Monthly recurring revenue')).closest('.rounded-2xl') as HTMLElement
+    expect(within(mrrCard).getByText('₵350')).toBeTruthy()
+
+    const attention = screen.getByText('Needs attention').closest('.rounded-2xl') as HTMLElement
+    expect(within(attention).getByText(/Wants Pro/)).toBeTruthy()
+    expect(within(attention).getByText('Nabest')).toBeTruthy() // expired
+    await act(async () => {
+      fireEvent.click(within(attention).getByRole('button', { name: 'Approve' }))
+    })
+    await waitFor(() => expect(billing[1]).toMatchObject({ planId: 'pro', request: undefined }))
+  })
+
+  it('plans: toggling a feature and saving sends the edited catalog', async () => {
+    withQuery(<PlansPage />)
+    const cell = await screen.findByRole('switch', { name: 'Analytics on Starter' })
+    expect(cell.getAttribute('aria-checked')).toBe('false')
+    fireEvent.click(cell)
+    expect(screen.getByText('Unsaved changes')).toBeTruthy()
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    })
+    const put = calls.find((c) => c.method === 'PUT' && c.url === '/api/platform/billing/catalog')
+    expect(put?.body.plans[0].features).toContain('retail.analytics')
   })
 })

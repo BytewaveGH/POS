@@ -9,7 +9,7 @@ import { toast } from 'sonner'
 import { TenantServices } from '@/lib/tenant-services'
 import type { PlatformEmployee, TenantRecord, TenantStats, TenantStatus } from './types'
 
-const call = async <T>(url: string, init?: RequestInit, fallback = 'Something went wrong'): Promise<T> => {
+export const call = async <T>(url: string, init?: RequestInit, fallback = 'Something went wrong'): Promise<T> => {
   const res = await fetch(url, init?.body ? { ...init, headers: { 'Content-Type': 'application/json', ...(init.headers ?? {}) } } : init)
   const body = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(body?.message ?? fallback)

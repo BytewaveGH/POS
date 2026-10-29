@@ -8,6 +8,10 @@ import { getSidebarItems } from './logics/data'
 import { useSession } from 'next-auth/react'
 import { usePathname } from 'next/navigation'
 import { dashboardAppType } from '@/lib/app-type'
+import { canUseFeature } from '@/lib/subscription/access'
+import { featureForPath } from '@/lib/subscription/features'
+import { useBilling } from '@/lib/subscription/client'
+import { SubscriptionGate } from '@/components/billing/gate'
 
 const ILayout = ({ children }: { children: React.ReactNode }) => {
   const { data: session, status } = useSession()
@@ -20,19 +24,26 @@ const ILayout = ({ children }: { children: React.ReactNode }) => {
   // Employees' items depend on their permissions, which arrive with the session.
   const loading = appType === null || (status === 'loading' && !session)
   const sidebarItems = appType ? getSidebarItems(appType) : []
+  const { access } = useBilling()
 
-  const visibleItems = isEmployee
-    ? sidebarItems
-        .map((group) => ({
-          ...group,
+  const visibleItems = sidebarItems
+    .map((group) => ({
+      ...group,
+      items: group.items
+        .filter((item) => {
+          if (!isEmployee) return true
+          if (item.ownerOnly) return false
           // requiredPermission: one key, or a list of which any one is enough.
-          items: group.items.filter((item) => {
-            const req: string | string[] | undefined = item.requiredPermission
-            return !req || (Array.isArray(req) ? req : [req]).some((k) => !!user?.[k])
-          }),
-        }))
-        .filter((group) => group.items.length > 0)
-    : sidebarItems
+          const req: string | string[] | undefined = item.requiredPermission
+          return !req || (Array.isArray(req) ? req : [req]).some((k) => !!user?.[k])
+        })
+        // Pages not on the plan stay visible (with a lock) so owners can discover them.
+        .map((item) => {
+          const feature = featureForPath(item.href)
+          return feature && !canUseFeature(access, feature.key) ? { ...item, locked: true } : item
+        }),
+    }))
+    .filter((group) => group.items.length > 0)
 
   return (
     <main className="w-full">
@@ -44,7 +55,9 @@ const ILayout = ({ children }: { children: React.ReactNode }) => {
         <main className="w-full min-w-0 flex">
           <SidebarTrigger />
           {/* min-w-0: wide rows (e.g. scrolling strips) scroll inside the page instead of stretching it */}
-          <div className="w-full min-w-0 p-3 md:p-4">{children}</div>
+          <div className="w-full min-w-0 p-3 md:p-4">
+            <SubscriptionGate>{children}</SubscriptionGate>
+          </div>
         </main>
       </SidebarProvider>
     </main>

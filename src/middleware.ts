@@ -119,6 +119,11 @@ export default auth((req: NextAuthRequest) => {
     // Strip locale prefix to get the bare path (e.g. /stores/pos)
     const barePath = pathname.replace(/^\/(en|fr)/, '') || '/'
 
+    // Plan & billing is the owner's alone.
+    if (barePath === '/billing' || barePath.startsWith('/billing/')) {
+      return Response.redirect(new URL(firstAllowedPath(user, locale), req.url))
+    }
+
     // Find which permission this path requires
     const match = EMPLOYEE_ROUTE_PRIORITY.find(({ path }) => barePath === path || barePath.startsWith(path + '/'))
 

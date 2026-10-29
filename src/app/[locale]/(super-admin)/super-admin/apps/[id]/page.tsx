@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import {
@@ -30,6 +30,7 @@ import type { TenantStatus } from '../../_logics/types'
 import { AppAvatar, CopyButton, StatusPill, VerticalBadge, fullDate, timeAgo } from '../../_components/bits'
 import { ConfirmDeleteApp } from '../../_components/confirm-delete'
 import { EditAppDrawer } from '../../_components/app-forms'
+import { SubscriptionPanel } from '../../_components/subscription-panel'
 
 const cedis = (n: number) => `₵${new Intl.NumberFormat('en-GH', { maximumFractionDigits: 0 }).format(n)}`
 
@@ -56,6 +57,12 @@ export default function AppDetailPage() {
   const [staffQuery, setStaffQuery] = useState('')
   const [staffStatus, setStaffStatus] = useState<TenantStatus | 'all'>('all')
   const [busyEmployee, setBusyEmployee] = useState<number | null>(null)
+  const [tab, setTab] = useState('overview')
+  // ?tab=billing (links from the billing dashboard).
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get('tab')
+    if (t === 'staff' || t === 'billing') setTab(t)
+  }, [])
 
   const staff = useMemo(() => {
     const list = employees.data ?? []
@@ -164,7 +171,7 @@ export default function AppDetailPage() {
         )}
       </Card>
 
-      <Tabs defaultValue="overview" className="mt-6">
+      <Tabs value={tab} onValueChange={setTab} className="mt-6">
         <TabsList className="h-auto p-1 rounded-xl bg-stone-100">
           <TabsTrigger value="overview" className="rounded-lg data-[state=active]:shadow-sm">
             Overview
@@ -176,6 +183,9 @@ export default function AppDetailPage() {
                 {staffCounts.all}
               </span>
             )}
+          </TabsTrigger>
+          <TabsTrigger value="billing" className="rounded-lg data-[state=active]:shadow-sm">
+            Billing
           </TabsTrigger>
         </TabsList>
 
@@ -339,6 +349,10 @@ export default function AppDetailPage() {
               ))}
             </Card>
           )}
+        </TabsContent>
+
+        <TabsContent value="billing" className="mt-4">
+          <SubscriptionPanel tenant={tenant} />
         </TabsContent>
       </Tabs>
 

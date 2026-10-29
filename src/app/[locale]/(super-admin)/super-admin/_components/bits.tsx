@@ -1,7 +1,7 @@
 'use client'
 
-import React, { useState } from 'react'
-import { Ban, Check, CheckCircle2, Copy } from 'lucide-react'
+import React from 'react'
+import { Ban, CheckCircle2 } from 'lucide-react'
 import { formatDistanceToNowStrict } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { verticalMeta } from '../_logics/verticals'
@@ -65,32 +65,8 @@ export const AppAvatar = ({
   )
 }
 
-export const CopyButton = ({ value, label = 'Copy', className }: { value: string; label?: string; className?: string }) => {
-  const [done, setDone] = useState(false)
-  return (
-    <button
-      type="button"
-      onClick={async (e) => {
-        e.stopPropagation()
-        try {
-          await navigator.clipboard.writeText(value)
-          setDone(true)
-          setTimeout(() => setDone(false), 1500)
-        } catch {
-          // Clipboard blocked (e.g. insecure context) — nothing to do.
-        }
-      }}
-      aria-label={done ? 'Copied' : label}
-      title={done ? 'Copied' : label}
-      className={cn(
-        'h-7 w-7 rounded-lg inline-flex items-center justify-center text-stone-400 hover:text-endeavour hover:bg-stone-100 transition-colors',
-        className
-      )}
-    >
-      {done ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
-    </button>
-  )
-}
+// Moved to the shared kit (also used by business dashboards).
+export { CopyButton } from '@/components/kit/ui'
 
 export const timeAgo = (iso: string) => {
   const d = new Date(iso)

@@ -17,6 +17,8 @@ import { AppActionsMenu } from '../_components/app-actions'
 import { ConfirmDeleteApp } from '../_components/confirm-delete'
 import { EditAppDrawer } from '../_components/app-forms'
 import { useConsole } from '../_components/console-context'
+import { useBillingBook } from '../_logics/billing'
+import { BillingPill } from '@/components/billing/bits'
 
 const VIEW_KEY = 'sellix-console-apps-view'
 
@@ -37,6 +39,9 @@ export default function SuperAdminApps() {
   const { openRegister } = useConsole()
   const actions = usePlatformActions()
   const { data: tenants = [], isLoading, error } = useTenants()
+  const { view: billing } = useBillingBook()
+  const billingById = useMemo(() => new Map(billing?.rows.map((r) => [r.tenant.id, r])), [billing])
+  const billingOf = (id: number) => billingById.get(id) ?? null
 
   const [query, setQuery] = useState('')
   const [vertical, setVertical] = useState<string>('all')
@@ -298,7 +303,7 @@ export default function SuperAdminApps() {
       ) : view === 'table' ? (
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[860px] text-left">
+            <table className="w-full min-w-[960px] text-left">
               <thead>
                 <tr className="border-b border-stone-100 bg-stone-50/60 text-[11px] font-bold uppercase tracking-wide text-stone-400">
                   <th className="w-12 pl-5 py-3">
@@ -314,6 +319,7 @@ export default function SuperAdminApps() {
                   <th className="py-3 pr-4">Address</th>
                   <th className="py-3 pr-4">Vertical</th>
                   <th className="py-3 pr-4">Status</th>
+                  <th className="py-3 pr-4">Plan</th>
                   <th className="py-3 pr-4">Registered</th>
                   <th className="py-3 pr-4 w-12" />
                 </tr>
@@ -366,6 +372,16 @@ export default function SuperAdminApps() {
                       <StatusPill status={t.status} />
                     </td>
                     <td className="py-3.5 pr-4">
+                      {billingOf(t.id) ? (
+                        <Link href={`${base}/apps/${t.id}?tab=billing`} className="flex flex-col items-start gap-1">
+                          <span className="text-sm font-semibold text-stone-800">{billingOf(t.id)!.access.plan?.name ?? '—'}</span>
+                          <BillingPill state={billingOf(t.id)!.access.state} />
+                        </Link>
+                      ) : (
+                        <span className="text-sm text-stone-400">—</span>
+                      )}
+                    </td>
+                    <td className="py-3.5 pr-4">
                       <span className="block text-sm text-stone-700">{timeAgo(t.createdAt)}</span>
                       <span className="block text-[11px] text-stone-400">{fullDate(t.createdAt)}</span>
                     </td>
@@ -401,6 +417,7 @@ export default function SuperAdminApps() {
                   <div className="flex flex-wrap gap-1.5 mt-2">
                     <VerticalBadge appType={t.appType} />
                     <StatusPill status={t.status} />
+                    {billingOf(t.id) && <BillingPill state={billingOf(t.id)!.access.state} />}
                   </div>
                 </div>
                 <div className="flex items-center gap-1">

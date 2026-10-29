@@ -3,6 +3,7 @@ import axios, { AxiosRequestConfig } from 'axios'
 import { getSession } from 'next-auth/react'
 import { apiErrorMessage, isSessionRebindError } from './api-error'
 import { forceLogout } from './force-logout'
+import { BILLING_CHANGED_EVENT } from './subscription/events'
 
 let isRefreshing = false
 let refreshQueue: Array<(token: string) => void> = []
@@ -33,6 +34,12 @@ apiClient.interceptors.response.use(
     if (isSessionRebindError(error) && !(isRealEstateUrl(error.config?.url) && /tenant mismatch/i.test(apiErrorMessage(error, '')))) {
       void forceLogout('rebind')
       return Promise.reject(error)
+    }
+
+    // 402: the plan doesn't allow this (BACKEND_REQUIREMENTS §8.4). Reload billing
+    // now so the dashboard shows the lock or upgrade screen instead of a failed page.
+    if (error.response?.status === 402 && typeof window !== 'undefined') {
+      window.dispatchEvent(new Event(BILLING_CHANGED_EVENT))
     }
 
     // Only a 401 refreshes — never a 403 — and only once per request.
