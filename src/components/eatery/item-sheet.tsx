@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { Minus, Plus, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { choiceProblems, defaultChoices, formatMoney, groupRule, linePrice, round2 } from '@/lib/eatery/menu'
+import { choiceProblems, defaultChoices, formatMoney, groupRule, linePrice, priceGroup, round2 } from '@/lib/eatery/menu'
 import type { MenuItem, OrderLineInput, StorefrontBundle } from '@/lib/eatery/types'
 import { ItemArt, TagList, ThemeScope } from './theme-scope'
 
@@ -50,6 +50,7 @@ export const ItemSheet = ({
   const problems = choiceProblems(item, choices, picks)
   const price = linePrice(item, choices, picks, bundle.promotions, now)
   const total = round2(price.unitPrice * qty)
+  const pricedBy = priceGroup(item)
 
   const toggle = (groupId: string, choiceId: string, single: boolean, max: number) =>
     setChoices((c) => {
@@ -178,7 +179,13 @@ export const ItemSheet = ({
                               onChange={() => toggle(g.id, c.id, single, g.max)}
                             />
                             <span className="flex-1 font-semibold">{c.name}</span>
-                            <span className="text-sm e-muted">{c.soldOut ? 'Sold out' : delta(c.priceDelta, currency)}</span>
+                            <span className="text-sm e-muted">
+                              {c.soldOut
+                                ? 'Sold out'
+                                : g === pricedBy
+                                  ? formatMoney(c.priceDelta, currency)
+                                  : delta(c.priceDelta, currency)}
+                            </span>
                           </label>
                         )
                       })}

@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/kit/ui'
 import { Drawer, Field, FormGrid, FormSection, Input, Segmented, Select, Textarea, Toggle, toNum } from '@/components/kit/form'
 import { useEateryActions } from '@/lib/eatery/hooks'
-import { DAY_SHORT, formatMoney, groupRule } from '@/lib/eatery/menu'
+import { DAY_SHORT, formatMoney, groupRule, priceGroup, round2 } from '@/lib/eatery/menu'
 import { ALL_OPTION_TEMPLATES, optionGroupFromTemplate, presetFor, uid } from '@/lib/eatery/presets'
 import type {
   ComboSlot,
@@ -222,14 +222,21 @@ const OptionGroupEditor = ({
   onRemove,
   onMove,
   currency,
+  pricing,
+  onPricing,
 }: {
   group: OptionGroup
   onChange: (g: OptionGroup) => void
   onRemove: () => void
   onMove: (d: -1 | 1) => void
   currency: string
+  // Only on the item's first pick-one group: does it hold the full prices?
+  pricing?: 'own' | 'add'
+  onPricing?: (p: 'own' | 'add') => void
 }) => {
   const single = group.kind === 'variant'
+  const own = pricing === 'own'
+  const symbol = currency === 'GHS' ? '₵' : currency
   return (
     <div className="rounded-xl border border-stone-200 p-3">
       <div className="flex items-start gap-2">
@@ -306,6 +313,19 @@ const OptionGroupEditor = ({
           </>
         )}
       </div>
+      {pricing && onPricing && (
+        <div className="mt-2">
+          <Segmented
+            ariaLabel={`${group.name || 'Group'} pricing`}
+            value={pricing}
+            onChange={onPricing}
+            options={[
+              { value: 'own', label: 'Each has its own price' },
+              { value: 'add', label: 'Adds to the item price' },
+            ]}
+          />
+        </div>
+      )}
       <p className="mt-1.5 text-[11px] text-stone-500">
         Customers see: “{groupRule(group)}
         {group.min > 0 ? ' · required' : ''}”
@@ -321,10 +341,11 @@ const OptionGroupEditor = ({
               }
             />
             <Input
-              aria-label={`${c.name} price change`}
+              aria-label={own ? `${c.name} price` : `${c.name} price change`}
               type="number"
               step="any"
-              prefix="±"
+              min={own ? 0 : undefined}
+              prefix={own ? symbol : '±'}
               value={c.priceDelta}
               onChange={(e) =>
                 onChange({ ...group, choices: group.choices.map((x) => (x.id === c.id ? { ...x, priceDelta: toNum(e.target.value) } : x)) })
@@ -361,10 +382,16 @@ const OptionGroupEditor = ({
       >
         Add choice
       </Button>
-      {group.choices.some((c) => c.priceDelta) && (
+      {own ? (
         <p className="text-[11px] text-stone-400">
-          Prices are added to the item price ({currency === 'GHS' ? '₵' : currency}); use a negative number for a smaller size.
+          Customers pay the price of the choice they pick. The first one in stock is picked for them.
         </p>
+      ) : (
+        group.choices.some((c) => c.priceDelta) && (
+          <p className="text-[11px] text-stone-400">
+            Prices are added to the item price ({symbol}); use a negative number for a smaller size.
+          </p>
+        )
       )}
     </div>
   )
@@ -416,11 +443,13 @@ export const ItemForm = ({
   const [template, setTemplate] = useState('')
   const [tried, setTried] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [ownPrice, setOwnPrice] = useState(false)
 
   useEffect(() => {
     if (!open) return
     const d = item ? (JSON.parse(JSON.stringify(item)) as MenuItem) : blank()
     setDraft(d)
+    setOwnPrice(!!priceGroup(d)?.choices.some((c) => c.priceDelta > 0))
     setTimed(!!d.schedule?.length)
     setIsCombo(!!d.combo)
     setTemplate('')
@@ -487,13 +516,32 @@ export const ItemForm = ({
 
   const setSlots = (s: ComboSlot[]) => set({ combo: { slots: s } })
 
+  // "Each has its own price" keeps the item at 0 and the full prices on the
+  // choices, so the cart maths is unchanged. Switching moves the cheapest
+  // price between the item and the choices; what customers pay stays the same.
+  const firstPick = isCombo ? undefined : draft.optionGroups.find((g) => g.min >= 1 && g.max === 1)
+  const pricedBy = ownPrice && draft.price === 0 ? firstPick : undefined
+  const setPricing = (mode: 'own' | 'add') => {
+    if (!firstPick) return
+    const live = firstPick.choices.filter((c) => !c.soldOut)
+    const shift = mode === 'own' ? draft.price : -Math.min(...(live.length ? live : firstPick.choices).map((c) => c.priceDelta))
+    set({
+      price: mode === 'own' ? 0 : -shift,
+      optionGroups: draft.optionGroups.map((g) =>
+        g.id === firstPick.id ? { ...g, choices: g.choices.map((c) => ({ ...c, priceDelta: round2(c.priceDelta + shift) })) } : g
+      ),
+    })
+    setOwnPrice(mode === 'own')
+  }
+  const shownFrom = fromPrice({ ...draft, id: 0, combo: isCombo ? draft.combo : undefined } as MenuItem)
+
   return (
     <Drawer
       open={open}
       onOpenChange={onOpenChange}
       wide
       title={item ? `Edit ${item.name}` : 'New menu item'}
-      description={`Customers pay from ${formatMoney(fromPrice({ ...draft, id: 0 } as MenuItem), restaurant.currency)}`}
+      description={`Customers pay from ${formatMoney(shownFrom, restaurant.currency)}`}
       error={actions.error ?? (tried && problems.length ? { message: problems[0] } : null)}
       footer={
         <>
@@ -529,22 +577,36 @@ export const ItemForm = ({
                 placeholder={restaurant.menuKind === 'drinks' ? 'e.g. Passion Fruit Mojito' : 'e.g. Pepperoni Feast'}
               />
             </Field>
-            <Field
-              label={isCombo ? 'Combo price' : 'Price'}
-              htmlFor="it-price"
-              hint={draft.optionGroups.some((g) => g.kind === 'variant') ? 'For the first size/choice; options add to it' : undefined}
-            >
-              <Input
-                id="it-price"
-                type="number"
-                min={0}
-                step="any"
-                inputMode="decimal"
-                prefix={restaurant.currency === 'GHS' ? '₵' : undefined}
-                value={draft.price}
-                onChange={(e) => set({ price: toNum(e.target.value) })}
-              />
-            </Field>
+            {pricedBy ? (
+              <Field label="Price" hint="Set on each choice below">
+                <p className="flex h-10 items-center text-sm font-semibold text-stone-700">
+                  {`From ${formatMoney(shownFrom, restaurant.currency)} · by ${pricedBy.name.trim().toLowerCase() || 'choice'}`}
+                </p>
+              </Field>
+            ) : (
+              <Field
+                label={isCombo ? 'Combo price' : 'Price'}
+                htmlFor="it-price"
+                hint={
+                  !isCombo && shownFrom === 0
+                    ? 'Customers will see this item as free'
+                    : firstPick
+                      ? 'For the first size/choice; options add to it'
+                      : undefined
+                }
+              >
+                <Input
+                  id="it-price"
+                  type="number"
+                  min={0}
+                  step="any"
+                  inputMode="decimal"
+                  prefix={restaurant.currency === 'GHS' ? '₵' : undefined}
+                  value={draft.price}
+                  onChange={(e) => set({ price: toNum(e.target.value) })}
+                />
+              </Field>
+            )}
             <Field label="Section" htmlFor="it-cat">
               <Select
                 id="it-cat"
@@ -697,6 +759,8 @@ export const ItemForm = ({
               key={g.id}
               group={g}
               currency={restaurant.currency}
+              pricing={g === firstPick ? (pricedBy ? 'own' : 'add') : undefined}
+              onPricing={setPricing}
               onChange={(ng) => set({ optionGroups: draft.optionGroups.map((x) => (x.id === g.id ? ng : x)) })}
               onRemove={() => set({ optionGroups: draft.optionGroups.filter((x) => x.id !== g.id) })}
               onMove={(d) => {
@@ -734,14 +798,24 @@ export const ItemForm = ({
             <Button
               variant="ghost"
               icon={Plus}
-              onClick={() =>
+              onClick={() => {
+                // The first custom group is usually the type or size; later ones are extras.
+                const pick = !isCombo && !firstPick
                 set({
                   optionGroups: [
                     ...draft.optionGroups,
-                    { id: uid('g'), name: '', kind: 'addon', min: 0, max: 1, choices: [{ id: uid('c'), name: '', priceDelta: 0 }] },
+                    {
+                      id: uid('g'),
+                      name: '',
+                      kind: pick ? 'variant' : 'addon',
+                      min: pick ? 1 : 0,
+                      max: 1,
+                      choices: [{ id: uid('c'), name: '', priceDelta: 0 }],
+                    },
                   ],
                 })
-              }
+                if (pick && draft.price === 0) setOwnPrice(true)
+              }}
             >
               Custom group
             </Button>
