@@ -9,7 +9,11 @@ import type { Restaurant } from '@/lib/eatery/types'
 import { BrandMark, Cover } from './theme-scope'
 
 const OpenPill = ({ state, className }: { state: OpenState; className?: string }) => (
-  <span className={cn('inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold e-card', className)}>
+  // Card colours, not the cover's ink: white text on a poster cover would vanish on the card.
+  <span
+    className={cn('inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold e-card', className)}
+    style={{ color: 'var(--e-text)' }}
+  >
     <span className={cn('h-2 w-2 rounded-full', state.open ? 'bg-emerald-500' : 'bg-stone-400')} aria-hidden />
     {state.open ? state.label : `Closed · ${state.label.toLowerCase()}`}
   </span>

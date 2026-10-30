@@ -4,10 +4,11 @@ import React, { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, Check, Moon, ShoppingBag } from 'lucide-react'
 import { useCart, useCartLines } from '@/lib/eatery/cart'
+import { festivalOf, sealYear } from '@/lib/eatery/festivals'
 import { formatMoney, openState, priceOrder } from '@/lib/eatery/menu'
 import type { FulfilmentType, MenuItem, StorefrontBundle } from '@/lib/eatery/types'
 import { CartSheet } from './cart-sheet'
-import { FestivalRibbon } from './festival-ribbon'
+import { FestivalBar, FestivalSeal } from './festival-marks'
 import { Hero, InfoStrip } from './hero'
 import { ItemSheet } from './item-sheet'
 import { MenuView, PromoBanner } from './menu-view'
@@ -44,6 +45,7 @@ export const Storefront = ({
   preview?: boolean
 }) => {
   const { restaurant } = bundle
+  const festival = festivalOf(restaurant.theme)
   const [open, setOpen] = useState<MenuItem | null>(null)
   const [cartOpen, setCartOpen] = useState(false)
   const [added, setAdded] = useState<string | null>(null)
@@ -81,6 +83,7 @@ export const Storefront = ({
 
   return (
     <ThemeScope theme={restaurant.theme} className="min-h-full">
+      <FestivalBar theme={restaurant.theme} />
       <header
         className="sticky top-0 z-30 border-b backdrop-blur-md"
         style={{ borderColor: 'var(--e-border)', background: 'color-mix(in srgb, var(--e-bg) 85%, transparent)' }}
@@ -111,8 +114,16 @@ export const Storefront = ({
         </div>
       </header>
 
-      <FestivalRibbon theme={restaurant.theme} />
-      <Hero restaurant={restaurant} now={now} table={table} />
+      <div className="relative">
+        <Hero restaurant={restaurant} now={now} table={table} />
+        {festival && (
+          <FestivalSeal
+            festival={festival}
+            year={sealYear(festival, now)}
+            className="pointer-events-none absolute right-3 top-3 z-10 h-[72px] w-[72px] -rotate-[8deg] sm:right-8 sm:top-6 sm:h-24 sm:w-24"
+          />
+        )}
+      </div>
       <InfoStrip restaurant={restaurant} now={now} />
       <OrderMode restaurant={restaurant} table={table} value={mode} onChange={(f) => setPref(cartKey, { fulfilment: f })} />
 

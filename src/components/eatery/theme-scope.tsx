@@ -6,6 +6,7 @@ import { Flame, GlassWater, Leaf, Sparkles, Star, TrendingUp, Users, Wine, Wheat
 import { cn } from '@/lib/utils'
 import { patternStyle, resolveTheme, type ResolvedTheme, type ThemeConfig } from '@/lib/eatery/theme'
 import { ensureContrast, mix, withAlpha } from '@/lib/eatery/color'
+import { festivalInk, festivalOf } from '@/lib/eatery/festivals'
 import type { ItemTag, Restaurant } from '@/lib/eatery/types'
 import './storefront.css'
 
@@ -25,11 +26,18 @@ export const ThemeScope = ({
   as?: 'div' | 'article' | 'main'
 }) => {
   const resolved = useMemo(() => resolveTheme(theme), [theme])
+  const festival = festivalOf(theme)
+  // During a festival the logo wears a ring in its colour (BrandMark).
+  const style = useMemo(
+    () =>
+      festival ? { ...resolved.style, ['--e-festival' as string]: festivalInk(festival, resolved.palette.surface, 3) } : resolved.style,
+    [resolved, festival]
+  )
   return (
     <ThemeContext.Provider value={resolved}>
       <Tag
         className={cn('e-scope', className)}
-        style={resolved.style}
+        style={style}
         data-shape={theme.shape}
         data-case={theme.uppercaseHeadings ? 'upper' : 'normal'}
         data-surface={theme.surface ?? 'outlined'}
@@ -70,7 +78,7 @@ export const BrandMark = ({
         background: 'var(--e-primary)',
         color: 'var(--e-on-primary)',
         fontSize: size * 0.4,
-        boxShadow: '0 0 0 3px var(--e-surface)',
+        boxShadow: '0 0 0 3px var(--e-surface), 0 0 0 5px var(--e-festival, transparent)',
       }}
       aria-hidden={!logo}
     >
