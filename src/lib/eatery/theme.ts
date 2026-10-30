@@ -59,25 +59,7 @@ export const BODY_FONTS = (Object.keys(FONTS) as FontKey[]).filter((k) => FONTS[
 export type HeroStyle = 'cinematic' | 'poster' | 'cozy' | 'minimal'
 export type MenuLayout = 'elegant-list' | 'bold-grid' | 'cozy-cards' | 'compact-list'
 export type Shape = 'sharp' | 'soft' | 'rounded' | 'pill'
-export type Pattern =
-  | 'none'
-  | 'deco'
-  | 'halftone'
-  | 'steam'
-  | 'kente'
-  | 'ember'
-  | 'sprinkles'
-  | 'citrus'
-  | 'dots'
-  | 'grid'
-  | 'waves'
-  // Festival motifs (festivals.ts); owners can pick them too.
-  | 'hearts'
-  | 'ribbons'
-  | 'bats'
-  | 'snow'
-  | 'confetti'
-  | 'stars'
+export type Pattern = 'none' | 'deco' | 'halftone' | 'steam' | 'kente' | 'ember' | 'sprinkles' | 'citrus' | 'dots' | 'grid' | 'waves'
 
 // How cards sit on the page.
 //   outlined  hairline border (the original look)
@@ -130,12 +112,6 @@ export const PATTERNS: { value: Pattern; label: string }[] = [
   { value: 'dots', label: 'Dots' },
   { value: 'grid', label: 'Grid' },
   { value: 'waves', label: 'Waves' },
-  { value: 'hearts', label: 'Hearts' },
-  { value: 'ribbons', label: 'Ribbons' },
-  { value: 'bats', label: 'Bats' },
-  { value: 'snow', label: 'Snow' },
-  { value: 'confetti', label: 'Confetti' },
-  { value: 'stars', label: 'Moon & stars' },
 ]
 
 // ── The stored format ──
@@ -178,21 +154,26 @@ export interface ThemeConfig {
   }
   // Wording that suits the place: "Add" vs "Add to tab", "Your order" vs "Your round"
   copy: { add: string; cart: string }
-  // Festival looks (festivals.ts). Optional: older themes get the defaults.
+  // Festival editions (festivals.ts). Optional: older themes get the defaults.
   seasonal?: SeasonalSettings
-  // Runtime only, never saved: the festival this theme is currently wearing.
+  // Runtime only, never saved: the festival this theme is currently marking.
   festival?: string
 }
 
 export interface SeasonalSettings {
-  // Wear each festival's look automatically while it's on.
+  // Mark each festival automatically while it's on.
   auto: boolean
-  // Show the festival ribbon above the menu.
+  // 'accent' keeps the owner's colours and adds the festival's touches;
+  // 'full' also swaps the palette for the festival's.
+  intensity: 'accent' | 'full'
+  // Show the festival bar above the page.
   banner: boolean
   // Festivals the owner never wants.
   off: string[]
   // Single occurrences removed (`${festival}:${year}`); the festival returns next year.
   skipped: string[]
+  // The owner's own line for a festival's bar, by festival key.
+  messages: Record<string, string>
 }
 
 // ── Resolution ──
@@ -377,48 +358,6 @@ export const patternStyle = (pattern: Pattern, color: string, opacity = 0.18): R
       return {
         backgroundImage: `linear-gradient(${c} 1px, transparent 1px), linear-gradient(90deg, ${c} 1px, transparent 1px)`,
         backgroundSize: '28px 28px',
-      }
-    case 'hearts':
-      return {
-        backgroundImage: svg(
-          `<path fill='${c}' d='M18 30s-9-5.6-9-11.4A4.8 4.8 0 0 1 18 16a4.8 4.8 0 0 1 9 2.6C27 24.4 18 30 18 30z'/><path fill='${c}' d='M44 50s-5-3.1-5-6.3a2.7 2.7 0 0 1 5-1.5 2.7 2.7 0 0 1 5 1.5c0 3.2-5 6.3-5 6.3z'/>`,
-          60
-        ),
-      }
-    case 'ribbons':
-      return {
-        backgroundImage: svg(
-          `<path fill='none' stroke='${c}' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' d='M15 40l8-14c2-3.5 3-6.5 3-9a5 5 0 0 0-10 0c0 2.5 1 5.5 3 9l8 14'/>`,
-          56
-        ),
-      }
-    case 'bats':
-      return {
-        backgroundImage: svg(
-          `<path fill='${c}' d='M8 22c3-1 6 0 7 2 1-2 3-3 5-2 1-2 2-3 3-3s2 1 3 3c2-1 4 0 5 2 1-2 4-3 7-2-3 1-4 4-4 6-2-2-5-2-6 0-1-1-3-2-5-2s-4 1-5 2c-1-2-4-2-6 0 0-2-1-5-4-6z'/><circle cx='46' cy='48' r='1.6' fill='${c}'/><circle cx='12' cy='50' r='1' fill='${c}'/>`,
-          60
-        ),
-      }
-    case 'snow':
-      return {
-        backgroundImage: svg(
-          `<g stroke='${c}' stroke-width='1.4' stroke-linecap='round'><path d='M16 6v20M6 16h20M9 9l14 14M23 9 9 23'/><path d='M42 36v10M37 41h10M38.5 37.5l7 7M45.5 37.5l-7 7'/></g><circle cx='44' cy='12' r='1.6' fill='${c}'/><circle cx='12' cy='46' r='1.6' fill='${c}'/>`,
-          56
-        ),
-      }
-    case 'confetti':
-      return {
-        backgroundImage: svg(
-          `<g fill='${c}'><rect x='8' y='10' width='6' height='6' transform='rotate(20 11 13)'/><path d='M36 8l5 8h-10z'/><circle cx='22' cy='34' r='2.5'/><rect x='40' y='36' width='9' height='3' rx='1.5' transform='rotate(-35 44 37)'/><path d='M10 48l4-5 2 6z'/></g>`,
-          56
-        ),
-      }
-    case 'stars':
-      return {
-        backgroundImage: svg(
-          `<path fill='${c}' d='M22 8a11 11 0 1 0 9 17 9 9 0 1 1-9-17z'/><path fill='${c}' d='M46 38l1.6 3.4 3.6.5-2.6 2.5.6 3.6-3.2-1.7-3.2 1.7.6-3.6-2.6-2.5 3.6-.5z'/><circle cx='12' cy='48' r='1.4' fill='${c}'/>`,
-          64
-        ),
       }
     case 'waves':
       return {

@@ -146,7 +146,7 @@ The theme is stored as JSON on `restaurant.theme` (`ThemeConfig` in `src/lib/eat
 | `shape`                | `sharp`, `soft`, `rounded`, `pill`                                                                                                                                                                   |
 | `hero`                 | `cinematic`, `poster`, `cozy`, `minimal`                                                                                                                                                             |
 | `menuLayout`           | `elegant-list`, `bold-grid`, `cozy-cards`, `compact-list`                                                                                                                                            |
-| `pattern`              | `none`, `deco`, `halftone`, `steam`, `kente`, `ember`, `sprinkles`, `citrus`, `dots`, `grid`, `waves`, `hearts`, `ribbons`, `bats`, `snow`, `confetti`, `stars`                                      |
+| `pattern`              | `none`, `deco`, `halftone`, `steam`, `kente`, `ember`, `sprinkles`, `citrus`, `dots`, `grid`, `waves`                                                                                                |
 | `surface` (optional)   | `outlined` (default), `elevated` (soft shadow), `glass` (frosted over the backdrop; solid where blur isn't supported or reduced transparency is requested), `brutal` (thick ink border, hard shadow) |
 | `backdrop` (optional)  | `solid` (default), `gradient`, `mesh`; colour washes stay at 16% or less so the contrast checks still hold                                                                                           |
 | `imagery.coverOverlay` | 0–0.85; the storefront never uses less than 0.35 over a photo, so the name stays readable                                                                                                            |
@@ -172,15 +172,19 @@ Next to the eight presets by kind of place, `src/lib/eatery/styles.ts` defines t
 
 `applyStyle()` changes every visual setting and keeps the restaurant's logo, cover photo, wording and kind of place. The editor shows each style as a live miniature of the restaurant's own storefront, with its name and dishes. All ten pass WCAG AA as shipped.
 
-### Festival looks
+### Festival editions
 
-`src/lib/eatery/festivals.ts` lists 13 festivals: New Year, Valentine's & Chocolate Day, Independence Day, Ramadan, Eid al-Fitr, Easter, Mother's Day, Eid al-Adha, Father's Day, Pink October, Halloween, Black Friday and Christmas. Each has its dates, a light and a dark palette, and a motif. While one is on, the public pages show the restaurant in its colours with a one-line ribbon above the menu, then switch back the day after. Fonts, layout, logo, photos and wording stay the owner's.
+`src/lib/eatery/festivals.ts` lists 13 festivals: New Year, Valentine's Day, Independence Day, Ramadan, Eid al-Fitr, Easter, Mother's Day, Eid al-Adha, Father's Day, Pink October, Halloween, Black Friday and Christmas. While one is on, the public pages mark it, then go back to normal the day after. **The restaurant's brand always leads.**
 
-- **Nothing is saved into the owner's colours.** `useStorefront` and `useDirectory` (`hooks.ts`) dress the restaurant as they read it, so the owner's theme is never overwritten. `theme.festival` exists only at runtime and is never saved.
-- **Owner settings** are saved in the theme as `seasonal` (optional; defaults shown): `{ "auto": true, "banner": true, "off": [], "skipped": [] }`. `off` lists festivals the owner turned off for good. `skipped` lists single occurrences (`"halloween:2026"`) removed with **Remove this year**; those come back the next year.
-- **Overlaps:** the shorter festival wins, so Halloween replaces Pink October in the last week of October. If the owner removes Halloween, Pink October shows again.
+- **A touch (default):** the owner's colours stay. The festival adds a slim bar at the very top in its own colours (a dark shade with a hairline of festival colours, such as the Ghana flag for Independence Day), a round seal on the header with the festival's name and year set around the rim, a ring in the festival colour around the logo, and that colour as the accent (deal banners, badges).
+- **Full festival colours (opt-in):** all of the above, plus the festival's light or dark palette, whichever matches the owner's page background.
+- Fonts, layout, photos, pattern and wording never change.
+- **Nothing is saved into the owner's colours.** `useStorefront` and `useDirectory` (`hooks.ts`) apply the festival as they read the restaurant. `theme.festival` exists only at runtime and is never saved.
+- **Owner settings** are saved in the theme as `seasonal` (optional; defaults shown): `{ "auto": true, "intensity": "accent", "banner": true, "off": [], "skipped": [], "messages": {} }`. `off` lists festivals turned off for good. `skipped` lists single occurrences (`"halloween:2026"`) that return the next year. `messages` holds the owner's own line for a festival's bar, up to 90 characters.
+- **Overlaps:** the shorter festival wins, so Halloween replaces Pink October in the last week of October. If the owner skips Halloween, Pink October shows again.
 - **Moving dates** are calculated: Easter (Good Friday to Easter Monday), Mother's and Father's Day, and Black Friday (Monday to Cyber Monday). Ramadan and the two Eids come from a table of expected dates for 2025–2030; extend it each year.
-- The owner manages all of this in **Brand & theme → Start from a style → Festivals**, and can preview any festival in the phone frame. Every palette passes WCAG AA (`tests/eatery-festivals.test.tsx`).
+- **Editor:** Brand & theme → Start from a style → Festivals. It has the settings, a spotlight on one festival (seal, bar preview, message, preview on the phone, skip or remove this year) and the year ahead as an agenda with an on/off switch per festival.
+- Bar text, seal ink and every full palette pass WCAG AA (`tests/eatery-festivals.test.tsx`).
 
 ## 4. Counter, ingredients and profit
 

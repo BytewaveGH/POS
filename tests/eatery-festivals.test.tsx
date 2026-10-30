@@ -1,20 +1,24 @@
 import React from 'react'
 import { fireEvent, render, screen } from '@testing-library/react'
+import { contrast } from '@/lib/eatery/color'
 import { resolveTheme, type SeasonalSettings, type ThemeConfig } from '@/lib/eatery/theme'
 import { presetFor } from '@/lib/eatery/presets'
 import { DESIGN_STYLES, applyStyle } from '@/lib/eatery/styles'
 import {
   FESTIVALS,
+  barColors,
   blackFriday,
   dressForFestival,
   easterSunday,
+  festivalInk,
   festivalsOn,
   liveFestival,
+  sealYear,
   upcomingFestivals,
   wearFestival,
 } from '@/lib/eatery/festivals'
 import { ThemeScope } from '@/components/eatery/theme-scope'
-import { FestivalRibbon } from '@/components/eatery/festival-ribbon'
+import { FestivalBar } from '@/components/eatery/festival-marks'
 import { FestivalPanel } from '@/app/[locale]/(eatery)/eatery/_components/festival-panel'
 
 const light = presetFor('general').theme
@@ -22,29 +26,46 @@ const dark = applyStyle(light, DESIGN_STYLES.find((s) => s.key === 'noir')!)
 const day = (y: number, m: number, d: number) => new Date(y, m - 1, d, 12)
 const withSeasonal = (t: ThemeConfig, s: Partial<SeasonalSettings>): ThemeConfig => ({
   ...t,
-  seasonal: { auto: true, banner: true, off: [], skipped: [], ...s },
+  seasonal: { auto: true, intensity: 'accent', banner: true, off: [], skipped: [], messages: {}, ...s },
 })
 const onNow = (now: Date, t: ThemeConfig = light) => liveFestival(t, now)?.festival.key ?? null
+const pink = FESTIVALS.find((f) => f.key === 'pink-october')!
 
-describe('festival looks stay readable', () => {
-  it.each(FESTIVALS.flatMap((f) => [[f.key, 'light'] as const, [f.key, 'dark'] as const]))('%s (%s) passes WCAG AA', (key, mode) => {
-    const r = resolveTheme(wearFestival(mode === 'dark' ? dark : light, FESTIVALS.find((f) => f.key === key)!))
-    expect(r.checks.filter((c) => !c.pass).map((c) => `${c.label} ${c.ratio.toFixed(2)}`)).toEqual([])
-  })
-
-  it('a dark theme gets the dark palette; fonts, layout, logo and wording stay', () => {
+describe('festival editions respect the brand', () => {
+  it('by default only the accent changes; fonts, layout, colours, logo and wording stay', () => {
     const mine = { ...dark, imagery: { logoUrl: 'data:image/png;base64,AA', coverOverlay: 0.5 }, copy: { add: 'Pour it', cart: 'My tab' } }
     const worn = dressForFestival(mine, day(2026, 10, 10))
     expect(worn).toMatchObject({
       festival: 'pink-october',
-      pattern: 'ribbons',
+      pattern: mine.pattern,
       fonts: mine.fonts,
-      hero: mine.hero,
       imagery: mine.imagery,
       copy: mine.copy,
     })
-    expect(worn.colors.background).toBe(FESTIVALS.find((f) => f.key === 'pink-october')!.colors.dark.background)
+    expect(worn.colors).toEqual({ ...mine.colors, accent: pink.color })
     expect(mine.festival).toBeUndefined()
+  })
+
+  it('full festival colours follow the theme: a dark theme stays dark', () => {
+    expect(wearFestival(withSeasonal(dark, { intensity: 'full' }), pink).colors).toEqual(pink.palette.dark)
+    expect(wearFestival(withSeasonal(light, { intensity: 'full' }), pink).colors).toEqual(pink.palette.light)
+  })
+
+  it.each(FESTIVALS.flatMap((f) => [[f.key, 'light'] as const, [f.key, 'dark'] as const]))(
+    '%s full palette (%s) passes WCAG AA',
+    (key, mode) => {
+      const f = FESTIVALS.find((x) => x.key === key)!
+      const r = resolveTheme(wearFestival(withSeasonal(mode === 'dark' ? dark : light, { intensity: 'full' }), f))
+      expect(r.checks.filter((c) => !c.pass).map((c) => `${c.label} ${c.ratio.toFixed(2)}`)).toEqual([])
+    }
+  )
+
+  it.each(FESTIVALS.map((f) => [f.key]))('%s bar and seal read clearly', (key) => {
+    const f = FESTIVALS.find((x) => x.key === key)!
+    const bar = barColors(f)
+    expect(contrast(bar.text, bar.background)).toBeGreaterThanOrEqual(4.5)
+    for (const surface of ['#FFFFFF', '#141414', light.colors.surface, dark.colors.surface])
+      expect(contrast(festivalInk(f, surface, 4.5), surface)).toBeGreaterThanOrEqual(4.5)
   })
 })
 
@@ -54,6 +75,7 @@ describe('festival calendar', () => {
     expect(blackFriday(2027)).toEqual(new Date(2027, 10, 26))
     expect(easterSunday(2026)).toEqual(new Date(2026, 3, 5))
     expect(easterSunday(2027)).toEqual(new Date(2027, 2, 28))
+    expect(sealYear(FESTIVALS[0], new Date(2026, 11, 31))).toBe(2027)
   })
 
   it('picks the festival on today, the most specific first', () => {
@@ -75,7 +97,6 @@ describe('festival calendar', () => {
     expect(onNow(oct30, skipped)).toBe('pink-october')
     expect(onNow(day(2027, 10, 30), skipped)).toBe('halloween')
     expect(onNow(oct30, withSeasonal(light, { off: ['halloween', 'pink-october'] }))).toBeNull()
-    expect(onNow(oct30, withSeasonal(light, { auto: false }))).toBeNull()
     const plain = withSeasonal(light, { auto: false })
     expect(dressForFestival(plain, oct30)).toBe(plain)
   })
@@ -88,7 +109,7 @@ describe('festival calendar', () => {
   })
 })
 
-describe('festival ribbon and editor', () => {
+describe('festival bar and editor', () => {
   beforeAll(() => {
     globalThis.ResizeObserver ??= class {
       observe() {}
@@ -97,64 +118,70 @@ describe('festival ribbon and editor', () => {
     } as any
   })
 
-  it('customers see the ribbon unless the owner hides it', () => {
+  it('customers see the owner’s message, or ours, unless the bar is off', () => {
     const worn = dressForFestival(light, day(2026, 10, 10))
     const { unmount } = render(
       <ThemeScope theme={worn}>
-        <FestivalRibbon theme={worn} />
+        <FestivalBar theme={worn} />
       </ThemeScope>
     )
-    expect(screen.getByText('Pink October')).toBeTruthy()
-    expect(screen.getByText(/get checked/)).toBeTruthy()
+    expect(screen.getByText(pink.message)).toBeTruthy()
     unmount()
-    const quiet = dressForFestival(withSeasonal(light, { banner: false }), day(2026, 10, 10))
-    render(<FestivalRibbon theme={quiet} />)
-    expect(screen.queryByTestId('festival-ribbon')).toBeNull()
+    const custom = dressForFestival(
+      withSeasonal(light, { messages: { 'pink-october': 'Free pink lemonade all month' } }),
+      day(2026, 10, 10)
+    )
+    const again = render(<FestivalBar theme={custom} />)
+    expect(screen.getByText('Free pink lemonade all month')).toBeTruthy()
+    again.unmount()
+    render(<FestivalBar theme={dressForFestival(withSeasonal(light, { banner: false }), day(2026, 10, 10))} />)
+    expect(screen.queryByTestId('festival-bar')).toBeNull()
   })
 
-  it('the owner can remove the live festival for this year, or turn one off for good', () => {
+  const renderPanel = (theme: ThemeConfig) => {
     const changes: SeasonalSettings[] = []
     const previews: (string | null)[] = []
     render(
       <FestivalPanel
-        theme={light}
+        theme={theme}
         onChange={(s) => changes.push(s)}
         now={day(2026, 10, 30)}
-        name="Mama’s Kitchen"
-        dishes={[]}
-        currency="GHS"
         previewing={null}
         onPreview={(k) => previews.push(k)}
       />
     )
-    expect(screen.getByText('Customers see Halloween right now')).toBeTruthy()
+    return { changes, previews }
+  }
+
+  it('opens on the live festival, which the owner can remove this year, preview or reword', () => {
+    const { changes, previews } = renderPanel(light)
+    const spot = screen.getByRole('region', { name: 'Halloween details' })
+    expect(spot.textContent).toMatch(/Live now · until Sat,? 31 Oct/)
     fireEvent.click(screen.getByRole('button', { name: 'Remove this year' }))
-    expect(changes.at(-1)).toMatchObject({ auto: true, skipped: ['halloween:2026'], off: [] })
-
-    fireEvent.click(screen.getByRole('switch', { name: /Christmas/ }))
-    expect(changes.at(-1)!.off).toEqual(['christmas'])
-
-    fireEvent.click(screen.getByRole('button', { name: 'Preview Black Friday' }))
-    expect(previews).toEqual(['black-friday'])
+    expect(changes.at(-1)).toMatchObject({ skipped: ['halloween:2026'], off: [], intensity: 'accent' })
+    fireEvent.click(screen.getByRole('button', { name: /Preview on the phone/ }))
+    expect(previews).toEqual(['halloween'])
+    fireEvent.change(screen.getByLabelText('Message on the bar'), { target: { value: 'Spooky specials tonight' } })
+    expect(changes.at(-1)!.messages).toEqual({ halloween: 'Spooky specials tonight' })
   })
 
-  it('offers to bring back a festival the owner removed', () => {
-    const changes: SeasonalSettings[] = []
-    render(
-      <FestivalPanel
-        theme={withSeasonal(light, { skipped: ['halloween:2026'], off: ['pink-october'] })}
-        onChange={(s) => changes.push(s)}
-        now={day(2026, 10, 30)}
-        name="Mama’s Kitchen"
-        dishes={[]}
-        currency="GHS"
-        previewing={null}
-        onPreview={() => {}}
-      />
-    )
-    expect(screen.getByText('Halloween is on, but not on your storefront')).toBeTruthy()
-    expect(screen.getByText('Removed this year')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: /Bring it back/ }))
+  it('switches the look, and turns a festival off for good from the agenda', () => {
+    const { changes } = renderPanel(light)
+    fireEvent.click(screen.getByRole('radio', { name: /Full festival colours/ }))
+    expect(changes.at(-1)!.intensity).toBe('full')
+    fireEvent.click(screen.getByRole('switch', { name: 'Christmas' }))
+    expect(changes.at(-1)!.off).toEqual(['christmas'])
+    // Picking a future festival offers to skip it in advance.
+    fireEvent.click(screen.getByRole('button', { name: /Black Friday/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Skip this year' }))
+    expect(changes.at(-1)!.skipped).toEqual(['black-friday:2026'])
+  })
+
+  it('offers to bring back a festival the owner skipped', () => {
+    const { changes } = renderPanel(withSeasonal(light, { skipped: ['halloween:2026'], off: ['pink-october'] }))
+    fireEvent.click(screen.getByRole('button', { name: /^Halloween/ }))
+    expect(screen.getAllByText('Skipped this year').length).toBeGreaterThan(0)
+    fireEvent.click(screen.getByRole('button', { name: /Bring it back this year/ }))
     expect(changes.at(-1)).toMatchObject({ skipped: [], off: ['pink-october'] })
   })
 })

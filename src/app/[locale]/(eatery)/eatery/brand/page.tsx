@@ -195,9 +195,6 @@ const Editor = ({ o }: { o: OwnerData & { restaurant: Restaurant } }) => {
                 theme={theme}
                 onChange={(seasonal) => set({ seasonal })}
                 now={now}
-                name={r.name}
-                dishes={dishes}
-                currency={r.currency}
                 previewing={previewing}
                 onPreview={setPreviewing}
               />
