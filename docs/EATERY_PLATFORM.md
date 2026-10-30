@@ -146,7 +146,7 @@ The theme is stored as JSON on `restaurant.theme` (`ThemeConfig` in `src/lib/eat
 | `shape`                | `sharp`, `soft`, `rounded`, `pill`                                                                                                                                                                   |
 | `hero`                 | `cinematic`, `poster`, `cozy`, `minimal`                                                                                                                                                             |
 | `menuLayout`           | `elegant-list`, `bold-grid`, `cozy-cards`, `compact-list`                                                                                                                                            |
-| `pattern`              | `none`, `deco`, `halftone`, `steam`, `kente`, `ember`, `sprinkles`, `citrus`, `dots`, `grid`, `waves`                                                                                                |
+| `pattern`              | `none`, `deco`, `halftone`, `steam`, `kente`, `ember`, `sprinkles`, `citrus`, `dots`, `grid`, `waves`, `hearts`, `ribbons`, `bats`, `snow`, `confetti`, `stars`                                      |
 | `surface` (optional)   | `outlined` (default), `elevated` (soft shadow), `glass` (frosted over the backdrop; solid where blur isn't supported or reduced transparency is requested), `brutal` (thick ink border, hard shadow) |
 | `backdrop` (optional)  | `solid` (default), `gradient`, `mesh`; colour washes stay at 16% or less so the contrast checks still hold                                                                                           |
 | `imagery.coverOverlay` | 0–0.85; the storefront never uses less than 0.35 over a photo, so the name stays readable                                                                                                            |
@@ -171,6 +171,16 @@ Next to the eight presets by kind of place, `src/lib/eatery/styles.ts` defines t
 | Champagne    | Ivory and bronze, daylight luxury       | Playfair + Inter           | Elevated / solid, art deco     |
 
 `applyStyle()` changes every visual setting and keeps the restaurant's logo, cover photo, wording and kind of place. The editor shows each style as a live miniature of the restaurant's own storefront, with its name and dishes. All ten pass WCAG AA as shipped.
+
+### Festival looks
+
+`src/lib/eatery/festivals.ts` lists 13 festivals: New Year, Valentine's & Chocolate Day, Independence Day, Ramadan, Eid al-Fitr, Easter, Mother's Day, Eid al-Adha, Father's Day, Pink October, Halloween, Black Friday and Christmas. Each has its dates, a light and a dark palette, and a motif. While one is on, the public pages show the restaurant in its colours with a one-line ribbon above the menu, then switch back the day after. Fonts, layout, logo, photos and wording stay the owner's.
+
+- **Nothing is saved into the owner's colours.** `useStorefront` and `useDirectory` (`hooks.ts`) dress the restaurant as they read it, so the owner's theme is never overwritten. `theme.festival` exists only at runtime and is never saved.
+- **Owner settings** are saved in the theme as `seasonal` (optional; defaults shown): `{ "auto": true, "banner": true, "off": [], "skipped": [] }`. `off` lists festivals the owner turned off for good. `skipped` lists single occurrences (`"halloween:2026"`) removed with **Remove this year**; those come back the next year.
+- **Overlaps:** the shorter festival wins, so Halloween replaces Pink October in the last week of October. If the owner removes Halloween, Pink October shows again.
+- **Moving dates** are calculated: Easter (Good Friday to Easter Monday), Mother's and Father's Day, and Black Friday (Monday to Cyber Monday). Ramadan and the two Eids come from a table of expected dates for 2025–2030; extend it each year.
+- The owner manages all of this in **Brand & theme → Start from a style → Festivals**, and can preview any festival in the phone frame. Every palette passes WCAG AA (`tests/eatery-festivals.test.tsx`).
 
 ## 4. Counter, ingredients and profit
 
@@ -235,12 +245,12 @@ Rules: `src/lib/eatery/costing.ts` and `units.ts`. Contract: `BACKEND_REQUIREMEN
 
 ## 5. Code map
 
-| Path                                    | Contents                                                                                                                                                                             |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `src/lib/eatery/`                       | `types`, `theme`, `color` (WCAG maths), `presets`, `menu` (hours, availability, deals, pricing), `seed` (example restaurants), `data-source` (local + API), `hooks`, `cart`, `setup` |
-| `src/components/eatery/`                | `ThemeScope`, `Cover`, `BrandMark`, `Hero`, `MenuView`, `ItemSheet`, `Storefront`, `RestaurantCard`, fonts and CSS                                                                   |
-| `src/app/[locale]/(eatery-public)/eat/` | Customer pages, outside the dashboard shell and public in `middleware.ts`                                                                                                            |
-| `src/app/[locale]/(eatery)/eatery/`     | Owner pages                                                                                                                                                                          |
+| Path                                    | Contents                                                                                                                                                                                                    |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/lib/eatery/`                       | `types`, `theme`, `color` (WCAG maths), `presets`, `styles`, `festivals`, `menu` (hours, availability, deals, pricing), `seed` (example restaurants), `data-source` (local + API), `hooks`, `cart`, `setup` |
+| `src/components/eatery/`                | `ThemeScope`, `Cover`, `BrandMark`, `Hero`, `MenuView`, `ItemSheet`, `Storefront`, `RestaurantCard`, fonts and CSS                                                                                          |
+| `src/app/[locale]/(eatery-public)/eat/` | Customer pages, outside the dashboard shell and public in `middleware.ts`                                                                                                                                   |
+| `src/app/[locale]/(eatery)/eatery/`     | Owner pages                                                                                                                                                                                                 |
 
 ## 6. Local mode (until the backend ships)
 
