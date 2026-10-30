@@ -7,6 +7,7 @@ import { useCart, useCartLines } from '@/lib/eatery/cart'
 import { formatMoney, openState, priceOrder } from '@/lib/eatery/menu'
 import type { FulfilmentType, MenuItem, StorefrontBundle } from '@/lib/eatery/types'
 import { CartSheet } from './cart-sheet'
+import { FestivalRibbon } from './festival-ribbon'
 import { Hero, InfoStrip } from './hero'
 import { ItemSheet } from './item-sheet'
 import { MenuView, PromoBanner } from './menu-view'
@@ -110,6 +111,7 @@ export const Storefront = ({
         </div>
       </header>
 
+      <FestivalRibbon theme={restaurant.theme} />
       <Hero restaurant={restaurant} now={now} table={table} />
       <InfoStrip restaurant={restaurant} now={now} />
       <OrderMode restaurant={restaurant} table={table} value={mode} onChange={(f) => setPref(cartKey, { fulfilment: f })} />

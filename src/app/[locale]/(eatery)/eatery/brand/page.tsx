@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, CheckCircle2, RotateCcw, Save, Wand2 } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Eye, RotateCcw, Save, Wand2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button, Card, PageHeader, SectionTitle } from '@/components/kit/ui'
 import { Field, Input, Segmented, Toggle } from '@/components/kit/form'
@@ -31,6 +31,8 @@ import { EateryFrame, RestaurantSwitcher } from '../_components/frame'
 import { PresetCard } from '../_components/new-restaurant'
 import { StyleCard } from '../_components/style-card'
 import { DESIGN_STYLES, applyStyle, matchingStyle } from '@/lib/eatery/styles'
+import { FESTIVAL_BY_KEY, dressForFestival, liveFestival, type FestivalKey } from '@/lib/eatery/festivals'
+import { FestivalPanel } from '../_components/festival-panel'
 import type { OwnerData } from '@/lib/eatery/hooks'
 
 const COLOR_FIELDS: { key: keyof ThemeColors; label: string; hint: string }[] = [
@@ -108,19 +110,23 @@ const Editor = ({ o }: { o: OwnerData & { restaurant: Restaurant } }) => {
   useEffect(() => setTheme(r.theme), [r.id, r.theme])
   const dirty = JSON.stringify(theme) !== JSON.stringify(r.theme)
   const current = matchingStyle(theme)
-  const [styleTab, setStyleTab] = useState<'modern' | 'kind'>('modern')
+  const [styleTab, setStyleTab] = useState<'modern' | 'kind' | 'festivals'>('modern')
+  // The phone shows the owner's own look unless they preview a festival.
+  const [previewing, setPreviewing] = useState<FestivalKey | null>(null)
+  const live = liveFestival(theme, now)
+  const dishes = useMemo(() => o.items.filter((i) => i.status !== 'hidden').slice(0, 2), [o.items])
   const resolved = useMemo(() => resolveTheme(theme), [theme])
   const failing = resolved.checks.filter((c) => !c.pass)
   const set = (p: Partial<ThemeConfig>) => setTheme((t) => ({ ...t, ...p }))
   const setColor = (k: keyof ThemeColors, v: string) => setTheme((t) => ({ ...t, colors: { ...t.colors, [k]: v } }))
   const bundle = useMemo(
     () => ({
-      restaurant: { ...r, theme },
+      restaurant: { ...r, theme: previewing ? dressForFestival(theme, now, previewing) : theme },
       categories: o.categories,
       items: o.items.filter((i) => i.status !== 'hidden'),
       promotions: o.promotions.filter((p) => p.active),
     }),
-    [r, theme, o.categories, o.items, o.promotions]
+    [r, theme, previewing, now, o.categories, o.items, o.promotions]
   )
 
   const save = async () => {
@@ -157,7 +163,7 @@ const Editor = ({ o }: { o: OwnerData & { restaurant: Restaurant } }) => {
         <div className="flex flex-col gap-4 min-w-0">
           <Card className="p-5">
             <SectionTitle title="Start from a style" hint="Keeps your logo, cover photo and wording — fine-tune anything below" />
-            <div className="mb-4 max-w-sm">
+            <div className="mb-4 max-w-lg">
               <Segmented
                 ariaLabel="Kind of style"
                 value={styleTab}
@@ -165,6 +171,7 @@ const Editor = ({ o }: { o: OwnerData & { restaurant: Restaurant } }) => {
                 options={[
                   { value: 'modern', label: `Modern styles · ${DESIGN_STYLES.length}` },
                   { value: 'kind', label: 'By kind of place' },
+                  { value: 'festivals', label: live ? 'Festivals · live' : 'Festivals' },
                 ]}
               />
             </div>
@@ -176,13 +183,24 @@ const Editor = ({ o }: { o: OwnerData & { restaurant: Restaurant } }) => {
                     style={st}
                     base={theme}
                     name={r.name}
-                    dishes={o.items.filter((i) => i.status !== 'hidden').slice(0, 2)}
+                    dishes={dishes}
                     currency={r.currency}
                     selected={current === st.key}
                     onSelect={() => setTheme(applyStyle(theme, st))}
                   />
                 ))}
               </div>
+            ) : styleTab === 'festivals' ? (
+              <FestivalPanel
+                theme={theme}
+                onChange={(seasonal) => set({ seasonal })}
+                now={now}
+                name={r.name}
+                dishes={dishes}
+                currency={r.currency}
+                previewing={previewing}
+                onPreview={setPreviewing}
+              />
             ) : (
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 {PRESETS.map((p) => (
@@ -192,7 +210,12 @@ const Editor = ({ o }: { o: OwnerData & { restaurant: Restaurant } }) => {
                     name={r.name}
                     selected={!current && theme.preset === p.key}
                     onSelect={() =>
-                      setTheme({ ...JSON.parse(JSON.stringify(presetFor(p.key).theme)), imagery: theme.imagery, copy: theme.copy })
+                      setTheme({
+                        ...JSON.parse(JSON.stringify(presetFor(p.key).theme)),
+                        imagery: theme.imagery,
+                        copy: theme.copy,
+                        seasonal: theme.seasonal,
+                      })
                     }
                   />
                 ))}
@@ -448,6 +471,37 @@ const Editor = ({ o }: { o: OwnerData & { restaurant: Restaurant } }) => {
 
         <div className="xl:sticky xl:top-20 xl:self-start">
           <p className="mb-2 text-xs font-bold uppercase tracking-wider text-stone-400">Live preview</p>
+          {previewing ? (
+            <p
+              className="mb-3 flex items-center justify-between gap-2 rounded-xl bg-endeavour/[0.06] px-3 py-2 text-xs text-stone-700"
+              role="status"
+            >
+              <span>
+                Previewing <strong>{FESTIVAL_BY_KEY[previewing].name}</strong>
+              </span>
+              <button type="button" onClick={() => setPreviewing(null)} className="font-bold text-endeavour hover:underline">
+                Show my look
+              </button>
+            </p>
+          ) : (
+            live && (
+              <p
+                className="mb-3 flex items-center justify-between gap-2 rounded-xl bg-stone-100 px-3 py-2 text-xs text-stone-700"
+                role="status"
+              >
+                <span>
+                  Customers see <strong>{live.festival.name}</strong> today
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPreviewing(live.festival.key)}
+                  className="inline-flex items-center gap-1 font-bold text-endeavour hover:underline"
+                >
+                  <Eye className="h-3.5 w-3.5" aria-hidden /> See it
+                </button>
+              </p>
+            )
+          )}
           <div className="mx-auto w-full max-w-[400px] rounded-[42px] border-[10px] border-stone-900 bg-stone-900 shadow-2xl">
             <div className="h-[720px] overflow-y-auto overflow-x-hidden rounded-[32px] bg-white" data-testid="theme-preview">
               <Storefront bundle={bundle} now={now} cartKey={`__preview__${r.id}`} checkoutHref="#" preview />

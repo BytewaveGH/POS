@@ -9,7 +9,8 @@ import { publicApiClient } from '@/lib/public-axios-client'
 import { apiErrorMessage, apiStatus } from '@/lib/api-error'
 import { createApiSource, createLocalSource, DATA_SOURCE_KIND, type EaterySource, type OrderTicket } from './data-source'
 import { prepareImage, type ImageKind } from './images'
-import type { CounterOrderInput, ResourceMap, ResourceName, Restaurant } from './types'
+import { dressForFestival } from './festivals'
+import type { CounterOrderInput, DirectoryEntry, ResourceMap, ResourceName, Restaurant, StorefrontBundle } from './types'
 
 // Network errors and 5xx only, at most twice; a failed query waits for the user.
 const retry = (count: number, err: unknown) => count < 2 && (apiStatus(err) === undefined || (apiStatus(err) ?? 0) >= 500)
@@ -55,12 +56,21 @@ export const usePublicSource = (): EaterySource => {
   return useMemo(() => (DATA_SOURCE_KIND === 'local' ? createLocalSource(null) : createApiSource(request, publicRequest)), [request])
 }
 
+// Customers see each restaurant in today's festival look, if the owner allows
+// it (festivals.ts). Re-dressed once a day, not on every refetch.
+const useFestivalDress = () => {
+  const day = useNow(60_000).toDateString()
+  return useCallback(<R extends Pick<Restaurant, 'theme'>>(r: R): R => ({ ...r, theme: dressForFestival(r.theme, new Date(day)) }), [day])
+}
+
 export const useDirectory = () => {
   const source = usePublicSource()
+  const dress = useFestivalDress()
   useCrossTabSync()
   return useQuery({
     queryKey: ['eatery', source.kind, 'directory'],
     queryFn: () => source.directory(),
+    select: useCallback((list: DirectoryEntry[]) => list.map(dress), [dress]),
     staleTime: 60_000,
     ...QUERY_DEFAULTS,
   })
@@ -68,10 +78,12 @@ export const useDirectory = () => {
 
 export const useStorefront = (slug: string) => {
   const source = usePublicSource()
+  const dress = useFestivalDress()
   useCrossTabSync()
   return useQuery({
     queryKey: ['eatery', source.kind, 'store', slug],
     queryFn: () => source.storefront(slug),
+    select: useCallback((b: StorefrontBundle | null) => b && { ...b, restaurant: dress(b.restaurant) }, [dress]),
     staleTime: 30_000,
     ...QUERY_DEFAULTS,
   })
