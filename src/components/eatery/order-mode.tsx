@@ -42,6 +42,9 @@ export const OrderMode = ({
       hint: table ? 'We’ll bring it over' : 'Scan the QR on your table',
     },
   }
+  // Three side by side leave ~90px of text each on a phone: stack each card
+  // (icon, name, hint over two lines) until there's room for a row.
+  const stacked = modes.length > 2
   return (
     <div className="mx-auto max-w-5xl px-4 pt-4">
       <div
@@ -60,17 +63,24 @@ export const OrderMode = ({
               role="radio"
               aria-checked={on}
               onClick={() => onChange(m)}
-              className={cn('flex items-center gap-3 border-[1.5px] px-3 py-2.5 text-left transition-colors e-focus', on ? 'e-soft' : '')}
+              className={cn(
+                'flex border-[1.5px] px-3 py-2.5 text-left transition-colors e-focus',
+                stacked ? 'flex-col items-start gap-1.5 sm:flex-row sm:items-center sm:gap-3' : 'items-center gap-3',
+                on ? 'e-soft' : ''
+              )}
               style={{
-                borderRadius: 'var(--e-radius-control)',
+                // Card corners: a pill-shaped control would clip a stacked card.
+                borderRadius: stacked ? 'var(--e-radius)' : 'var(--e-radius-control)',
                 borderColor: on ? 'var(--e-primary-text)' : 'var(--e-border)',
                 background: on ? undefined : 'var(--e-surface)',
               }}
             >
               <I.icon className="h-5 w-5 flex-shrink-0" style={{ color: on ? 'var(--e-primary-text)' : 'var(--e-muted)' }} aria-hidden />
-              <span className="min-w-0">
+              <span className="min-w-0 w-full">
                 <span className="block text-sm font-extrabold leading-tight">{I.label}</span>
-                <span className="block truncate text-[11px] e-muted">{I.hint}</span>
+                <span className={cn('block text-[11px] leading-snug e-muted', stacked ? 'line-clamp-2 sm:truncate' : 'truncate')}>
+                  {I.hint}
+                </span>
               </span>
             </button>
           )

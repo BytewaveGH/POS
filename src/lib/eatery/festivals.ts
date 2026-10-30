@@ -1,12 +1,14 @@
 // Festival editions: while a festival is on, the storefront marks it — then
 // goes back to normal the day after.
 //
-// The restaurant's brand always leads. By default (`intensity: 'accent'`) a
-// festival only adds: a slim bar above the page in the festival's colour, a
-// seal on the header, a ring around the logo, and the festival colour as the
-// accent (deal banners, badges). Owners who want more can choose `'full'`,
-// which also swaps their palette for the festival's. Fonts, layout, photos,
-// pattern and wording are never changed.
+// By default (`intensity: 'full'`) the whole storefront takes the festival's
+// look: its palette (light or dark, matching the owner's), and its glyph and
+// gradients on every card, button, tab, badge, heading, cover and the page
+// itself (festival-style.ts, storefront.css). On top: a slim bar above the
+// page, a seal on the header and a ring around the logo. Owners who prefer a
+// lighter touch choose `'accent'`: their colours stay, and only the bar, seal,
+// ring and the festival colour as accent are added. Fonts, layout, photos and
+// wording are never changed.
 //
 // Nothing is saved into the owner's theme: `dressForFestival` runs as the
 // public pages read a restaurant (hooks.ts), so turning a festival off takes
@@ -316,7 +318,7 @@ export const FESTIVAL_BY_KEY = Object.fromEntries(FESTIVALS.map((f) => [f.key, f
 export const festivalOf = (theme: Pick<ThemeConfig, 'festival'>) =>
   theme.festival ? (FESTIVAL_BY_KEY[theme.festival as FestivalKey] ?? null) : null
 
-export const DEFAULT_SEASONAL: SeasonalSettings = { auto: true, intensity: 'accent', banner: true, off: [], skipped: [], messages: {} }
+export const DEFAULT_SEASONAL: SeasonalSettings = { auto: true, intensity: 'full', banner: true, off: [], skipped: [], messages: {} }
 export const seasonalOf = (theme: Pick<ThemeConfig, 'seasonal'>): SeasonalSettings => ({ ...DEFAULT_SEASONAL, ...theme.seasonal })
 
 // The owner's line for the bar, or the festival's own.

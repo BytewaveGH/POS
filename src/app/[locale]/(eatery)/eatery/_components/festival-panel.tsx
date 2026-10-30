@@ -132,18 +132,18 @@ export const FestivalPanel = ({
               <p className="mb-2 text-[13px] font-semibold text-stone-700">How much changes</p>
               <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="How much changes">
                 <IntensityOption
+                  selected={s.intensity === 'full'}
+                  onSelect={() => set({ intensity: 'full' })}
+                  title="Full festival look"
+                  body="Everything dresses up: colours, buttons, cards, tabs, badges, headings, cover and background — plus the bar, seal and logo ring."
+                  swatches={selected ? Object.values(selected.festival.palette.light).slice(0, 3) : []}
+                />
+                <IntensityOption
                   selected={s.intensity === 'accent'}
                   onSelect={() => set({ intensity: 'accent' })}
                   title="A touch"
-                  body="Keeps your colours. Adds the festival bar, a seal on your header and a ring around your logo."
+                  body="Keeps your colours. Adds only the festival bar, a seal on your header and a ring around your logo."
                   swatches={[theme.colors.primary, theme.colors.surface, selected?.festival.color ?? '#DB2777']}
-                />
-                <IntensityOption
-                  selected={s.intensity === 'full'}
-                  onSelect={() => set({ intensity: 'full' })}
-                  title="Full festival colours"
-                  body="All of that, and your colours switch to the festival palette while it’s on."
-                  swatches={selected ? Object.values(selected.festival.palette.light).slice(0, 3) : []}
                 />
               </div>
             </div>
