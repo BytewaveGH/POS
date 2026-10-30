@@ -142,6 +142,11 @@ export const defaultChoices = (item: MenuItem): Record<string, string[]> =>
       .map((g) => [g.id, [g.choices.find((c) => !c.soldOut)?.id].filter(Boolean) as string[]])
   )
 
+// "Each choice has its own price": an item priced at 0 whose first pick-one
+// group holds the full prices (Vanilla ₵15, Pistachio ₵20) rather than extras.
+export const priceGroup = (item: Pick<MenuItem, 'price' | 'optionGroups' | 'combo'>) =>
+  item.price === 0 && !item.combo ? item.optionGroups.find((g) => g.min >= 1 && g.max === 1) : undefined
+
 // Problems with a set of choices, keyed by group id (or slot id for combos).
 export const choiceProblems = (item: MenuItem, choices: Record<string, string[]>, comboPicks: Record<string, number> = {}) => {
   const problems: Record<string, string> = {}

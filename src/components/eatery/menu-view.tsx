@@ -16,11 +16,21 @@ import {
 import type { MenuCategory, MenuItem, Promotion, StorefrontBundle } from '@/lib/eatery/types'
 import { ItemArt, TagList } from './theme-scope'
 
-// Lowest possible price: base + cheapest choice of every required group.
+// The `min` cheapest choices of a required group (in stock ones, if any are).
+const cheapest = (g: MenuItem['optionGroups'][number]) => {
+  const inStock = g.choices.filter((c) => !c.soldOut)
+  return (inStock.length ? inStock : g.choices)
+    .map((c) => c.priceDelta)
+    .sort((a, b) => a - b)
+    .slice(0, g.min)
+    .reduce((s, d) => s + d, 0)
+}
+
+// Lowest possible price: base + cheapest choices of every required group.
 export const fromPrice = (item: MenuItem) =>
   round2(
     item.price +
-      item.optionGroups.filter((g) => g.min > 0).reduce((s, g) => s + Math.min(...g.choices.map((c) => c.priceDelta), 0) * g.min, 0) +
+      item.optionGroups.filter((g) => g.min > 0).reduce((s, g) => s + cheapest(g), 0) +
       (item.combo?.slots ?? []).reduce((s, sl) => s + Math.min(...sl.choices.map((c) => c.upcharge), 0), 0)
   )
 const hasRange = (item: MenuItem) => item.optionGroups.some((g) => g.min > 0 && new Set(g.choices.map((c) => c.priceDelta)).size > 1)

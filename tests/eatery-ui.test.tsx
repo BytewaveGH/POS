@@ -371,6 +371,42 @@ describe('eatery platform (local data)', () => {
     expect(bundle.items.find((i) => i.name === 'Mango Cheesecake')?.imageUrl).toMatch(/^data:image/)
   })
 
+  it('prices an item by its choices (ice cream flavours) and preselects the first', async () => {
+    const owner = createLocalSource('acme')
+    const mine = await owner.claimDemo!()
+    const cafe = mine.find((r) => r.slug === 'kofi-and-crumb')!
+    const categories = (await owner.list('categories')).filter((c) => c.restaurantId === cafe.id)
+    const items = (await owner.list('items')).filter((i) => i.restaurantId === cafe.id)
+    withQuery(<ItemForm open onOpenChange={() => {}} restaurant={cafe} categories={categories} items={items} item={null} />)
+
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Ice Cream' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Custom group' }))
+    // No price yet: the first custom group is a pick-one with its own prices.
+    expect(screen.getByRole('radio', { name: 'Each has its own price' }).getAttribute('aria-checked')).toBe('true')
+    fireEvent.change(screen.getByLabelText('Option group name'), { target: { value: 'Flavour' } })
+    fireEvent.change(screen.getByLabelText('Choice name'), { target: { value: 'Vanilla' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add choice' }))
+    fireEvent.change(screen.getAllByLabelText('Choice name')[1], { target: { value: 'Pistachio' } })
+    fireEvent.change(screen.getByLabelText('Vanilla price'), { target: { value: '15' } })
+    fireEvent.change(screen.getByLabelText('Pistachio price'), { target: { value: '22' } })
+    expect(screen.getByText('From ₵15 · by flavour')).toBeTruthy()
+
+    // Switching to "adds to the item price" moves the cheapest price onto the item.
+    fireEvent.click(screen.getByRole('radio', { name: 'Adds to the item price' }))
+    expect((screen.getByLabelText(/^Price/) as HTMLInputElement).value).toBe('15')
+    expect((screen.getByLabelText('Pistachio price change') as HTMLInputElement).value).toBe('7')
+    fireEvent.click(screen.getByRole('radio', { name: 'Each has its own price' }))
+    expect((screen.getByLabelText('Pistachio price') as HTMLInputElement).value).toBe('22')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add to menu' }))
+    await waitFor(async () => {
+      const saved = (await owner.list('items')).find((i) => i.name === 'Ice Cream')!
+      expect(saved.price).toBe(0)
+      expect(saved.optionGroups[0]).toMatchObject({ kind: 'variant', min: 1, max: 1 })
+      expect(saved.optionGroups[0].choices.map((c) => c.priceDelta)).toEqual([15, 22])
+    })
+  })
+
   it('uploads a logo and cover from the brand editor', async () => {
     const owner = createLocalSource('acme')
     const [velvet] = await owner.claimDemo!()

@@ -2,7 +2,18 @@ import { contrast, ensureContrast } from '@/lib/eatery/color'
 import { fixContrast, resolveTheme } from '@/lib/eatery/theme'
 import { PRESETS, presetFor } from '@/lib/eatery/presets'
 import { DESIGN_STYLES, applyStyle, matchingStyle } from '@/lib/eatery/styles'
-import { bestPromotion, choiceProblems, inWindow, itemAvailability, linePrice, openState, priceOrder } from '@/lib/eatery/menu'
+import {
+  bestPromotion,
+  choiceProblems,
+  defaultChoices,
+  inWindow,
+  itemAvailability,
+  linePrice,
+  openState,
+  priceGroup,
+  priceOrder,
+} from '@/lib/eatery/menu'
+import { fromPrice } from '@/components/eatery/menu-view'
 import { createLocalSource, DEMO_SCOPE } from '@/lib/eatery/data-source'
 import type { MenuItem, Promotion, StorefrontBundle } from '@/lib/eatery/types'
 
@@ -141,6 +152,34 @@ describe('time-based rules', () => {
       discountPerUnit: 37.5,
       unitPrice: 112.5,
     })
+  })
+
+  it('an item can be priced by its choices: from the cheapest, first one preselected', () => {
+    const iceCream: MenuItem = {
+      ...cocktail,
+      price: 0,
+      optionGroups: [
+        {
+          id: 'flavour',
+          name: 'Flavour',
+          kind: 'variant',
+          min: 1,
+          max: 1,
+          choices: [
+            { id: 'v', name: 'Vanilla', priceDelta: 15, soldOut: true },
+            { id: 'p', name: 'Pistachio', priceDelta: 22 },
+            { id: 'c', name: 'Chocolate', priceDelta: 18 },
+          ],
+        },
+      ],
+    }
+    expect(priceGroup(iceCream)?.id).toBe('flavour')
+    expect(priceGroup({ ...iceCream, price: 5 })).toBeUndefined()
+    // Cheapest in stock, never ₵0.
+    expect(fromPrice(iceCream)).toBe(18)
+    expect(defaultChoices(iceCream)).toEqual({ flavour: ['p'] })
+    expect(linePrice(iceCream, { flavour: ['p'] }, undefined, [], at(12)).unitPrice).toBe(22)
+    expect(linePrice(iceCream, { flavour: ['c'] }, undefined, [], at(12)).unitPrice).toBe(18)
   })
 
   it('choices are checked against min/max and sold-out options', () => {
