@@ -6,7 +6,8 @@ import { Flame, GlassWater, Leaf, Sparkles, Star, TrendingUp, Users, Wine, Wheat
 import { cn } from '@/lib/utils'
 import { patternStyle, resolveTheme, type ResolvedTheme, type ThemeConfig } from '@/lib/eatery/theme'
 import { ensureContrast, mix, withAlpha } from '@/lib/eatery/color'
-import { festivalInk, festivalOf } from '@/lib/eatery/festivals'
+import { festivalInk, festivalOf, seasonalOf } from '@/lib/eatery/festivals'
+import { festivalBackdrop, festivalScatter, festivalVars } from '@/lib/eatery/festival-style'
 import type { ItemTag, Restaurant } from '@/lib/eatery/types'
 import './storefront.css'
 
@@ -27,12 +28,19 @@ export const ThemeScope = ({
 }) => {
   const resolved = useMemo(() => resolveTheme(theme), [theme])
   const festival = festivalOf(theme)
-  // During a festival the logo wears a ring in its colour (BrandMark).
-  const style = useMemo(
-    () =>
-      festival ? { ...resolved.style, ['--e-festival' as string]: festivalInk(festival, resolved.palette.surface, 3) } : resolved.style,
-    [resolved, festival]
-  )
+  const full = !!festival && seasonalOf(theme).intensity === 'full'
+  // During a festival the logo wears a ring in its colour (BrandMark); with
+  // the full look, every component takes the festival's styling too
+  // (storefront.css, festival-style.ts).
+  const style = useMemo(() => {
+    if (!festival) return resolved.style
+    const ink = festivalInk(festival, resolved.palette.surface, 3)
+    return {
+      ...resolved.style,
+      '--e-festival': ink,
+      ...(full ? { ...festivalVars(festival, resolved, ink), ...festivalBackdrop(festival, resolved) } : {}),
+    } as React.CSSProperties
+  }, [resolved, festival, full])
   return (
     <ThemeContext.Provider value={resolved}>
       <Tag
@@ -41,11 +49,21 @@ export const ThemeScope = ({
         data-shape={theme.shape}
         data-case={theme.uppercaseHeadings ? 'upper' : 'normal'}
         data-surface={theme.surface ?? 'outlined'}
+        data-festival={festival?.key}
+        data-festival-mode={festival ? (full ? 'full' : 'accent') : undefined}
       >
         {children}
       </Tag>
     </ThemeContext.Provider>
   )
+}
+
+// The theme's pattern, or the festival's glyphs while the full look is on.
+const motifStyle = (theme: ThemeConfig, color: string, opacity: number) => {
+  const festival = festivalOf(theme)
+  return festival && seasonalOf(theme).intensity === 'full'
+    ? festivalScatter(festival.key, color, opacity * 0.9)
+    : patternStyle(theme.pattern, color, opacity)
 }
 
 const initialsOf = (name: string) =>
@@ -119,13 +137,12 @@ export const Cover = ({ theme, className, children }: { theme: ThemeConfig; clas
             className="absolute inset-0"
             style={{ background: withAlpha('#000000', Math.max(0.35, theme.imagery.coverOverlay ?? 0.45)) }}
           />
+          {festivalOf(theme) && seasonalOf(theme).intensity === 'full' && (
+            <div className="absolute inset-0" style={motifStyle(theme, '#ffffff', 0.14)} aria-hidden />
+          )}
         </>
       ) : (
-        <div
-          className="absolute inset-0"
-          style={patternStyle(theme.pattern, patternInk, theme.hero === 'poster' ? 0.5 : 0.3)}
-          aria-hidden
-        />
+        <div className="absolute inset-0" style={motifStyle(theme, patternInk, theme.hero === 'poster' ? 0.5 : 0.3)} aria-hidden />
       )}
       {children && <div className="relative h-full">{children}</div>}
     </div>
@@ -186,7 +203,7 @@ export const ItemArt = ({
       className={cn('relative flex items-center justify-center overflow-hidden', className)}
       style={{ background: `linear-gradient(145deg, ${withAlpha(r.palette.primary, 0.22)}, ${withAlpha(r.palette.accent, 0.22)})` }}
     >
-      <div className="absolute inset-0" style={patternStyle(theme.pattern, r.palette.primaryText, 0.18)} />
+      <div className="absolute inset-0" style={motifStyle(theme, r.palette.primaryText, 0.18)} />
       <span
         className={cn('relative e-display', size === 'lg' ? 'text-5xl' : size === 'sm' ? 'text-lg' : 'text-3xl')}
         style={{ color: 'var(--e-primary-text)' }}

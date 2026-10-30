@@ -19,6 +19,7 @@ import {
 } from '@/lib/eatery/festivals'
 import { ThemeScope } from '@/components/eatery/theme-scope'
 import { FestivalBar } from '@/components/eatery/festival-marks'
+import { festivalVars } from '@/lib/eatery/festival-style'
 import { FestivalPanel } from '@/app/[locale]/(eatery)/eatery/_components/festival-panel'
 
 const light = presetFor('general').theme
@@ -26,14 +27,22 @@ const dark = applyStyle(light, DESIGN_STYLES.find((s) => s.key === 'noir')!)
 const day = (y: number, m: number, d: number) => new Date(y, m - 1, d, 12)
 const withSeasonal = (t: ThemeConfig, s: Partial<SeasonalSettings>): ThemeConfig => ({
   ...t,
-  seasonal: { auto: true, intensity: 'accent', banner: true, off: [], skipped: [], messages: {}, ...s },
+  seasonal: { auto: true, intensity: 'full', banner: true, off: [], skipped: [], messages: {}, ...s },
 })
 const onNow = (now: Date, t: ThemeConfig = light) => liveFestival(t, now)?.festival.key ?? null
 const pink = FESTIVALS.find((f) => f.key === 'pink-october')!
 
 describe('festival editions respect the brand', () => {
-  it('by default only the accent changes; fonts, layout, colours, logo and wording stay', () => {
+  it('by default the whole look changes; fonts, layout, logo and wording stay', () => {
     const mine = { ...dark, imagery: { logoUrl: 'data:image/png;base64,AA', coverOverlay: 0.5 }, copy: { add: 'Pour it', cart: 'My tab' } }
+    const worn = dressForFestival(mine, day(2026, 10, 10))
+    expect(worn).toMatchObject({ festival: 'pink-october', fonts: mine.fonts, hero: mine.hero, imagery: mine.imagery, copy: mine.copy })
+    expect(worn.colors).toEqual(pink.palette.dark)
+    expect(mine.festival).toBeUndefined()
+  })
+
+  it('“a touch” keeps the owner’s colours and only brings in the festival accent', () => {
+    const mine = withSeasonal(dark, { intensity: 'accent' })
     const worn = dressForFestival(mine, day(2026, 10, 10))
     expect(worn).toMatchObject({
       festival: 'pink-october',
@@ -67,6 +76,46 @@ describe('festival editions respect the brand', () => {
     for (const surface of ['#FFFFFF', '#141414', light.colors.surface, dark.colors.surface])
       expect(contrast(festivalInk(f, surface, 4.5), surface)).toBeGreaterThanOrEqual(4.5)
   })
+})
+
+describe('the full look reaches every component', () => {
+  it('marks the scope so cards, buttons, tabs, badges and headings take the festival styling', () => {
+    const worn = dressForFestival(light, day(2026, 10, 10))
+    const { container, unmount } = render(
+      <ThemeScope theme={worn}>
+        <p>menu</p>
+      </ThemeScope>
+    )
+    const scope = container.firstElementChild as HTMLElement
+    expect(scope.dataset).toMatchObject({ festival: 'pink-october', festivalMode: 'full' })
+    for (const v of ['--e-festival', '--e-primary-2', '--e-accent-2', '--e-fx-card', '--e-fx-mark', '--e-fx-badge'])
+      expect(scope.style.getPropertyValue(v), v).not.toBe('')
+    unmount()
+
+    const touch = dressForFestival(withSeasonal(light, { intensity: 'accent' }), day(2026, 10, 10))
+    const quiet = render(
+      <ThemeScope theme={touch}>
+        <p>menu</p>
+      </ThemeScope>
+    ).container.firstElementChild as HTMLElement
+    expect(quiet.dataset.festivalMode).toBe('accent')
+    expect(quiet.style.getPropertyValue('--e-fx-card')).toBe('')
+  })
+
+  it.each(FESTIVALS.flatMap((f) => [[f.key, 'light'] as const, [f.key, 'dark'] as const]))(
+    '%s (%s) button and badge text stays readable across the gradients',
+    (key, mode) => {
+      const f = FESTIVALS.find((x) => x.key === key)!
+      const r = resolveTheme(wearFestival(withSeasonal(mode === 'dark' ? dark : light, {}), f))
+      const vars = festivalVars(f, r, festivalInk(f, r.palette.surface, 3))
+      expect(contrast(r.palette.onPrimary, vars['--e-primary-2'])).toBeGreaterThanOrEqual(
+        contrast(r.palette.onPrimary, r.palette.primary) - 0.01
+      )
+      expect(contrast(r.palette.onAccent, vars['--e-accent-2'])).toBeGreaterThanOrEqual(
+        contrast(r.palette.onAccent, r.palette.accent) - 0.01
+      )
+    }
+  )
 })
 
 describe('festival calendar', () => {
@@ -158,7 +207,7 @@ describe('festival bar and editor', () => {
     const spot = screen.getByRole('region', { name: 'Halloween details' })
     expect(spot.textContent).toMatch(/Live now · until Sat,? 31 Oct/)
     fireEvent.click(screen.getByRole('button', { name: 'Remove this year' }))
-    expect(changes.at(-1)).toMatchObject({ skipped: ['halloween:2026'], off: [], intensity: 'accent' })
+    expect(changes.at(-1)).toMatchObject({ skipped: ['halloween:2026'], off: [], intensity: 'full' })
     fireEvent.click(screen.getByRole('button', { name: /Preview on the phone/ }))
     expect(previews).toEqual(['halloween'])
     fireEvent.change(screen.getByLabelText('Message on the bar'), { target: { value: 'Spooky specials tonight' } })
@@ -167,8 +216,8 @@ describe('festival bar and editor', () => {
 
   it('switches the look, and turns a festival off for good from the agenda', () => {
     const { changes } = renderPanel(light)
-    fireEvent.click(screen.getByRole('radio', { name: /Full festival colours/ }))
-    expect(changes.at(-1)!.intensity).toBe('full')
+    fireEvent.click(screen.getByRole('radio', { name: /A touch/ }))
+    expect(changes.at(-1)!.intensity).toBe('accent')
     fireEvent.click(screen.getByRole('switch', { name: 'Christmas' }))
     expect(changes.at(-1)!.off).toEqual(['christmas'])
     // Picking a future festival offers to skip it in advance.

@@ -233,3 +233,59 @@ textarea.e-input {
     backdrop-filter: none;
   }
 }
+
+/* ── Festival editions: the full look (src/lib/eatery/festival-style.ts) ──
+   On top of the festival palette (already in the variables above), every
+   component takes the festival's marks. Decoration lives in background
+   layers and borders only, so no layout moves and no text sits on a busier
+   ground than its card. Pills (rounded-full) stay plain. */
+
+.e-scope[data-festival-mode='full'] .e-card:not([class*='rounded-full']) {
+  border-top: 2px solid var(--e-festival);
+  background-image: var(--e-fx-card);
+  background-repeat: no-repeat;
+  background-position: right 10px top 10px;
+  background-size: 22px 22px;
+}
+
+.e-scope[data-festival-mode='full'] .e-btn,
+.e-scope[data-festival-mode='full'] .e-tab[aria-current='true'] {
+  background-image: linear-gradient(135deg, var(--e-primary) 0%, var(--e-primary-2) 100%);
+}
+.e-scope[data-festival-mode='full']:not([data-surface='brutal']) .e-btn {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 8px 20px -10px var(--e-primary);
+}
+
+.e-scope[data-festival-mode='full'] .e-accent {
+  background-image: var(--e-fx-badge), linear-gradient(135deg, var(--e-accent) 0%, var(--e-accent-2) 100%);
+  background-size:
+    96px 96px,
+    auto;
+}
+
+.e-scope[data-festival-mode='full'] .e-choice:has(input:checked),
+.e-scope[data-festival-mode='full'] .e-input:focus {
+  border-color: var(--e-festival);
+}
+.e-scope[data-festival-mode='full'] .e-leader {
+  border-bottom-color: color-mix(in srgb, var(--e-festival) 50%, var(--e-border));
+}
+
+/* Menu section titles carry the festival's glyph. */
+.e-scope[data-festival-mode='full'] h2.e-display::before {
+  content: '';
+  display: inline-block;
+  width: 0.6em;
+  height: 0.6em;
+  margin-right: 0.3em;
+  vertical-align: 0.05em;
+  background: var(--e-festival);
+  -webkit-mask: var(--e-fx-mark) center / contain no-repeat;
+  mask: var(--e-fx-mark) center / contain no-repeat;
+}
+
+.e-scope[data-festival-mode='full'] ::selection {
+  background: var(--e-accent-soft);
+}
