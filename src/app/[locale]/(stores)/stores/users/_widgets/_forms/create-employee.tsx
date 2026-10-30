@@ -10,84 +10,9 @@ import InputsTemplate from '@/components/templates/inputs'
 import ButtonTemplate from '@/components/templates/button'
 import { useAxios } from '@/hooks/use-axios'
 import { EmployeeServices } from '../../_logics/services'
-import { BarChart2, Package, Warehouse, ShoppingCart, FileText, Settings2, Building2, Users, Shield } from 'lucide-react'
+import { Check, Shield } from 'lucide-react'
 import { cn } from '@/lib/utils'
-
-// ── Role presets (frontend-only convenience — auto-fills permission toggles) ──
-export const ROLE_PRESETS = [
-  {
-    label: 'Admin',
-    desc: 'All permissions',
-    color: 'bg-indigo-100 text-indigo-700 border-indigo-200',
-    perms: {
-      canViewReports: true,
-      canManageProducts: true,
-      canManageStock: true,
-      canManageSales: true,
-      canManageInvoices: true,
-      canManageOperations: true,
-      canManageWarehouses: true,
-      canManageEmployees: true,
-    },
-  },
-  {
-    label: 'Manager',
-    desc: 'All except employee mgmt',
-    color: 'bg-purple-100 text-purple-700 border-purple-200',
-    perms: {
-      canViewReports: true,
-      canManageProducts: true,
-      canManageStock: true,
-      canManageSales: true,
-      canManageInvoices: true,
-      canManageOperations: true,
-      canManageWarehouses: true,
-      canManageEmployees: false,
-    },
-  },
-  {
-    label: 'Cashier',
-    desc: 'Sales only',
-    color: 'bg-green-100 text-green-700 border-green-200',
-    perms: {
-      canViewReports: false,
-      canManageProducts: false,
-      canManageStock: false,
-      canManageSales: true,
-      canManageInvoices: false,
-      canManageOperations: false,
-      canManageWarehouses: false,
-      canManageEmployees: false,
-    },
-  },
-  {
-    label: 'Stock Keeper',
-    desc: 'Stock & warehouses',
-    color: 'bg-amber-100 text-amber-700 border-amber-200',
-    perms: {
-      canViewReports: false,
-      canManageProducts: false,
-      canManageStock: true,
-      canManageSales: false,
-      canManageInvoices: false,
-      canManageOperations: false,
-      canManageWarehouses: true,
-      canManageEmployees: false,
-    },
-  },
-] as const
-
-// ── Permission config (exported so the card list can reuse it) ───────────────
-export const PERMISSIONS = [
-  { key: 'canViewReports', label: 'View Reports', icon: BarChart2, color: 'bg-blue-100 text-blue-700' },
-  { key: 'canManageProducts', label: 'Manage Products', icon: Package, color: 'bg-purple-100 text-purple-700' },
-  { key: 'canManageStock', label: 'Manage Stock', icon: Warehouse, color: 'bg-amber-100 text-amber-700' },
-  { key: 'canManageSales', label: 'Manage Sales', icon: ShoppingCart, color: 'bg-green-100 text-green-700' },
-  { key: 'canManageInvoices', label: 'Manage Invoices', icon: FileText, color: 'bg-cyan-100 text-cyan-700' },
-  { key: 'canManageOperations', label: 'Manage Operations', icon: Settings2, color: 'bg-orange-100 text-orange-700' },
-  { key: 'canManageWarehouses', label: 'Manage Warehouses', icon: Building2, color: 'bg-rose-100 text-rose-700' },
-  { key: 'canManageEmployees', label: 'Manage Employees', icon: Users, color: 'bg-indigo-100 text-indigo-700' },
-] as const
+import { matchingPreset, presetValues, staffModule } from '@/lib/staff-roles'
 
 // ── Single schema — password optional; create-mode is enforced in onSubmit ──
 const employeeSchema = z.object({
@@ -109,13 +34,16 @@ const employeeSchema = z.object({
 type EmployeeForm = z.infer<typeof employeeSchema>
 
 interface CreateEmployeeProps {
+  // The business's module: decides which permissions are shown and what they're called.
+  appType?: string
   mode?: 'create' | 'update'
   employeeId?: number
   initialData?: Partial<EmployeeForm> & Record<string, any>
   onSuccess?: () => void
 }
 
-const CreateEmployee = ({ mode = 'create', employeeId, initialData, onSuccess }: CreateEmployeeProps) => {
+const CreateEmployee = ({ appType, mode = 'create', employeeId, initialData, onSuccess }: CreateEmployeeProps) => {
+  const staff = staffModule(appType)
   const request = useAxios()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
@@ -161,11 +89,8 @@ const CreateEmployee = ({ mode = 'create', employeeId, initialData, onSuccess }:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initKey])
 
-  const applyRolePreset = (perms: Record<string, boolean>) => {
-    Object.entries(perms).forEach(([key, value]) => {
-      form.setValue(key as keyof EmployeeForm, value as any)
-    })
-  }
+  const values = form.watch()
+  const activePreset = matchingPreset(staff, values)
 
   const onSubmit = async (data: EmployeeForm) => {
     // Enforce password on create
@@ -213,7 +138,7 @@ const CreateEmployee = ({ mode = 'create', employeeId, initialData, onSuccess }:
                 control={form.control}
                 name="email"
                 label="Email"
-                placeholder="e.g. kwame@store.com"
+                placeholder="e.g. kwame@business.com"
                 isRequired
                 inputType="email"
               />
@@ -238,37 +163,54 @@ const CreateEmployee = ({ mode = 'create', employeeId, initialData, onSuccess }:
 
             {/* Role preset quick-fill */}
             <div className="flex flex-col gap-1.5 mb-3">
-              <p className="text-[10px] text-gray-400">Quick presets — tap to fill:</p>
-              <div className="flex flex-wrap gap-1.5">
-                {ROLE_PRESETS.map((role) => (
-                  <button
-                    key={role.label}
-                    type="button"
-                    onClick={() => applyRolePreset(role.perms as unknown as Record<string, boolean>)}
-                    className={cn('px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-all active:scale-95', role.color)}
-                  >
-                    {role.label}
-                    <span className="ml-1 opacity-60 font-normal">— {role.desc}</span>
-                  </button>
-                ))}
+              <p className="text-[10px] text-gray-400">Quick roles — tap to fill:</p>
+              <div className="flex flex-wrap gap-1.5" role="group" aria-label="Quick roles">
+                {staff.presets.map((role) => {
+                  const on = activePreset?.label === role.label
+                  return (
+                    <button
+                      key={role.label}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() =>
+                        Object.entries(presetValues(role)).forEach(([key, value]) =>
+                          form.setValue(key as keyof EmployeeForm, value, { shouldDirty: true })
+                        )
+                      }
+                      className={cn(
+                        'inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-all active:scale-95',
+                        role.color,
+                        on && 'ring-2 ring-offset-1 ring-endeavour/40'
+                      )}
+                    >
+                      {on && <Check className="h-3 w-3" />}
+                      {role.label}
+                      <span className="opacity-60 font-normal">— {role.description}</span>
+                    </button>
+                  )
+                })}
               </div>
             </div>
             <div className="flex flex-col rounded-xl border border-gray-200 overflow-hidden divide-y divide-gray-100">
-              {PERMISSIONS.map(({ key, label, icon: Icon, color }) => (
+              {staff.permissions.map(({ key, label, description, icon: Icon, color }) => (
                 <FormField
                   key={key}
                   control={form.control}
                   name={key}
                   render={({ field }) => (
                     <FormItem className="flex items-center justify-between space-y-0 px-3 py-3 hover:bg-gray-50 transition-colors">
-                      <div className="flex items-center gap-2.5">
-                        <span className={cn('p-1.5 rounded-lg', color)}>
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className={cn('p-1.5 rounded-lg flex-shrink-0', color)}>
                           <Icon className="h-3.5 w-3.5" />
                         </span>
-                        <FormLabel className="text-sm text-stone-700 font-medium cursor-pointer leading-none m-0">{label}</FormLabel>
+                        <div className="min-w-0">
+                          <FormLabel className="block text-sm text-stone-700 font-medium cursor-pointer leading-tight m-0">{label}</FormLabel>
+                          <p className="text-[11px] text-gray-400 leading-snug mt-0.5">{description}</p>
+                        </div>
                       </div>
                       <FormControl>
                         <Switch
+                          aria-label={label}
                           checked={field.value as boolean}
                           onCheckedChange={field.onChange}
                           className="data-[state=checked]:bg-endeavour"

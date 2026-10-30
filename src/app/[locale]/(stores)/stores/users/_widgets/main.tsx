@@ -8,7 +8,9 @@ import ButtonTemplate from '@/components/templates/button'
 import { useFetchData } from '@/hooks/use-fetch'
 import { useAxios } from '@/hooks/use-axios'
 import { EmployeeServices } from '../_logics/services'
-import CreateEmployee, { PERMISSIONS } from './_forms/create-employee'
+import CreateEmployee from './_forms/create-employee'
+import { useSession } from 'next-auth/react'
+import { staffModule, type StaffPermission } from '@/lib/staff-roles'
 import { IGeneric } from '@/types/interfaces'
 import Link from 'next/link'
 import { canAddStaff, staffLimit } from '@/lib/subscription/access'
@@ -24,11 +26,23 @@ const initials = (name: string) =>
     .join('')
 
 // ── Employee card ────────────────────────────────────────────────────────────
-const EmployeeCard = ({ emp, colorIdx, onEdit, onDelete }: { emp: any; colorIdx: number; onEdit: () => void; onDelete: () => void }) => {
+const EmployeeCard = ({
+  emp,
+  colorIdx,
+  permissions,
+  onEdit,
+  onDelete,
+}: {
+  emp: any
+  colorIdx: number
+  permissions: StaffPermission[]
+  onEdit: () => void
+  onDelete: () => void
+}) => {
   const [expanded, setExpanded] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
-  const enabled = PERMISSIONS.filter((p) => emp[p.key])
-  const disabled = PERMISSIONS.filter((p) => !emp[p.key])
+  const enabled = permissions.filter((p) => emp[p.key])
+  const disabled = permissions.filter((p) => !emp[p.key])
 
   return (
     <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden hover:border-endeavour/30 hover:shadow-sm transition-all">
@@ -102,7 +116,7 @@ const EmployeeCard = ({ emp, colorIdx, onEdit, onDelete }: { emp: any; colorIdx:
                 enabled.length > 0 ? 'bg-endeavour/10 text-endeavour' : 'bg-gray-100 text-gray-400'
               )}
             >
-              {enabled.length}/{PERMISSIONS.length}
+              {enabled.length}/{permissions.length}
             </span>
           </div>
           {expanded ? <ChevronUp className="h-3.5 w-3.5 text-gray-400" /> : <ChevronDown className="h-3.5 w-3.5 text-gray-400" />}
@@ -144,9 +158,13 @@ const Main = () => {
 
   const { data: employeesRaw, isLoading, refetch } = useFetchData('employees', EmployeeServices.FetchAll() as unknown as IGeneric)
   const employees: any[] = (employeesRaw as any[]) ?? []
+  // Permissions in the words of this business's module (eatery, real estate, …).
+  const { data: session } = useSession()
+  const appType = session?.user?.appType
+  const { permissions } = staffModule(appType)
 
-  const fullAccessCount = employees.filter((e) => PERMISSIONS.every((p) => e[p.key])).length
-  const totalPerms = employees.reduce((s, e) => s + PERMISSIONS.filter((p) => e[p.key]).length, 0)
+  const fullAccessCount = employees.filter((e) => permissions.every((p) => e[p.key])).length
+  const totalPerms = employees.reduce((s, e) => s + permissions.filter((p) => e[p.key]).length, 0)
   const avgPerms = employees.length > 0 ? (totalPerms / employees.length).toFixed(1) : '—'
 
   // Staff seats come with the plan; editing existing staff is always allowed.
@@ -188,6 +206,7 @@ const Main = () => {
         contentClassName="md:min-w-[40rem]"
         content={
           <CreateEmployee
+            appType={appType}
             mode={selected ? 'update' : 'create'}
             employeeId={selected?.id}
             initialData={selected ?? undefined}
@@ -288,7 +307,7 @@ const Main = () => {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {employees.map((emp: any, idx: number) => (
-            <EmployeeCard key={emp.id} emp={emp} colorIdx={idx} onEdit={() => openEdit(emp)} onDelete={() => handleDelete(emp.id)} />
+            <EmployeeCard key={emp.id} emp={emp} colorIdx={idx} permissions={permissions} onEdit={() => openEdit(emp)} onDelete={() => handleDelete(emp.id)} />
           ))}
         </div>
       )}
