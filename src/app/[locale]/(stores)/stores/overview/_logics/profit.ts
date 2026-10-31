@@ -7,7 +7,7 @@
 // only a fallback for a backend that doesn't send `cogs` yet.
 //
 // Values are never clamped to 0: a loss, or a cost of goods above sales
-// (usually a purchase price entered per box instead of per piece), must be
+// (usually a box with no pieces-per-box set, so a piece is costed as a whole box), must be
 // visible to the owner, not hidden as "0".
 
 export interface ProductStat {
@@ -121,7 +121,7 @@ export const profitSummary = (overview: any, sold: ProductStat[], c: Catalogue):
 export const profitWarning = (s: ProfitSummary, fmt: (n: number) => string): string | null => {
   const list = (names: string[]) => `${names.slice(0, 3).join(', ')}${names.length > 3 ? ` and ${names.length - 3} more` : ''}`
   if (s.costAbovePrice.length)
-    return `Cost of goods is higher than the selling price for ${list(s.costAbovePrice)}. Check the purchase price is the cost of one piece, not a box.`
+    return `Cost of goods is higher than the selling price for ${list(s.costAbovePrice)}. Check the purchase price is the cost of one box and the box's Base quantity (pieces per box) is set.`
   if (s.uncostedProducts.length)
     return `${fmt(s.uncostedRevenue)} of sales (${list(s.uncostedProducts)}) have no purchase price, so their profit can't be worked out. Add purchase prices to include them.`
   return null

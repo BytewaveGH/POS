@@ -23,6 +23,7 @@ import {
   isDuplicateSkuError,
   productSaveErrorMessage,
   SKU_IN_USE,
+  unitCosts,
 } from '../../_logics/product-payload'
 
 const isValidBarcode = (code: string) => (/^[\x21-\x7E]{1,64}$/.test(code) ? null : '1–64 printable characters, no spaces')
@@ -308,6 +309,18 @@ const CreateProduct = ({ mode = 'create', productId, initialData, onSuccess }: C
   }
 
   const imageUrl = form.watch('imageUrl')
+  const watchedUnits = form.watch('units')
+  const purchasePrice = Number(form.watch('purchasePrice')) || 0
+  const unitName = (id: number) => unitOptions.find((o) => o.value === String(id))?.text ?? 'Unit'
+  const costs = unitCosts(
+    purchasePrice,
+    (watchedUnits ?? []).map((u) => ({
+      ...u,
+      retailPrice: Number(u.retailPrice) || 0,
+      baseQuantity: Number(u.baseQuantity) || 1,
+      boxSize: Number(u.boxSize) || undefined,
+    }))
+  )
 
   return (
     <div className="flex flex-col gap-2">
@@ -335,7 +348,7 @@ const CreateProduct = ({ mode = 'create', productId, initialData, onSuccess }: C
               <InputsTemplate
                 control={form.control}
                 name="purchasePrice"
-                label="Purchase Price (Cost per piece)"
+                label="Purchase Price (cost of one box)"
                 placeholder="0.00"
                 inputType="number"
                 isRequired
@@ -391,6 +404,30 @@ const CreateProduct = ({ mode = 'create', productId, initialData, onSuccess }: C
                   mode={mode}
                 />
               ))}
+
+              {purchasePrice > 0 && (watchedUnits?.length ?? 0) > 0 && (
+                <div
+                  role="note"
+                  aria-label="Cost per unit"
+                  className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-600"
+                >
+                  <p className="font-semibold text-stone-700">Cost per unit</p>
+                  <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+                    {watchedUnits.map((u, i) => (
+                      <li key={i} className={costs.costs[i]?.loss ? 'font-semibold text-red-600' : undefined}>
+                        {u.unitId ? unitName(u.unitId) : `Unit ${i + 1}`}: ₵{costs.costs[i]?.cost.toFixed(2)}
+                        {costs.costs[i]?.loss ? ` — more than its ₵${Number(u.retailPrice).toFixed(2)} price` : ''}
+                      </li>
+                    ))}
+                  </ul>
+                  {costs.unknownSplit && (
+                    <p className="mt-1.5 text-amber-700">
+                      Set the box&apos;s Base quantity (e.g. 20 pieces), or Pieces per full box on a half-box unit, so the cost of the
+                      smaller units can be worked out.
+                    </p>
+                  )}
+                </div>
+              )}
 
               <button
                 type="button"

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { unitCosts } from '@/app/[locale]/(stores)/stores/products/inventory/_logics/product-payload'
 import { catalogueOf, costProduct, profitSummary, profitWarning } from '@/app/[locale]/(stores)/stores/overview/_logics/profit'
 import { endOfDayIso, rangeParams, startOfDayIso } from '@/app/[locale]/(stores)/stores/overview/_logics/range'
 import { periodBounds, shiftPeriod } from '@/app/[locale]/(stores)/stores/overview/_widgets/payments'
@@ -62,5 +63,27 @@ describe('stats date ranges', () => {
     expect(periodBounds('month', '2026-02-01')).toEqual({ from: '2026-02-01', to: '2026-02-28' })
     expect(shiftPeriod('day', '2026-11-01', -1)).toBe('2026-10-31')
     expect(shiftPeriod('month', '2026-01-01', -1)).toBe('2025-12')
+  })
+})
+
+describe('cost of each selling unit (purchase price = one box)', () => {
+  const flat = (baseQuantity: number, retailPrice = 0) => ({ pricingRule: 'flat' as const, baseQuantity, retailPrice })
+
+  it('splits the box cost by base quantity', () => {
+    const units = [flat(20, 250), flat(5, 60), flat(1, 12)]
+    expect(unitCosts(200, units).costs.map((c) => c.cost)).toEqual([200, 50, 10])
+    expect(unitCosts(200, units).unknownSplit).toBe(false)
+  })
+
+  it('a half-box piece costs the box ÷ pieces per full box', () => {
+    const units = [flat(1, 250), { pricingRule: 'half-box' as const, baseQuantity: 1, boxSize: 20, retailPrice: 12 }]
+    expect(unitCosts(200, units).costs.map((c) => c.cost)).toEqual([200, 10])
+  })
+
+  it('flags units that would sell at a loss and boxes with no size', () => {
+    const r = unitCosts(200, [flat(1, 250), flat(1, 12)])
+    expect(r.unknownSplit).toBe(true)
+    expect(r.costs[1]).toEqual({ cost: 200, loss: true })
+    expect(unitCosts(200, [flat(1, 250)]).unknownSplit).toBe(false)
   })
 })

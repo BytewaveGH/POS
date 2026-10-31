@@ -108,3 +108,32 @@ export const isDuplicateSkuError = (err: any): boolean => {
 }
 
 export const productSaveErrorMessage = (err: any) => (isDuplicateSkuError(err) ? SKU_IN_USE : apiErrorMessage(err, 'Something went wrong'))
+
+// ── Cost of each selling unit ────────────────────────────────────────────────
+// purchasePrice is what the shop pays for one purchase unit — the largest unit,
+// e.g. one box (the backend's stats code reads it the same way). A smaller
+// unit's cost is its share of that box:
+//   • a half-box piece unit: purchasePrice ÷ boxSize ("pieces per full box");
+//   • otherwise: purchasePrice × baseQuantity ÷ the largest baseQuantity
+//     (Box = 12, Pack = 6, Piece = 1 → box cost, half of it, a twelfth of it).
+// With several units but no box size anywhere, a smaller unit's cost can't be
+// known — `unknownSplit` flags that so the form can ask for the box size.
+
+type CostUnit = Pick<UnitFormValues, 'pricingRule' | 'baseQuantity' | 'boxSize' | 'retailPrice'>
+
+export const piecesPerBox = (units: CostUnit[]) =>
+  Math.max(1, ...units.map((u) => baseQty(u.baseQuantity)), ...units.map((u) => (u.pricingRule === 'half-box' ? u.boxSize || 1 : 1)))
+
+export const unitCost = (purchasePrice: number, unit: CostUnit, units: CostUnit[]) => {
+  if (unit.pricingRule === 'half-box' && unit.boxSize && unit.boxSize > 0) return purchasePrice / unit.boxSize
+  const largest = Math.max(1, ...units.map((u) => baseQty(u.baseQuantity)))
+  return (purchasePrice * baseQty(unit.baseQuantity)) / largest
+}
+
+export const unitCosts = (purchasePrice: number, units: CostUnit[]) => ({
+  costs: units.map((u) => {
+    const cost = Math.round(unitCost(purchasePrice, u, units) * 100) / 100
+    return { cost, loss: purchasePrice > 0 && u.retailPrice > 0 && cost > u.retailPrice }
+  }),
+  unknownSplit: units.length > 1 && piecesPerBox(units) === 1,
+})
