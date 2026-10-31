@@ -25,20 +25,23 @@ import { AgCharts } from 'ag-charts-react'
 import { AgChartOptions } from 'ag-charts-community'
 import DatagridTemplate from '@/components/templates/datagrid'
 import { useFetchData } from '@/hooks/use-fetch'
-import { useFetchPaginated } from '@/hooks/use-fetch-paginated'
 import { StatisticsServices } from '../../overview/_logics/services'
 import { ProductServices } from '../../products/inventory/_logics/services'
 import { IGeneric } from '@/types/interfaces'
 import { cn } from '@/lib/utils'
+import { catalogueOf, costProduct, profitSummary, profitWarning } from '../../overview/_logics/profit'
+import { rangeParams } from '../../overview/_logics/range'
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 const fmt = (v: number) => `₵ ${Number(v ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
 const fmtShort = (v: number): string => {
   const n = Number(v ?? 0)
-  if (n >= 1_000_000) return `₵ ${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1_000) return `₵ ${(n / 1_000).toFixed(1)}K`
-  return fmt(n)
+  const sign = n < 0 ? '−' : ''
+  const a = Math.abs(n)
+  if (a >= 1_000_000) return `${sign}₵ ${(a / 1_000_000).toFixed(1)}M`
+  if (a >= 1_000) return `${sign}₵ ${(a / 1_000).toFixed(1)}K`
+  return `${sign}${fmt(a)}`
 }
 
 const trendPct = (current: number, prev: number): number | null => {
@@ -263,7 +266,7 @@ const Main = () => {
   const [to, setTo] = useState(() => isoDate(new Date()))
 
   const dateKey = `${from}__${to}`
-  const dateParams = { ...(from ? { from } : {}), ...(to ? { to } : {}) }
+  const dateParams = rangeParams(from, to)
 
   // ── Previous period (same duration, ending the day before `from`) ──────────
   const prevRange = useMemo(() => {
@@ -345,26 +348,29 @@ const Main = () => {
   )
   const { data: prevOverviewRaw } = useFetchData(
     `analytics-ov-prev-${prevRange?.from}-${prevRange?.to}`,
-    StatisticsServices.FetchAll({ from: prevRange?.from, to: prevRange?.to }) as unknown as IGeneric,
+    StatisticsServices.FetchAll(rangeParams(prevRange?.from, prevRange?.to)) as unknown as IGeneric,
     !!prevRange
   )
   const { data: dailySalesRaw, refetch: refetchDailyChart } = useFetchData(
     `analytics-daily-${chartFrom}-${chartTo}`,
-    StatisticsServices.FetchSales({ granularity: 'day', from: chartFrom, to: chartTo }) as unknown as IGeneric
+    StatisticsServices.FetchSales({ granularity: 'day', ...rangeParams(chartFrom, chartTo) }) as unknown as IGeneric
   )
-  const { data: allSoldRaw } = useFetchData(
+  const { data: allSoldRaw, refetch: refetchTop } = useFetchData(
     `analytics-sold-${dateKey}`,
     StatisticsServices.FetchProducts({ limit: 1000, ...dateParams }) as unknown as IGeneric
   )
   const { data: chartSoldRaw } = useFetchData(
     `analytics-csold-${chartFrom}-${chartTo}`,
-    StatisticsServices.FetchProducts({ limit: 1000, from: chartFrom, to: chartTo }) as unknown as IGeneric
+    StatisticsServices.FetchProducts({ limit: 1000, ...rangeParams(chartFrom, chartTo) }) as unknown as IGeneric
   )
   const { data: warehousesRaw, refetch: refetchWarehouses } = useFetchData(
     `analytics-wh-${dateKey}`,
     StatisticsServices.FetchWarehouses(dateParams) as unknown as IGeneric
   )
-  const { data: allProductsRaw } = useFetchData('analytics-products', ProductServices.FetchAll() as unknown as IGeneric)
+  const { data: allProductsRaw } = useFetchData(
+    'analytics-products',
+    ProductServices.FetchAll({ limit: 1000, offset: 0 }) as unknown as IGeneric
+  )
   const { data: shortagesRaw } = useFetchData('analytics-shortages', StatisticsServices.FetchShortages() as unknown as IGeneric)
   const { data: hourlySalesRaw, refetch: refetchHourlyChart } = useFetchData(
     `analytics-hourly-${dateKey}`,
@@ -380,21 +386,12 @@ const Main = () => {
   }, [])
   const { data: monthlySalesRaw, refetch: refetchMonthlyChart } = useFetchData(
     `analytics-monthly-${monthlyRange.from}`,
-    StatisticsServices.FetchSales({ granularity: 'month', from: monthlyRange.from, to: monthlyRange.to }) as unknown as IGeneric
+    StatisticsServices.FetchSales({ granularity: 'month', ...rangeParams(monthlyRange.from, monthlyRange.to) }) as unknown as IGeneric
   )
 
+  // /stats/products/top has no offset, so the table pages through the full list.
   const [topPage, setTopPage] = useState(0)
   const topPageSize = 8
-  const {
-    data: topProductsRaw,
-    total: topTotal,
-    refetch: refetchTop,
-  } = useFetchPaginated(
-    `analytics-top-${dateKey}`,
-    StatisticsServices.FetchProducts({ ...dateParams }) as unknown as IGeneric,
-    topPage,
-    topPageSize
-  )
 
   // ── Global refresh + auto-refresh every 10 min ────────────────────────────
   const [lastUpdated, setLastUpdated] = useState(() => new Date())
@@ -418,49 +415,15 @@ const Main = () => {
   const overview = overviewRaw as any
   const prevOverview = prevOverviewRaw as any
   const monthlySalesArr = (monthlySalesRaw as any[]) ?? []
-  const topProducts = (topProductsRaw as any[]) ?? []
   const allSold = (allSoldRaw as any[]) ?? []
   const warehouses = (warehousesRaw as any[]) ?? []
   const allProducts = (allProductsRaw as any[]) ?? []
   const shortages = (shortagesRaw as any[]) ?? []
 
-  // ── Per-product profit maps (top-products table + client-side fallback) ──────
-  const purchasePriceMap = useMemo(() => {
-    const map: Record<number, number> = {}
-    allProducts.forEach((p: any) => {
-      map[p.id] = p.purchasePrice ?? 0
-    })
-    return map
-  }, [allProducts])
-
-  const refRetailMap = useMemo(() => {
-    const map: Record<number, number> = {}
-    allProducts.forEach((p: any) => {
-      const units: any[] = p.units ?? []
-      const halfBox = units.find((u: any) => u.pricingRule === 'half-box' && u.boxRetailPrice > 0)
-      if (halfBox) {
-        map[p.id] = halfBox.boxRetailPrice
-        return
-      }
-      const prices = units.map((u: any) => u.retailPrice ?? 0).filter(Boolean)
-      if (prices.length) map[p.id] = Math.max(...prices)
-    })
-    return map
-  }, [allProducts])
-
-  const calcProfit = (revenue: number, productId: number) => {
-    const pp = purchasePriceMap[productId] ?? 0
-    const rr = refRetailMap[productId]
-    if (!rr || rr <= 0 || pp <= 0) return 0
-    return revenue * Math.max(0, 1 - pp / rr)
-  }
-
-  // Client-side gross profit estimate (purchase-price vs retail-price margin)
-  const totalProfit = useMemo(
-    () => allSold.reduce((s: number, p: any) => s + calcProfit(p.revenue ?? 0, p.productId), 0),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [allSold, purchasePriceMap, refRetailMap]
-  )
+  // ── Profit: the backend's cost of goods, estimated only when it's missing ──
+  const catalogue = useMemo(() => catalogueOf(allProducts), [allProducts])
+  const summary = useMemo(() => profitSummary(overview, allSold, catalogue), [overview, allSold, catalogue])
+  const prevSummary = useMemo(() => profitSummary(prevOverview, [], catalogue), [prevOverview, catalogue])
 
   // ── KPIs ──────────────────────────────────────────────────────────────────
   const totalRevenue = overview?.revenue?.total ?? 0
@@ -473,27 +436,18 @@ const Main = () => {
   const cashRevenue = overview?.revenue?.cash ?? 0
   const lowStockCount = overview?.inventory?.lowStockProducts ?? 0
 
-  // Use backend exact values when the field is present; fall back to client-side estimate
-  const backendCogs: number | null = overview?.cogs ?? null
-  const backendProfit: number | null = overview?.profit ?? null
-  const backendOperationsCost: number = overview?.operationsCost ?? 0
+  const { grossProfit, netProfit, cogs: totalCogs, operationsCost } = summary
+  const profitMarginPct = summary.grossMargin * 100
+  const netMarginPct = summary.netMargin * 100
+  const warning = profitWarning(summary, fmt)
+  const prevComparable = !summary.estimated && !prevSummary.estimated && prevRevenue > 0
 
-  const grossProfit = backendCogs !== null ? Math.max(0, totalRevenue - backendCogs) : totalProfit
-  const netProfit = backendProfit !== null ? Math.max(0, backendProfit) : Math.max(0, grossProfit - backendOperationsCost)
-
-  const profitMarginPct = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0
-
-  // ── Overall margin ratio for chart profit lines ────────────────────────────
+  // ── Margin for the chart profit lines (the chart's own date range) ────────
   const overallMarginRatio = useMemo(() => {
-    if (backendCogs !== null && totalRevenue > 0) return Math.max(0, (totalRevenue - backendCogs) / totalRevenue)
-    const sold = (chartSoldRaw as any[]) ?? []
-    const cRev = sold.reduce((s: number, p: any) => s + (p.revenue ?? 0), 0)
-    const cProf = sold.reduce((s: number, p: any) => s + calcProfit(p.revenue ?? 0, p.productId), 0)
-    if (cRev > 0) return Math.max(0, cProf / cRev)
-    const tRev = allSold.reduce((s: number, p: any) => s + (p.revenue ?? 0), 0)
-    return tRev > 0 ? Math.max(0, totalProfit / tRev) : 0
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [backendCogs, totalRevenue, chartSoldRaw, allSold, totalProfit, purchasePriceMap, refRetailMap])
+    const rows = ((chartSoldRaw as any[]) ?? []).map((p) => costProduct(p, catalogue)).filter((p) => p.profit !== null)
+    const rev = rows.reduce((t, p) => t + p.revenue, 0)
+    return rev > 0 ? rows.reduce((t, p) => t + (p.profit ?? 0), 0) / rev : summary.grossMargin
+  }, [chartSoldRaw, catalogue, summary.grossMargin])
 
   // ── Daily chart data ───────────────────────────────────────────────────────
   const dailySalesWithProfit = useMemo(() => {
@@ -533,15 +487,14 @@ const Main = () => {
 
   // ── Top products with contribution % ──────────────────────────────────────
   const totalSoldRevenue = allSold.reduce((s: number, p: any) => s + (p.revenue ?? 0), 0)
+  const topTotal = allSold.length
   const topProductsEnriched = useMemo(
     () =>
-      topProducts.map((p: any) => ({
-        ...p,
-        profit: calcProfit(p.revenue ?? 0, p.productId),
+      allSold.slice(topPage * topPageSize, (topPage + 1) * topPageSize).map((p: any) => ({
+        ...costProduct(p, catalogue),
         share: totalSoldRevenue > 0 ? Number((((p.revenue ?? 0) / totalSoldRevenue) * 100).toFixed(1)) : 0,
       })),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [topProducts, totalSoldRevenue, purchasePriceMap, refRetailMap]
+    [allSold, topPage, totalSoldRevenue, catalogue]
   )
 
   // ── Chart options ──────────────────────────────────────────────────────────
@@ -665,9 +618,15 @@ const Main = () => {
       {
         field: 'profit',
         headerName: 'Profit',
-        width: 110,
-        valueFormatter: (p: any) => fmt(p.value),
-        cellStyle: (p: any) => ({ color: (p.value ?? 0) >= 0 ? '#16a34a' : '#dc2626' }),
+        width: 120,
+        valueFormatter: (p: any) => (p.value === null ? 'No cost price' : fmt(p.value)),
+        tooltipValueGetter: (p: any) =>
+          p.data?.costIssue === 'no-cost'
+            ? 'Add a purchase price to this product to see its profit'
+            : p.data?.costIssue === 'cost-above-price'
+              ? 'Cost is above the selling price — check the purchase price is per piece'
+              : undefined,
+        cellStyle: (p: any) => ({ color: p.value === null ? '#9ca3af' : p.value >= 0 ? '#16a34a' : '#dc2626' }),
       },
       {
         field: 'share',
@@ -702,7 +661,13 @@ const Main = () => {
       })
     }
 
-    if (profitMarginPct > 0) {
+    if (totalRevenue > 0 && profitMarginPct < 0) {
+      list.push({
+        icon: TrendingDown,
+        text: `Cost of goods is above sales this period (${profitMarginPct.toFixed(1)}% margin) — check purchase prices.`,
+        type: 'negative',
+      })
+    } else if (profitMarginPct > 0) {
       list.push({
         icon: Percent,
         text:
@@ -715,7 +680,7 @@ const Main = () => {
       })
     }
 
-    const topP = topProducts[0]
+    const topP = allSold[0]
     if (topP && totalSoldRevenue > 0) {
       const share = (((topP.revenue ?? 0) / totalSoldRevenue) * 100).toFixed(1)
       list.push({
@@ -796,7 +761,7 @@ const Main = () => {
     totalSales,
     prevSales,
     profitMarginPct,
-    topProducts,
+    allSold,
     totalSoldRevenue,
     warehouses,
     momoRevenue,
@@ -886,6 +851,13 @@ const Main = () => {
         </div>
       </header>
 
+      {warning && (
+        <div role="note" className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+          <AlertTriangle className="h-4 w-4 flex-shrink-0 text-amber-500" />
+          <p>{warning}</p>
+        </div>
+      )}
+
       {/* ── KPI Cards ───────────────────────────────────────────────────── */}
       <section className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
         <KpiCard
@@ -899,18 +871,18 @@ const Main = () => {
         <KpiCard
           label="Gross Profit"
           value={fmtShort(grossProfit)}
-          sub={backendCogs !== null ? `after ${fmtShort(backendCogs)} COGS` : `${profitMarginPct.toFixed(1)}% est. margin`}
+          sub={`after ${fmtShort(totalCogs)} cost of goods${summary.estimated ? ' (est.)' : ''}`}
           icon={DollarSign}
-          color="bg-emerald-500"
-          trend={trendPct(grossProfit, prevRevenue * overallMarginRatio)}
+          color={grossProfit >= 0 ? 'bg-emerald-500' : 'bg-red-500'}
+          trend={prevComparable ? trendPct(grossProfit, prevSummary.grossProfit) : null}
         />
         <KpiCard
           label="Net Profit"
           value={fmtShort(netProfit)}
-          sub={backendProfit !== null ? `${profitMarginPct.toFixed(1)}% margin · after ops` : 'after operations'}
+          sub={`${netMarginPct.toFixed(1)}% · after ${fmtShort(operationsCost)} expenses`}
           icon={Wallet}
-          color="bg-teal-500"
-          trend={trendPct(netProfit, prevRevenue * overallMarginRatio)}
+          color={netProfit >= 0 ? 'bg-teal-500' : 'bg-red-500'}
+          trend={prevComparable ? trendPct(netProfit, prevSummary.netProfit) : null}
         />
         <KpiCard
           label="Total Sales"
@@ -1240,7 +1212,7 @@ const Main = () => {
                   <div className="bg-gray-50 rounded-xl p-3 flex flex-col gap-1">
                     <p className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold">Period Profit</p>
                     <p className="text-base font-bold text-stone-800">{fmtShort(netProfit)}</p>
-                    <p className="text-[10px] text-gray-400">{profitMarginPct.toFixed(1)}% net margin</p>
+                    <p className="text-[10px] text-gray-400">{netMarginPct.toFixed(1)}% net margin</p>
                   </div>
                 </div>
               </div>

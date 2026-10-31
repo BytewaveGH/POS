@@ -577,6 +577,75 @@ The frontend gates the dashboard. If billing can't be loaded it **fails open**, 
 - **Staff limit**: `POST /employees/` returns 402 `"staff_limit"` once the tenant has `limits.staff` employees. Editing and deleting stay allowed.
 - Public routes (eatery storefronts, the amusement board) are up to product. We suggest an expired eatery's storefront stops taking orders but keeps showing its menu.
 
+## 9. Store stats: cost of goods, payments and paging (changes to existing endpoints)
+
+The overview and analytics pages now show the backend's numbers as they are: `cogs`, `operationsCost` and `profit` from `GET /stats/overview`, and `cogs`/`profit` per product from `GET /stats/products/top`. Negative values are no longer turned into 0, so a wrong cost of goods now shows up as a loss. The fixes below are in `sellix.apis`. Response shapes stay the same unless a change says otherwise.
+
+### 9.1 Cost of goods per unit sold (`app/application/stats/repository.go`, `unitCost`) — most important
+
+The product form labels `purchasePrice` as **"Purchase Price (Cost per piece)"**, meaning one base/stock unit. Stock is also deducted in base units (`app/application/sale/repository.go`: `consumption += item.Quantity * pu.BaseQuantity`). `unitCost` doesn't match that:
+
+- It ignores `BaseQuantity`. Selling 1 Box (`baseQuantity` 12) is costed as 1 piece, so profit is too high.
+- When the unit has `BoxSize`, it divides by `BoxSize`. A half-box piece unit (`baseQuantity` 1) is then costed at 1/12 of a piece, so profit is too high again.
+
+Change it so that:
+
+```go
+// purchasePrice is the cost of one base (stock) unit, as the product form says.
+func unitCost(pu *ent.ProductUnit, p *ent.Product) float64 {
+	base := pu.BaseQuantity
+	if base < 1 {
+		base = 1
+	}
+	return p.PurchasePrice * float64(base)
+}
+```
+
+This applies wherever `unitCost` is used: overview COGS for sales **and** paid invoices, and top-products COGS for sales and invoices.
+
+Data check: older products may have been entered with the **box** cost as `purchasePrice`, from before the "per piece" label. For those, cost of goods will look too high. Please list products whose `purchasePrice` is higher than the retail price of their 1-piece unit, so the owner can correct them. The frontend already warns per product: "cost is higher than the selling price".
+
+Tests: 1 box (`baseQuantity` 12, retail 60, purchasePrice 4) → cogs 48, profit 12. 3 half-box pieces (`baseQuantity` 1, `boxSize` 12, purchasePrice 4) → cogs 12. Flat unit `baseQuantity` 1 → cogs = qty × purchasePrice.
+
+### 9.2 Optional: say when a product has no cost (`GET /stats/products/top`)
+
+A product with `purchasePrice` 0 now returns `cogs: 0, profit: revenue`, which looks like a 100% margin. The frontend already shows "No cost price" when `cogs` is 0. It would be clearer to also add:
+
+```json
+{ "productId": 7, "productName": "Plain rice", "quantitySold": 40, "revenue": 1800, "cogs": 0, "profit": 1800, "costed": false }
+```
+
+`costed: false` when the product's `purchasePrice` is 0. This field is additive; nothing breaks without it.
+
+### 9.3 Paging for `GET /stats/products/top`
+
+The handler reads `limit` but ignores `offset`, so page 2 returns the same rows as page 1. The frontend currently loads `limit=1000` and pages locally. Please:
+
+- accept `offset` (default 0) and apply it after sorting;
+- return the total as other list endpoints do (`{ data: [...], count: N }`), or keep the plain array and add `count`. **Tell us which you choose before shipping it**, because the frontend reads the plain array today.
+
+### 9.4 Cash vs MoMo per day (`GET /stats/sales`)
+
+The overview has a new **Cash & MoMo** panel for reconciling against the till and the MoMo statement. It calls `GET /stats/overview` once for the chosen day or month. A **day-by-day list for a month** would need one call per day, so please split each time-series point by payment type:
+
+```json
+[{ "date": "2026-10-30", "count": 42, "revenue": 3120.5, "cash": 1800, "momo": 1320.5, "cashCount": 25, "momoCount": 17 }]
+```
+
+This applies to every `granularity` (`hour`, `day`, `week`, `month`) and is additive to the current fields. Paid invoices count in `cash`/`momo` by their `paymentType`, the same as the overview.
+
+### 9.5 Consistent dates for invoices
+
+`/stats/overview` and `/stats/products/top` include a paid invoice by **`CreateTime`**. `/stats/sales` buckets it by **`PaidAt`** (when set). The same invoice can therefore fall on different days in the overview and in the chart, which breaks daily reconciliation. Please use one date everywhere. We suggest `PaidAt`, falling back to `CreateTime`, because that is when the money arrived. That applies to both the `paidInvoicePreds` filter and the time-series buckets.
+
+### 9.6 Date range bounds (for information; no change needed)
+
+`parseDateRange` reads `to=2026-10-31` as `2026-10-31T00:00:00Z`, which leaves out that whole day. The frontend now sends full RFC 3339 bounds (`from` = local start of day, `to` = local 23:59:59.999), so no change is needed. If you prefer, a bare `YYYY-MM-DD` for `to` could be read as the end of that day. Either way, please keep accepting RFC 3339 with fractional seconds and `Z`.
+
+### 9.7 Eatery: items priced by their options (no change needed)
+
+Menu items can now be priced at 0, with each pick-one choice holding its full price in `priceDelta` (e.g. ice cream flavours ₵15/₵22). `app/application/eatery` already accepts `price` 0 and adds `priceDelta`s in `storefront.go` order pricing, so nothing is needed. Please don't add a "price must be > 0" rule for items.
+
 ## Priority
 
 1. Tenant CRUD + owner-account creation (§1) — unblocks the whole "register a new business" flow for real, replaces the local JSON-file placeholder entirely.
@@ -585,7 +654,8 @@ The frontend gates the dashboard. If billing can't be loaded it **fails open**, 
 4. Real estate vertical (§6) — frontend is live on browser-only storage; these endpoints make it multi-device and durable.
 5. Eatery platform (§7) — owner dashboard and public storefronts are live on browser-only storage; customers' orders only reach the owner once these exist.
 6. Subscriptions and billing (§8) — plans, payments and gating work today on a server-side JSON file. These endpoints make billing durable, and §8.4 makes access limits enforceable instead of only shown in the UI.
-7. ~~Camera product recognition (§5)~~ — ✅ done; open points resolved, one pending backend change (SKU 409).
-8. ~~Attractions/tickets/bookings/leaderboard (§4)~~ — ✅ done, confirmed live and matching the frontend's contract exactly (2026-08-29).
+7. Store stats fixes (§9) — §9.1 (cost of goods per unit) first: until then profit on the overview and analytics pages is wrong for products sold by the box or as half-box pieces. §9.4–9.5 make daily cash/MoMo reconciliation exact.
+8. ~~Camera product recognition (§5)~~ — ✅ done; open points resolved, one pending backend change (SKU 409).
+9. ~~Attractions/tickets/bookings/leaderboard (§4)~~ — ✅ done, confirmed live and matching the frontend's contract exactly (2026-08-29).
 
 Happy to hop on a call to go through response shapes/edge cases once you've had a look.
