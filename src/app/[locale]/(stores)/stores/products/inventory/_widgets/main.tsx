@@ -22,6 +22,7 @@ import { IGeneric } from '@/types/interfaces'
 import { SalesServices } from '../../../pos/_logics/services'
 import { AlertTriangle, Package, FileText, ShoppingCart, Boxes, ArrowLeftRight } from 'lucide-react'
 import { useSession } from 'next-auth/react'
+import { unitCosts } from '../_logics/product-payload'
 
 // Stock is stored in base units. For display, also express it in the
 // product's largest multi-piece unit: 27 → "≈ 2 Box".
@@ -360,8 +361,11 @@ const Main = () => {
       if (!p.units?.length) {
         return [{ ...p, _unitId: null, unitName: '—', retailPrice: null, wholesalePrice: null, pricingRule: '—' }]
       }
-      return p.units.map((u: any) => ({
+      const costs = unitCosts(Number(p.purchasePrice) || 0, p.units)
+      return p.units.map((u: any, i: number) => ({
         ...p,
+        // The unit's share of the box cost (purchasePrice is per box).
+        unitCost: costs.costs[i].cost,
         _unitId: u.id,
         unitName: u.unitName,
         baseQuantity: u.baseQuantity ?? 1,
@@ -391,9 +395,10 @@ const Main = () => {
       },
       { field: 'category', headerName: 'Category', width: 120 },
       {
-        field: 'purchasePrice',
+        field: 'unitCost',
         headerName: 'Cost',
         width: 110,
+        valueGetter: (p: any) => p.data?.unitCost ?? p.data?.purchasePrice,
         valueFormatter: (p: any) => fmt(p.value),
       },
       {

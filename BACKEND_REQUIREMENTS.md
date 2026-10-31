@@ -583,29 +583,40 @@ The overview and analytics pages now show the backend's numbers as they are: `co
 
 ### 9.1 Cost of goods per unit sold (`app/application/stats/repository.go`, `unitCost`) — most important
 
-The product form labels `purchasePrice` as **"Purchase Price (Cost per piece)"**, meaning one base/stock unit. Stock is also deducted in base units (`app/application/sale/repository.go`: `consumption += item.Quantity * pu.BaseQuantity`). `unitCost` doesn't match that:
+`purchasePrice` is the cost of one **purchase unit**: the largest unit, usually a box. `unitCost` already reads it that way. The product form said "cost per piece", which was wrong, and has been corrected to "cost of one box". Today `unitCost` divides the box cost only when the unit sold has `BoxSize` (half-box pieces). A smaller unit with the `flat` or `bulk-wholesale` rule — e.g. Box `baseQuantity` 20, Piece `baseQuantity` 1 — is costed at a **whole box per piece**. That's why products such as Happy Man show a negative profit.
 
-- It ignores `BaseQuantity`. Selling 1 Box (`baseQuantity` 12) is costed as 1 piece, so profit is too high.
-- When the unit has `BoxSize`, it divides by `BoxSize`. A half-box piece unit (`baseQuantity` 1) is then costed at 1/12 of a piece, so profit is too high again.
-
-Change it so that:
+Cost a unit sold as its share of the box:
 
 ```go
-// purchasePrice is the cost of one base (stock) unit, as the product form says.
-func unitCost(pu *ent.ProductUnit, p *ent.Product) float64 {
+// purchasePrice is the cost of one purchase unit (the largest unit, e.g. a box).
+func unitCost(pu *ent.ProductUnit, p *ent.Product, units []*ent.ProductUnit) float64 {
+	if pu.BoxSize != nil && *pu.BoxSize > 0 { // half-box piece
+		return p.PurchasePrice / float64(*pu.BoxSize)
+	}
+	largest := 1
+	for _, u := range units {
+		if u.BaseQuantity > largest {
+			largest = u.BaseQuantity
+		}
+	}
 	base := pu.BaseQuantity
 	if base < 1 {
 		base = 1
 	}
-	return p.PurchasePrice * float64(base)
+	return p.PurchasePrice * float64(base) / float64(largest)
 }
 ```
 
-This applies wherever `unitCost` is used: overview COGS for sales **and** paid invoices, and top-products COGS for sales and invoices.
+Load the product's units (`WithProductUnit(q.WithProduct(pq.WithUnits()))`, or a per-request cache by product id). Use this everywhere `unitCost` is used: overview COGS for sales **and** paid invoices, and top-products COGS for sales and invoices. The frontend uses the same rule to show "Cost per unit" on the product form and the unit's cost in the inventory list (`unitCosts` in `products/inventory/_logics/product-payload.ts`).
 
-Data check: older products may have been entered with the **box** cost as `purchasePrice`, from before the "per piece" label. For those, cost of goods will look too high. Please list products whose `purchasePrice` is higher than the retail price of their 1-piece unit, so the owner can correct them. The frontend already warns per product: "cost is higher than the selling price".
+Tests (purchasePrice 200 = one box of 20):
+- Box (`baseQuantity` 20) → 200.
+- Piece (`baseQuantity` 1, `flat`) → 10.
+- Pack (`baseQuantity` 5) → 50.
+- Half-box piece (`boxSize` 20) → 10.
+- Single-unit product (`baseQuantity` 1) → 200.
 
-Tests: 1 box (`baseQuantity` 12, retail 60, purchasePrice 4) → cogs 48, profit 12. 3 half-box pieces (`baseQuantity` 1, `boxSize` 12, purchasePrice 4) → cogs 12. Flat unit `baseQuantity` 1 → cogs = qty × purchasePrice.
+Data check: products with several units where every unit has `baseQuantity` 1 and none has `boxSize` can't be split. Every unit is costed at the full box price. Please list them so the owner can set the box's Base quantity. The product form now warns about this, and highlights in red any unit whose cost is above its price.
 
 ### 9.2 Optional: say when a product has no cost (`GET /stats/products/top`)
 
@@ -654,7 +665,7 @@ Menu items can now be priced at 0, with each pick-one choice holding its full pr
 4. Real estate vertical (§6) — frontend is live on browser-only storage; these endpoints make it multi-device and durable.
 5. Eatery platform (§7) — owner dashboard and public storefronts are live on browser-only storage; customers' orders only reach the owner once these exist.
 6. Subscriptions and billing (§8) — plans, payments and gating work today on a server-side JSON file. These endpoints make billing durable, and §8.4 makes access limits enforceable instead of only shown in the UI.
-7. Store stats fixes (§9) — §9.1 (cost of goods per unit) first: until then profit on the overview and analytics pages is wrong for products sold by the box or as half-box pieces. §9.4–9.5 make daily cash/MoMo reconciliation exact.
+7. Store stats fixes (§9) — §9.1 (cost of goods per unit) first: until then any piece or pack sold under the flat/wholesale rule is costed as a whole box, so those products show a loss. §9.4–9.5 make daily cash/MoMo reconciliation exact.
 8. ~~Camera product recognition (§5)~~ — ✅ done; open points resolved, one pending backend change (SKU 409).
 9. ~~Attractions/tickets/bookings/leaderboard (§4)~~ — ✅ done, confirmed live and matching the frontend's contract exactly (2026-08-29).
 

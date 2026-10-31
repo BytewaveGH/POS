@@ -624,7 +624,7 @@ const Main = () => {
           p.data?.costIssue === 'no-cost'
             ? 'Add a purchase price to this product to see its profit'
             : p.data?.costIssue === 'cost-above-price'
-              ? 'Cost is above the selling price — check the purchase price is per piece'
+              ? 'Cost is above the selling price — check the box cost and pieces per box'
               : undefined,
         cellStyle: (p: any) => ({ color: p.value === null ? '#9ca3af' : p.value >= 0 ? '#16a34a' : '#dc2626' }),
       },

@@ -66,7 +66,7 @@ const motifStyle = (theme: ThemeConfig, color: string, opacity: number) => {
     : patternStyle(theme.pattern, color, opacity)
 }
 
-const initialsOf = (name: string) =>
+export const initialsOf = (name: string) =>
   name
     .replace(/&/g, ' ')
     .split(/\s+/)
