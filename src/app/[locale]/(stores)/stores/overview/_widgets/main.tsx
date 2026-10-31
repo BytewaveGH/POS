@@ -10,6 +10,9 @@ import { useFetchPaginated } from '@/hooks/use-fetch-paginated'
 import { StatisticsServices } from '../_logics/services'
 import { ProductServices } from '../../products/inventory/_logics/services'
 import { IGeneric } from '@/types/interfaces'
+import { catalogueOf, costProduct, profitSummary, profitWarning } from '../_logics/profit'
+import { rangeParams } from '../_logics/range'
+import { PaymentsReconciliation } from './payments'
 
 const fmt = (v: number) => `₵ ${Number(v ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
@@ -108,7 +111,7 @@ const Main = () => {
 
   // Include from/to in query keys so React Query refetches when dates change
   const dateKey = `${from}__${to}`
-  const dateParams = { ...(from ? { from } : {}), ...(to ? { to } : {}) }
+  const dateParams = rangeParams(from, to)
 
   const { data: overviewRaw } = useFetchData(`stats-overview-${dateKey}`, StatisticsServices.FetchAll(dateParams) as unknown as IGeneric)
   // ── Daily chart date range ──────────────────────────────────────────────
@@ -145,7 +148,7 @@ const Main = () => {
 
   const { data: dailySalesRaw, refetch: refetchDailyChart } = useFetchData(
     `stats-sales-week-${chartFrom}-${chartTo}`,
-    StatisticsServices.FetchSales({ granularity: 'day', from: chartFrom, to: chartTo }) as unknown as IGeneric
+    StatisticsServices.FetchSales({ granularity: 'day', ...rangeParams(chartFrom, chartTo) }) as unknown as IGeneric
   )
   // Monthly chart uses its own 12-month range — independent of the date picker
   // so the current month always appears with its accumulated data so far.
@@ -160,7 +163,7 @@ const Main = () => {
 
   const { data: monthlySalesRaw, refetch: refetchMonthlyChart } = useFetchData(
     `stats-sales-month-${monthlyRange.from}`,
-    StatisticsServices.FetchSales({ granularity: 'month', from: monthlyRange.from, to: monthlyRange.to }) as unknown as IGeneric
+    StatisticsServices.FetchSales({ granularity: 'month', ...rangeParams(monthlyRange.from, monthlyRange.to) }) as unknown as IGeneric
   )
   const [topPage, setTopPage] = useState(0)
   const [topPageSize, setTopPageSize] = useState(10)
@@ -168,12 +171,6 @@ const Main = () => {
   const [whPage, setWhPage] = useState(0)
   const [whPageSize, setWhPageSize] = useState(10)
 
-  const { data: topProductsRaw, total: topTotal } = useFetchPaginated(
-    `stats-top-${dateKey}`,
-    StatisticsServices.FetchProducts({ ...dateParams }) as unknown as IGeneric,
-    topPage,
-    topPageSize
-  )
   const { data: allSoldRaw } = useFetchData(
     `stats-all-sold-${dateKey}`,
     StatisticsServices.FetchProducts({ limit: 1000, ...dateParams }) as unknown as IGeneric
@@ -182,7 +179,7 @@ const Main = () => {
   // Separate fetch scoped to the chart's own date range — profit margin for daily chart
   const { data: chartSoldRaw } = useFetchData(
     `stats-chart-sold-${chartFrom}-${chartTo}`,
-    StatisticsServices.FetchProducts({ limit: 1000, from: chartFrom, to: chartTo }) as unknown as IGeneric
+    StatisticsServices.FetchProducts({ limit: 1000, ...rangeParams(chartFrom, chartTo) }) as unknown as IGeneric
   )
   const { data: warehousesRaw, total: whTotal } = useFetchPaginated(
     `stats-warehouses-${dateKey}`,
@@ -190,7 +187,10 @@ const Main = () => {
     whPage,
     whPageSize
   )
-  const { data: allProductsRaw } = useFetchData('overview-products', ProductServices.FetchAll() as unknown as IGeneric)
+  const { data: allProductsRaw } = useFetchData(
+    'overview-products',
+    ProductServices.FetchAll({ limit: 1000, offset: 0 }) as unknown as IGeneric
+  )
 
   const overview = overviewRaw as any
   const dailySales = useMemo(() => {
@@ -202,83 +202,28 @@ const Main = () => {
     })
   }, [dailySalesRaw])
   const monthlySalesRawArr = (monthlySalesRaw as any[]) ?? []
-  const topProducts = (topProductsRaw as any[]) ?? []
   const allSold = (allSoldRaw as any[]) ?? []
   const warehouses = (warehousesRaw as any[]) ?? []
   const allProducts = (allProductsRaw as any[]) ?? []
 
-  const purchasePriceMap = useMemo(() => {
-    const map: Record<number, number> = {}
-    allProducts.forEach((p: any) => {
-      map[p.id] = p.purchasePrice ?? 0
-    })
-    return map
-  }, [allProducts])
-
-  // Reference retail price per product — the price that purchasePrice corresponds to.
-  // For box+piece products: boxRetailPrice (stored on the half-box piece unit) = full box retail.
-  //   profit margin = (boxRetail - purchasePrice) / boxRetail
-  //   Since piece cost = purchasePrice/boxSize and piece retail = boxRetail/boxSize,
-  //   the margin is IDENTICAL for both box and piece sales.
-  // For single-unit products: use that unit's retail price.
-  const refRetailMap = useMemo(() => {
-    const map: Record<number, number> = {}
-    allProducts.forEach((p: any) => {
-      const units: any[] = p.units ?? []
-
-      // A half-box piece unit stores boxRetailPrice = the full box's retail price.
-      // This is the natural denominator for purchasePrice (which is per box).
-      const halfBoxUnit = units.find((u: any) => u.pricingRule === 'half-box' && u.boxRetailPrice > 0)
-      if (halfBoxUnit) {
-        map[p.id] = halfBoxUnit.boxRetailPrice
-        return
-      }
-
-      // No box relationship: use the highest retail price unit
-      // (purchasePrice is typically the cost of the bulk/highest-value unit).
-      const retailPrices = units.map((u: any) => u.retailPrice ?? 0).filter((v: number) => v > 0)
-      if (retailPrices.length > 0) map[p.id] = Math.max(...retailPrices)
-    })
-    return map
-  }, [allProducts])
-
-  // profit = revenue × (1 − purchasePrice / refRetail)
-  // Consistent for all unit types of the same product because the margin is identical
-  // whether you sell the box or its individual pieces.
-  const calcProfit = (revenue: number, productId: number): number => {
-    const purchasePrice = purchasePriceMap[productId] ?? 0
-    const refRetail = refRetailMap[productId]
-    if (!refRetail || refRetail <= 0 || purchasePrice <= 0) return 0
-    const margin = 1 - purchasePrice / refRetail
-    return revenue * Math.max(0, margin) // clamp to 0 just in case of bad data
-  }
-
-  const totalProfit = useMemo(
-    () => allSold.reduce((sum: number, p: any) => sum + calcProfit(p.revenue ?? 0, p.productId), 0),
-    [allSold, purchasePriceMap, refRetailMap]
-  )
-
+  // Profit from the backend's cost of goods (estimated only when it's missing).
+  const catalogue = useMemo(() => catalogueOf(allProducts), [allProducts])
+  const summary = useMemo(() => profitSummary(overview, allSold, catalogue), [overview, allSold, catalogue])
+  const warning = profitWarning(summary, fmt)
+  const topTotal = allSold.length
   const topProductsWithProfit = useMemo(
-    () =>
-      topProducts.map((p: any) => ({
-        ...p,
-        profit: calcProfit(p.revenue ?? 0, p.productId),
-      })),
-    [topProducts, purchasePriceMap, refRetailMap]
+    () => allSold.slice(topPage * topPageSize, (topPage + 1) * topPageSize).map((p: any) => costProduct(p, catalogue)),
+    [allSold, topPage, topPageSize, catalogue]
   )
 
   // Margin ratio for the CHART period — profit ÷ revenue from the same weekRange
   // that the daily chart is displaying. This means the profit line reflects
   // actual sales in the chart window, not the date-picker window.
   const overallMarginRatio = useMemo(() => {
-    const sold = (chartSoldRaw as any[]) ?? []
-    const chartRevenue = sold.reduce((s, p) => s + (p.revenue ?? 0), 0)
-    const chartProfit = sold.reduce((s, p) => s + calcProfit(p.revenue ?? 0, p.productId), 0)
-    if (chartRevenue > 0) return Math.max(0, chartProfit / chartRevenue)
-    // Fallback: use overall sold data if chart period has no sales yet
-    const totalRevenue = ((allSoldRaw as any[]) ?? []).reduce((s: number, p: any) => s + (p.revenue ?? 0), 0)
-    return totalRevenue > 0 ? Math.max(0, totalProfit / totalRevenue) : 0
-  }, [chartSoldRaw, allSoldRaw, totalProfit, purchasePriceMap, refRetailMap])
+    const rows = ((chartSoldRaw as any[]) ?? []).map((p) => costProduct(p, catalogue)).filter((p) => p.profit !== null)
+    const rev = rows.reduce((t, p) => t + p.revenue, 0)
+    return rev > 0 ? rows.reduce((t, p) => t + (p.profit ?? 0), 0) / rev : summary.grossMargin
+  }, [chartSoldRaw, catalogue, summary.grossMargin])
 
   // Enrich daily sales with estimated gross profit
   const dailySalesWithProfit = useMemo(
@@ -368,8 +313,14 @@ const Main = () => {
         field: 'profit',
         headerName: 'Profit',
         width: 130,
-        valueFormatter: (p: any) => fmt(p.value),
-        cellStyle: (p: any) => ({ color: p.value >= 0 ? '#16a34a' : '#dc2626' }),
+        valueFormatter: (p: any) => (p.value === null ? 'No cost price' : fmt(p.value)),
+        tooltipValueGetter: (p: any) =>
+          p.data?.costIssue === 'no-cost'
+            ? 'Add a purchase price to this product to see its profit'
+            : p.data?.costIssue === 'cost-above-price'
+              ? 'Cost is above the selling price — check the purchase price is per piece'
+              : undefined,
+        cellStyle: (p: any) => ({ color: p.value === null ? '#9ca3af' : p.value >= 0 ? '#16a34a' : '#dc2626' }),
       },
     ],
     []
@@ -467,12 +418,21 @@ const Main = () => {
         />
         <StatCard
           label="Gross Profit"
-          value={fmt(totalProfit)}
-          sub={totalProfit < 0 ? 'Negative — check purchasePrice matches selling unit' : 'Revenue minus purchase cost'}
+          value={fmt(summary.grossProfit)}
+          sub={`${(summary.grossMargin * 100).toFixed(1)}% margin · net ${fmt(summary.netProfit)} after expenses`}
           icon={TrendingUp}
-          color={totalProfit >= 0 ? 'bg-emerald-500' : 'bg-red-500'}
+          color={summary.grossProfit >= 0 ? 'bg-emerald-500' : 'bg-red-500'}
         />
       </div>
+
+      {warning && (
+        <div role="note" className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+          <AlertTriangle className="h-4 w-4 flex-shrink-0 text-amber-500" />
+          <p>{warning}</p>
+        </div>
+      )}
+
+      <PaymentsReconciliation />
 
       {/* Charts */}
       <section className="grid grid-cols-1 md:grid-cols-5 gap-4">

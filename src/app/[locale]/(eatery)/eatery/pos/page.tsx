@@ -27,6 +27,7 @@ import { formatMoney, itemAvailability, priceOrder } from '@/lib/eatery/menu'
 import type { MenuItem, Order, Restaurant, StorefrontBundle } from '@/lib/eatery/types'
 import { ItemSheet } from '@/components/eatery/item-sheet'
 import { fromPrice } from '@/components/eatery/menu-view'
+import { ItemArt, ThemeScope } from '@/components/eatery/theme-scope'
 import { EateryFrame } from '../_components/frame'
 import { SoundToggle, useNewOrderAlert } from '../_components/alerts'
 import { ago, fulfilmentLabel } from '../_components/order-bits'
@@ -480,38 +481,51 @@ const PosScreen = ({ o }: { o: OwnerData & { restaurant: Restaurant } }) => {
           </div>
         </div>
 
-        <ul className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
-          {shown.map((item) => {
-            const a = itemAvailability(item, categoryById.get(item.categoryId), now)
-            const inTicket = lines.filter((l) => l.itemId === item.id).reduce((s, l) => s + l.quantity, 0)
-            return (
-              <li key={item.id}>
-                <button
-                  type="button"
-                  disabled={!a.orderable}
-                  onClick={() => tap(item)}
-                  aria-label={`${item.name}${a.orderable ? '' : ` — ${a.label}`}`}
-                  className="relative flex h-24 w-full flex-col justify-between rounded-2xl border border-stone-200 bg-white p-3 text-left shadow-sm transition active:scale-[0.98] hover:border-endeavour/50 disabled:opacity-40"
-                >
-                  <span className="line-clamp-2 text-sm font-bold leading-tight text-stone-900">{item.name}</span>
-                  <span className="flex items-center justify-between">
-                    <span className="text-sm font-extrabold tabular-nums text-endeavour">{formatMoney(fromPrice(item), r.currency)}</span>
-                    {!a.orderable ? (
-                      <span className="text-[10px] font-bold text-rose-600">{a.reason === 'not-now' ? 'Not now' : a.label}</span>
-                    ) : item.optionGroups.length || item.combo ? (
-                      <span className="text-[10px] font-semibold text-stone-400">options</span>
-                    ) : null}
-                  </span>
-                  {inTicket > 0 && (
-                    <span className="absolute -right-1.5 -top-1.5 flex h-6 min-w-6 items-center justify-center rounded-full bg-endeavour px-1.5 text-xs font-extrabold text-white">
-                      {inTicket}
+        {/* ThemeScope only so photo-less items get the brand's initials art, as on the menu page. */}
+        <ThemeScope theme={r.theme} className="!bg-transparent ![background-image:none] !text-inherit">
+          <ul className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
+            {shown.map((item) => {
+              const a = itemAvailability(item, categoryById.get(item.categoryId), now)
+              const inTicket = lines.filter((l) => l.itemId === item.id).reduce((s, l) => s + l.quantity, 0)
+              return (
+                <li key={item.id}>
+                  <button
+                    type="button"
+                    disabled={!a.orderable}
+                    onClick={() => tap(item)}
+                    aria-label={`${item.name}${a.orderable ? '' : ` — ${a.label}`}`}
+                    className="relative flex w-full flex-col rounded-2xl border border-stone-200 bg-white text-left shadow-sm transition active:scale-[0.98] hover:border-endeavour/50 disabled:opacity-40"
+                    style={{ fontFamily: 'var(--font-mulish), system-ui, sans-serif', color: '#1c1917' }}
+                  >
+                    <ItemArt
+                      name={item.name}
+                      imageUrl={item.imageUrl}
+                      theme={r.theme}
+                      size="sm"
+                      className="h-20 w-full rounded-t-2xl sm:h-24"
+                    />
+                    <span className="line-clamp-2 min-h-[2.5rem] px-3 pt-2 text-sm font-bold leading-tight text-stone-900">
+                      {item.name}
                     </span>
-                  )}
-                </button>
-              </li>
-            )
-          })}
-        </ul>
+                    <span className="flex items-center justify-between gap-1 px-3 pb-2.5 pt-1">
+                      <span className="text-sm font-extrabold tabular-nums text-endeavour">{formatMoney(fromPrice(item), r.currency)}</span>
+                      {!a.orderable ? (
+                        <span className="text-[10px] font-bold text-rose-600">{a.reason === 'not-now' ? 'Not now' : a.label}</span>
+                      ) : item.optionGroups.length || item.combo ? (
+                        <span className="text-[10px] font-semibold text-stone-400">options</span>
+                      ) : null}
+                    </span>
+                    {inTicket > 0 && (
+                      <span className="absolute -right-1.5 -top-1.5 flex h-6 min-w-6 items-center justify-center rounded-full bg-endeavour px-1.5 text-xs font-extrabold text-white">
+                        {inTicket}
+                      </span>
+                    )}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        </ThemeScope>
       </div>
 
       {/* Ticket: side panel on large screens, bottom sheet on phones and tablets in portrait. */}

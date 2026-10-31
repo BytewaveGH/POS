@@ -398,12 +398,25 @@ describe('eatery platform (local data)', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'Each has its own price' }))
     expect((screen.getByLabelText('Pistachio price') as HTMLInputElement).value).toBe('22')
 
+    // A second required group with full prices is charged on top: say so, and offer to merge.
+    fireEvent.click(screen.getByRole('button', { name: 'Custom group' }))
+    fireEvent.click(screen.getAllByRole('radio', { name: 'Pick one (size, crust…)' })[1])
+    fireEvent.change(screen.getAllByLabelText('Choice name')[2], { target: { value: 'Mango' } })
+    fireEvent.change(screen.getByLabelText('Mango price change'), { target: { value: '15' } })
+    expect(screen.getByRole('note').textContent).toMatch(/both prices are charged \(from ₵30\)/)
+    fireEvent.click(screen.getByRole('button', { name: 'Move these choices into “Flavour”' }))
+    expect(screen.queryByRole('note')).toBeNull()
+    expect(screen.getAllByLabelText('Option group name')).toHaveLength(1)
+    expect((screen.getByLabelText('Mango price') as HTMLInputElement).value).toBe('15')
+    fireEvent.change(screen.getByLabelText('Mango price'), { target: { value: '19' } })
+
     fireEvent.click(screen.getByRole('button', { name: 'Add to menu' }))
     await waitFor(async () => {
       const saved = (await owner.list('items')).find((i) => i.name === 'Ice Cream')!
       expect(saved.price).toBe(0)
       expect(saved.optionGroups[0]).toMatchObject({ kind: 'variant', min: 1, max: 1 })
-      expect(saved.optionGroups[0].choices.map((c) => c.priceDelta)).toEqual([15, 22])
+      expect(saved.optionGroups).toHaveLength(1)
+      expect(saved.optionGroups[0].choices.map((c) => c.priceDelta)).toEqual([15, 22, 19])
     })
   })
 

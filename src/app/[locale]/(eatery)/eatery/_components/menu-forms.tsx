@@ -224,6 +224,7 @@ const OptionGroupEditor = ({
   currency,
   pricing,
   onPricing,
+  stacked,
 }: {
   group: OptionGroup
   onChange: (g: OptionGroup) => void
@@ -233,6 +234,9 @@ const OptionGroupEditor = ({
   // Only on the item's first pick-one group: does it hold the full prices?
   pricing?: 'own' | 'add'
   onPricing?: (p: 'own' | 'add') => void
+  // A second required group with prices while another group already holds the
+  // full prices: both are charged, which is rarely what the owner meant.
+  stacked?: { into: string; total: string; onMerge: () => void }
 }) => {
   const single = group.kind === 'variant'
   const own = pricing === 'own'
@@ -324,6 +328,17 @@ const OptionGroupEditor = ({
               { value: 'add', label: 'Adds to the item price' },
             ]}
           />
+        </div>
+      )}
+      {stacked && (
+        <div role="note" className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          <p>
+            Customers must pick from “{stacked.into}” <b>and</b> from this group, so both prices are charged (from {stacked.total}). If
+            these are more choices of the same thing, put them in one group. If they cost extra, enter only the extra amount.
+          </p>
+          <Button variant="secondary" size="sm" className="mt-2" onClick={stacked.onMerge}>
+            Move these choices into “{stacked.into}”
+          </Button>
         </div>
       )}
       <p className="mt-1.5 text-[11px] text-stone-500">
@@ -534,6 +549,19 @@ export const ItemForm = ({
     setOwnPrice(mode === 'own')
   }
   const shownFrom = fromPrice({ ...draft, id: 0, combo: isCombo ? draft.combo : undefined } as MenuItem)
+  const stackedOn = (g: OptionGroup) =>
+    pricedBy && g !== pricedBy && g.min > 0 && g.choices.length > 0 && Math.min(...g.choices.map((c) => c.priceDelta)) > 0
+      ? {
+          into: pricedBy.name.trim() || 'the first group',
+          total: formatMoney(shownFrom, restaurant.currency),
+          onMerge: () =>
+            set({
+              optionGroups: draft.optionGroups
+                .filter((x) => x.id !== g.id)
+                .map((x) => (x.id === pricedBy.id ? { ...x, choices: [...x.choices, ...g.choices] } : x)),
+            }),
+        }
+      : undefined
 
   return (
     <Drawer
@@ -761,6 +789,7 @@ export const ItemForm = ({
               currency={restaurant.currency}
               pricing={g === firstPick ? (pricedBy ? 'own' : 'add') : undefined}
               onPricing={setPricing}
+              stacked={stackedOn(g)}
               onChange={(ng) => set({ optionGroups: draft.optionGroups.map((x) => (x.id === g.id ? ng : x)) })}
               onRemove={() => set({ optionGroups: draft.optionGroups.filter((x) => x.id !== g.id) })}
               onMove={(d) => {
